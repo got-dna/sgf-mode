@@ -1,0 +1,50 @@
+require librsvg
+
+it has
+1. SGF converted, tree-like, list data object
+2. SVG data (or str for ascii board) for visualization
+3. it should be synced
+
+2-d board: find-liberty
+node: doubly linked list, properties, color, move number
+ko: ko position
+prisoners number
+undo stack
+
+
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="800px" height="800px" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="stone-black" cx=".3" cy=".3" r=".8">
+      <stop offset="0"   stop-color="#777"/>
+      <stop offset="0.3" stop-color="#222"/>
+      <stop offset="1"   stop-color="#000"/>
+    </radialGradient>
+
+    <radialGradient id="stone-black" r="0.55" fy="0.3" fx="0.7" cy="0.5" cx="0.5">
+      <stop offset="0%" stop-color="#606060"></stop>
+      <stop offset="100%" stop-color="#000000"></stop>
+    </radialGradient>
+
+    <radialGradient id="stone-white" r="0.6" fy="0.3" fx="0.7" cy="0.5" cx="0.5">
+      <stop offset="0%" stop-color="#ffffff"></stop>
+      <stop offset="80%" stop-color="#e0e0e0"></stop>
+      <stop offset="100%" stop-color="#b0b0b0"></stop>
+    </radialGradient>
+
+    <radialGradient id="rg" cx=".47" cy=".49" r=".48">
+      <stop offset=".7" stop-color="#FFF"/>
+      <stop offset=".9" stop-color="#DDD"/>
+      <stop offset="1" stop-color="#777"/>
+    </radialGradient>
+
+    <radialGradient id="rg" cx=".3" cy=".3" r=".8">
+      <stop offset="0" stop-color="#777"/>
+      <stop offset=".3" stop-color="#222"/>
+      <stop offset="1" stop-color="#000"/>
+    </radialGradient>
+
+  </defs>
+
+  <rect width="500" height="500" fill="#DCB35C"/>
+  <circle cx="250" cy="250" r="245" fill="url(#rg)"/>
