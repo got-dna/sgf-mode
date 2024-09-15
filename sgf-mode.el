@@ -1,4 +1,4 @@
-;;; sgf-mode.el --- SGF Editing Mode  -*- lexical-binding: t; -*-
+;;; sgf-mode.el --- SGF Major Mode  -*- lexical-binding: t; -*-
 
 
 
@@ -10,258 +10,134 @@
 
 ;;; Code:
 
-
-(defvar sgf-space-re "[ \t\n\r]*")
-
-(defvar sgf-property-value-re
-  (rx (seq "["                         ; Empty or non-empty value: starts with "["
-           (group
-            (zero-or-more
-             (or (seq "\\" (any "[]"))   ; Match escaped "[" or "]"...
-                 (not (any "\\]")))))    ; Or any character except closing bracket or unescaped "\"
-           "]")                        ; Ends with "[
-      ))
-
-;; use `regexp' to dynamic include other regexp patterns
-(defvar sgf-property-re
-  (rx (group (one-or-more alpha))        ; Property name: one or more alphabetic characters
-      (regexp sgf-space-re)              ; Optional spaces between name and values
-      (one-or-more                       ; Property values: one or more occurrences
-        (regexp sgf-property-value-re)   ; Match a single value
-        (regexp sgf-space-re)            ; Optional spaces between values
-        ))
-  "Regular expression to match a single SGF property and its value(s), allowing whitespace(s) in between.")
+;(require 'sgf-io)
 
 
-(defvar sgf-node-re
-  (rx ";"
-      (regexp sgf-space-re)
-      (one-or-more (regexp sgf-property-re)))
-  "Regular expression to match a single node. A node starts with a semicolon and contains one or more properties.")
+;; Linked Node Object
+(defun sgf-linked-node (prev-node &optional current-node next-nodes)
+  "Define node object. It is doubly linked list."
+  (vector prev-node current-node next-nodes))
+
+;; Game State
+(defun sgf-game-state (linked-node move-num board-2d &optional
+                                   black-prisoners black-prisoner-count
+                                   white-prisoners white-prisoner-count
+                                   ko turn undo-stack)
+  "Define game state object. The move number, board-2d, ko, prisoners are re-computed every time when traversing the moves."
+  (vector linked-node                 ; 0 current node
+          board-2d                    ; 1
+          move-num                    ; 2
+          ko                          ; 3 ko position
+          prisoners                   ; 4 a list of cons (x . y) after current move
+          black-white-prisoner-counts ; 5 accumulated number (b . w)
+          undo-stack                  ; 6
+          redo-stack))
 
 
-(defun string-to-number-or-nil (str)
-  "Return the number represented by STR, or nil if STR is not a valid number."
-  (if (string-match-p (rx
-                       string-start
-                       (optional (any "-+"))          ; Optional sign
-                       (or
-                        (seq (one-or-more digit)       ; Digits before the decimal point
-                             (optional (seq "." (zero-or-more digit)))) ; Optional decimal point and digits
-                        (seq "." (one-or-more digit))) ; Decimal point with digits
-                       string-end)
-                      str)
-
-      (string-to-number str)))
-
-;;; Specific property converters
-(defun sgf-convert-DT (val)
-  "for property DT"
-  (parse-time-string val))
+(defun sgf-create-board-2d (w h)
+  "Create a empty 2D board of size WxH."
+  ;; create a 2d board
+  (let ((board-2d (make-vector h nil)))
+    (dotimes (i h) ;; for each row
+      (aset board-2d i (make-vector w 'E)))
+    board-2d))
 
 
-;; define a helper function to convert a position char to int
-(defun char-to-num (char)
-  "?a-?z ?A-?Z to 0-25 26-51.
-
-(char-to-num ?a) => 0
-(char-to-num ?z) => 25"
-  (cond
-   ((and (>= char ?a) (<= char ?z)) (- char ?a))
-   ((and (>= char ?A) (<= char ?Z)) (+ (- char ?A) 26))
-   (t (error "Invalid point letter '%c'" char))))
-
-(defun sgf-convert-pos (pos-str)
-  "(sgf-convert-pos \"aa\") => \"(0 . 0)\""
-  ;; aa:ac like str is odd in length
-  (if (string-empty-p pos-str)
-      "" ; this is a pass. position is empty
-    (if (= (logand (seq-length pos-str) 1) 1)
-        (mapconcat (lambda (i) (format "%S" i)) (sgf-convert-multi-positions pos-str) " ")
-      (format "%S" (sgf-convert-single-position pos-str)))))
-
-(defun sgf-convert-single-position (pos-str)
-  "for property AB, AW, AE"
-   (cons (char-to-num (aref pos-str 0))
-         (char-to-num (aref pos-str 1))))
-
-(defun sgf-convert-multi-positions (pos-str)
-  "Convert a multi-position string in 'aa:ac' format into a list of numeric pairs."
-  (let* ((positions (mapcar #'sgf-convert-single-position (split-string pos-str ":")))
-         (first (car positions)) (last (cadr positions))
-         (first-x (car first)) (first-y (cdr first))
-         (last-x (car last)) (last-y (cdr last)))
-    (if (= first-x last-x)
-        ;; either x is the same
-        (mapcar (lambda (i) (cons first-x i)) (number-sequence first-y last-y))
-      ;; or y the same
-      (mapcar (lambda (i) (cons i first-y)) (number-sequence first-x last-x)))))
-
-(ert-deftest sgf-convert-multi-positions-test ()
-  (let ((cases '(("aa:ac" . ((0 . 0) (0 . 1) (0 . 2)))
-                 ("aa:ca" . ((0 . 0) (1 . 0) (2 . 0))))))
-    (dolist (i cases)
-      (should (equal (sgf-convert-multi-positions (car i)) (cdr i))))))
+(defun sgf-board-2d-get (xy board-2d)
+  (aref (aref board-2d (cdr xy)) (car xy)))
 
 
-(defun sgf-convert-LB (label-str)
-  "for property LB: label a position or stone. e.g. LB[ee:label]"
-  (let ((re (rx (group (repeat 2 (any "a-zA-Z"))) ":" (group (zero-or-more anything)))))
-    (if (string-match re label-str)
-        (format "%S" (cons (sgf-convert-single-position (match-string 1 label-str))
-                           (match-string 2 label-str)))
-      (error "Malformed SGF label %S" label-str))))
-
-(defun sgf-convert-SZ (str)
-  "Process the SZ property from an SGF file and return a cons cell of board dimensions."
-  (let* ((nums (split-string str ":"))
-         (width (string-to-number (car nums)))
-         (height (string-to-number (or (cadr nums) (car nums)))))
-    (format "%S" (cons width height))))
-
-;; todo: use plist instead of alists?
-(defun sgf-buffer-to-game-tree ()
-  "Convert and replace the content in SGF-BUFFER to an eLisp list.
-
-If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF strings."
-  (let ((property-processors '(("DT" . sgf-convert-DT)
-                               ("SZ" . sgf-convert-SZ)
-                               ("B"  . sgf-convert-pos)
-                               ("W"  . sgf-convert-pos)
-                               ("AB" . sgf-convert-pos)
-                               ("AW" . sgf-convert-pos)
-                               ("AE" . sgf-convert-pos)
-                               ("SQ" . sgf-convert-pos)
-                               ("TR" . sgf-convert-pos)
-                               ("LB" . sgf-convert-LB)))
-        processor
-        beg-prop beg-prop-val node prop prop-key prop-val)
-    (with-current-buffer (current-buffer)
-      (save-excursion
-        (goto-char (point-min))
-        (while (re-search-forward sgf-node-re nil t)
-          (setq node (match-string 0))
-          (replace-match "(") ; delete the node SGF string and insert "(".
-          (while (string-match sgf-property-re node beg-prop)
-            (setq beg-prop (match-end 0))
-            (setq prop (match-string 0 node))
-            (setq prop-key (match-string 1 node))
-            (insert "(")
-            (insert (upcase prop-key))
-            (setq processor (cdr (assoc prop-key property-processors)))
-            (while (string-match sgf-property-value-re prop beg-prop-val)
-              (setq beg-prop-val (match-end 0))
-              (setq prop-val (match-string 1 prop))
-              (insert " ")
-              (if processor
-                  (setq prop-val (funcall processor prop-val))
-                ;; try convert to a number
-                (setq prop-val (or (string-to-number-or-nil prop-val)
-                                   (format "%S" prop-val))))
-              (insert (format "%s" prop-val)))
-            (insert ")")
-            (setq beg-prop-val 0))
-          (insert ")")
-          (setq beg-prop 0))))))
+(defun sgf-board-2d-set (xy v board-2d)
+  (aset (aref board-2d (cdr xy)) (car xy) v))
 
 
-(defun sgf-buffer-to-game-tree-new (&optional new-buffer)
-  "Convert the content of SGF-BUFFER to emacs-lisp in a new buffer."
-  (interactive "sNew buffer name: ")
-  (let* ((buffer (generate-new-buffer new-buffer))
-         (sgf-str (buffer-string)))
-    (with-current-buffer buffer
-      (insert sgf-str)
-      (goto-char (point-min))
-      (sgf-buffer-to-game-tree)
-      (emacs-lisp-mode))
-    (pop-to-buffer buffer)))
+(defun sgf-board-hoshi (w h)
+  "Return a list of hoshi positions on a board of size WxH."
+  (append
+   ;; center position
+   (if (and (= (logand w 1) 1) (= (logand h 1) 1)) (list (cons (/ (1- w) 2)  (/ (1- h) 2))))
+   ;; 4 corners
+   (if (and (> w 12) (> h 12))
+       (list (cons 3       3)
+             (cons (- w 4) 3)
+             (cons 3       (- h 4))
+             (cons (- w 4) (- h 4))))
+   ;; 4 sides
+   (if (and (> w 18) (> h 18) (= (logand h 1) 1))
+       (list (cons 3       (/ (1- h) 2))
+             (cons (- w 4) (/ (1- h) 2))))
+   (if (and (> w 18) (> h 18) (= (logand w 1) 1))
+       (list (cons (/ (1- w) 2) 3)
+             (cons (/ (1- w) 2) (- h 4))))))
 
 
-(defun sgf-str-to-game-tree (str)
-  "Convert a string of sgf into the equivalent Emacs Lisp."
-  (interactive)
-  (with-temp-buffer
-    (insert str)
-    (sgf-buffer-to-game-tree)
-    (goto-char (point-min))
-    (read (current-buffer))))
+(defun sgf-neighbors-xy (xy board-2d)
+  "Return a list of neighboring positions of XY on a board of size WxH."
+  (let ((x (car xy)) (y (cdr xy))
+        (w (length (aref board-2d 0)))
+        (h (length board-2d)))
+    (list
+     (if (> x 0) (cons (1- x) y)) ;; left
+     (if (< x (1- w)) (cons (1+ x) y)) ;; right
+     (if (> y 0) (cons x (1- y))) ;; above
+     (if (< y (1- h)) (cons x (1+ y)))))) ;; below
 
 
-(defun sgf-file-to-game-tree (file)
-  "Convert the sgf contents of FILE to emacs lisp."
-  (interactive "f")
-  (with-temp-buffer
-    (insert-file-contents-literally file)
-    (sgf-buffer-to-game-tree)
-    (goto-char (point-min))
-    (read (current-buffer))))
+(defun sgf-neighbors (xy board-2d)
+  (let ((x (car xy)) (y (cdr xy)))
+    (list
+     (aref (aref board-2d y) (1- x)) ;; left
+     (aref (aref board-2d y) (1+ x)) ;; right
+     (aref (aref board-2d (1- y)) x) ;; above
+     (aref (aref board-2d (1+ y)) x)))) ;; below
 
 
-(defun sgf-str-from-prop (prop)
-  "Convert a property to an SGF string.
+(defun sgf-alive-p (xy board-2d &optional last-color visited)
+  "Check if the stone on position XY of BOARD-2D is alive.
 
-(sgf-str-from-prop '(B (0 . 0) (1 . 0))) => B[aa][ba]
-(sgf-str-from-prop '(FF 4)) => FF[4]
-(sgf-str-from-prop '(AB (1 . 1) (1 . 2))) => AB[bb][bc]
-(sgf-str-from-prop '(SZ (15 . 13))) => SZ[15:13]
-(sgf-str-from-prop '(C \"comment\")) => C[comment]"
-  (let (prop-key prop-val-str)
-    (setq prop-key (car prop))
-    (setq prop-val-str
-          (mapconcat (lambda (prop-val)
-                       (cond ((or (eq prop-key 'B) (eq prop-key 'W)
-                                  (eq prop-key 'AB) (eq prop-key 'AW))
-                              (format "[%c%c]"
-                                      (+ ?a (car prop-val))
-                                      (+ ?a (cdr prop-val))))
-                             ((eq prop-key 'SZ)
-                              (let ((x (car prop-val))
-                                    (y (cdr prop-val)))
-                                (if (= x y) (format "[%d]" x) (format "[%d:%d]" x y))))
-                             (t (format "[%s]" prop-val))))
-                     (cdr prop)))
-    (format "%S%s" prop-key prop-val-str)))
-
-
-(defun sgf-str-from-node (node)
-  "Convert a node to an SGF string.
-
-(sgf-str-from-node '((FF 4) (SZ (15 . 13)) (AB (1 . 1) (1 . 2))))"
-  (concat ";" (mapconcat (lambda (prop) (sgf-str-from-prop prop)) node)))
-
-
-(ert-deftest sgf-str-from-node-test ()
-  (should (string= (sgf-str-from-node '((B (0 . 0) (1 . 0)) (C "comment")))
-                   ";B[aa][ba]C[comment]")))
-
-
-(defun sgf-str-from-game-tree (lnode)
-  "Convert a game tree to an SGF string."
-  (let ((curr-lnode lnode)
-        (next-lnodes (aref lnode 2))
-        (node-str (sgf-str-from-node (aref lnode 1))))
-    (if (null next-lnodes)
-        node-str
-      (let ((next-strs (mapcar #'sgf-from-game-tree next-lnodes)))
-        (if (= (length next-lnodes) 1)
-            ;; No fork, just append the next node string
-            (concat node-str (car next-strs))
-          ;; Fork, wrap each branch in parentheses
-          (concat node-str "(" (mapconcat #'identity next-strs ")(") ")"))))))
+It returns a cons cell of the form (LIBERTY-FOUND . VISITED). Its car
+indicates if a liberty is found, and its cdr is a list of visited
+positions to avoid loops, which also stores all the dead positions if no
+liberty is found."
+  (let ((curr-color (sgf-board-2d-get xy board-2d)))
+    (cond
+     ;; Base case: the current position is empty, indicating a liberty.
+     ((equal curr-color 'E) (cons t visited))
+     ;; If we've already visited this position, skip it to avoid loops.
+     ((member xy visited) (cons nil visited))
+     ;; Recursively check neighbors of the same color.
+     ((or (null last-color) (equal last-color curr-color))
+      ;; Add the current position to the visited list.
+      (setq visited (cons xy visited))
+      ;; Recursively check neighbors.
+      (let ((liberty-found nil))
+        (dolist (neighbor (sgf-neighbors-xy xy board-2d) (cons liberty-found visited))
+          (when neighbor
+            (let ((result (sgf-alive-p neighbor board-2d curr-color visited)))
+              ;; If a liberty is found, return immediately.
+              (if (car result)
+                  (setq liberty-found t)
+                ;; Otherwise, update visited positions.
+                (setq visited (cdr result))))))))
+     ;; No liberty found.
+     (t  (cons nil visited)))))
 
 
 
-(ert-deftest sgf-cycle-test ()
-  (let* ((cases '("(;B[aa][ba]C[comment])"
-                  "(;B[aa][ba]C[comment](;W[cc]C[comment])(;W[ee]))")))
-    (dolist (sgf-str cases)
-      (setq sgf-lst (sgf-str-to-game-tree sgf-str))
-      (setq root (car sgf-lst))
-      (setq root-lnode (board-linked-node nil root))
-      (sgf-link-nodes-in-branch (cdr sgf-lst) root-lnode)
-      (should (string= (format "(%s)" (sgf-str-from-game-tree root-lnode)) sgf-str)))))
-
+(defun sgf-capture (xy board-2d)
+  "Capture the opponent stone after the play of position XY.
+Return the list of positions for the prisoners captured."
+  (let ((curr-color (sgf-board-2d-get xy board-2d))
+        (prisoners nil))
+    (dolist (neighbor-xy (sgf-neighbors-xy xy board-2d))
+      (if (and neighbor-xy
+               (not (member neighbor-xy prisoners))
+               (not (equal curr-color (sgf-board-2d-get neighbor-xy board-2d))))
+          (let* ((results (sgf-alive-p neighbor-xy board-2d))
+                 (alive-p (car results)))
+            (if (not alive-p)
+                (setq prisoners (nconc (cdr results) prisoners))))))
+    prisoners))
 
 
 (defun sgf-process-play (node)
@@ -273,33 +149,6 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
     (cons color xy)))
 
 
-(defconst sgf-game-info-properties
-  '(("CP" "Copyright")
-    ("US" "Enterer Name")
-    ("AN" "Annotator Name")
-    ("SO" "Source")
-    ("EV" "Event Name")
-    ("GN" "Game Name")
-    ("RO" "Round Number")
-    ("DT" "Date")
-    ("PC" "Place")
-    ("BT" "Black Team" :player black)
-    ("PB" "Black Player" :player black)
-    ("BR" "Black Rank" :player black)
-    ("WT" "White Team" :player white)
-    ("PW" "White Player" :player white)
-    ("WR" "White Rank" :player white)
-    ("RU" "Rule")
-    ("OT" "Overtime Method")
-    ("TM" "Time Limit" :type real)
-    ("HA" "Handicap Stones" :type number)
-    ("KM" "Komi" :type real)
-    ("RE" "Result")
-    ("ON" "Opening Moves")
-    ("GC" "Comment" :type text))
-  "Game Info Properties")
-
-
 (defun nested-level-of-first (lst)
   "Return the nesting level of the first element in the list LST.
 (nested-level-of-first '(a b (c d))) => 0
@@ -308,117 +157,194 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
       (1+ (nested-level-of-first (car lst)))  ;; If the first element is a list, go deeper.
     0))
 
-(defun sgf-link-nodes-in-branch (game-branch head-lnode)
+(defun sgf-linkup-nodes-in-game-tree (game-tree head-lnode)
   "Link up nodes in a branch of the game tree."
   (let* ((prev-lnode head-lnode)
          curr-lnode nested-level)
-    (dolist (i game-branch)
+    (dolist (i game-tree)
       (setq nested-level (nested-level-of-first i))
       (cond ((= nested-level 2) ;; this is a fork
-             (sgf-link-nodes-in-branch i prev-lnode))
+             (sgf-linkup-nodes-in-game-tree i prev-lnode))
             ((= nested-level 1) ;; this is a node
-               ;; create new node
-               (setq curr-lnode (board-linked-node prev-lnode i))
-               ;; link prev-node to the new node
-               (aset prev-lnode 2 (append (aref prev-lnode 2) (list curr-lnode)))
-               ;; this line reversed the order of branches
-               ;; (aset prev-lnode 2 (cons curr-lnode (aref prev-lnode 2)))
-               (setq prev-lnode curr-lnode))))))
+             ;; create new node
+             (setq curr-lnode (sgf-linked-node prev-lnode i))
+             ;; link prev-node to the new node
+             (aset prev-lnode 2 (append (aref prev-lnode 2) (list curr-lnode)))
+             ;; this line reversed the order of branches
+             ;; (aset prev-lnode 2 (cons curr-lnode (aref prev-lnode 2)))
+             (setq prev-lnode curr-lnode))))))
 
-;; todo: unwind-protect to restore the original state if anything goes wrong.
+
+(defun sgf-update-game-state (game-state &rest body)
+  (unwind-protect
+      (progn ,@body)
+        game-state)
+    (message "Error updating game state."))
+
+
+(defun sgf-add-captured-stones (xys color board-2d svg)
+  (dolist (xy xys)
+    (let ((x (car xy)) (y (cdr xy)))
+      (aset (aref board-2d y) x color)
+      (dom-set-attribute svg (board-svg-mvnum-id x y)
+                         "color" (if (equal color 'B) "white" "black"))
+      (dom-remove-attribute svg (board-svg-stone-id x y) "visibility"))))
+
+
+(defun sgf-del-captured-stone (xys color board-2d svg)
+  (dolist (xy xys)
+    (let ((x (car xy)) (y (cdr xy)))
+      (aset (aref board-2d y) x 'E)
+      (dom-set-attribute svg (board-svg-mvnum-id x y)
+                         (if (equal color 'B) "black" "white"))
+      (dom-set-attribute svg (board-svg-stone-id x y) "visibility" "hidden"))))
+
+
+(defun sgf-update-svg-marks (svg interval mark board-2d)
+  "Process a mark property and update the marks on the board."
+  ;; make sure to remove old marks
+  (let ((mark-grp (board-svg-marks-group svg))
+        (grid (dom-parent svg mark-grp))
+        (type (car mark))
+        x y xy-state)
+    (svg-remove svg "marks")            ; remove the whole group
+    (setq mark-grp (svg-node grid :id "marks")) ; create new group
+    (dolist (xy (cdr mark))
+      (setq x (car xy) y (cdr xy)
+            xy-state (sgf-board-2d-get x y))
+      (board-svg-add-mark type mark-grp interval x y xy-state))))
+
+
+  ;; (vector linked-node                 ; 0 current node
+  ;;         board-2d                    ; 1
+  ;;         move-num                    ; 2
+  ;;         ko                          ; 3 ko position
+  ;;         prisoners                   ; 4 a list of cons (x . y) after current move
+  ;;         black-white-prisoner-counts ; 5 accumulated number (b . w)
+  ;;         undo-stack                  ; 6
+  ;;         redo-stack))
+
+
+;; For every move, do:
+;; 1. check if it is legal move: not KO, not suicide;
+;;    label current stone with red
+;; 2. update move number
+;; 3. capture opponent stone
+;; 4. update board
+;; 5. update svg
+;; 6. update linked node
+;; 7. push change to undo/redo stack
+;; 8. stringify the game and update SGF text
+;; Navigation Functions
 (defun sgf-forward-node (&optional branch)
   "Move to the next node in the game tree and update board."
   (interactive)
   (let* ((ol (car (overlays-in (point-min) (point-max))))
-         (svg  (overlay-get ol 'svg))
-         (hot-areas (overlay-get ol 'hot-areas))
-         (interval (car (overlay-get ol 'board-param)))
-         (game-state (overlay-get ol 'game-state))
+         (svg         (overlay-get ol 'svg))
+         (hot-areas   (overlay-get ol 'hot-areas))
+         (interval    (car (overlay-get ol 'svg-params)))
+         (game-state  (overlay-get ol 'game-state))
          (curr-lnode  (aref game-state 0))
-         (mvnum      (aref game-state 1))
-         (board-2d   (aref game-state 2))
+         (board-2d    (aref game-state 1))
+         (mvnum       (aref game-state 2))
          (next-lnodes (aref curr-lnode 2))
-         (n (length next-lnodes))
-         (prisoners (aref game-state 4))
-         next-lnode play xy x y color new-prisoners)
-        (if (null game-state) (error "No game state found."))
-        (cond ((= n 0) (message "No next node.") nil)
-              (t
-               (if (= n 1) (setq branch 0))
-               (if (null branch)
-                   (setq branch (- (read-char (format "Select a branch (a-%c): " (+ ?a n -1))) ?a)))
-               (if (or (< branch 0) (>= branch n))
-                   (error "Invalid branch."))
-               (setq next-lnode (nth branch next-lnodes))
+         (n           (length next-lnodes))
+         (pcounts     (aref game-state 5))
+         (clone  (copy-sequence game-state))
+         next-lnode next-node play xy x y color prisoners)
+    (if (= n 0) (progn (message "No more next play.") nil)
+      (setq branch
+            (or branch
+                (if (= n 1) 0
+                  (- (read-char (format "Select a branch (a-%c): " (+ ?a n -1))) ?a))))
+      (if (or (< branch 0) (>= branch n))
+          (error "Invalid branch selection."))
+      (setq next-lnode (nth branch next-lnodes))
+      (setq next-node (aref next-lnode 1)))
+    (setq play (sgf-process-play (aref next-lnode 1)))
+    (setq color (car play) xy (cdr play))
+    (condition-case-unless-debug err
+        ;; protect the game state from partially updated:
+        ;; if it failed, roll back to previous game state
+        (progn
+          (setq mvnum (1+ mvnum))
+          (aset game-state 1 mvnum)
+          (if (null xy) ; xy is not nil - this is not a pass
+              (aset game-state 4 nil)
+            ;; update game-state: make sure this aset is in place.
+            (sgf-board-2d-set xy color board-2d)
+            (setq prisoners (sgf-capture xy board-2d))
+            (aset game-state 4 prisoners)
+            ;; Remove captured stones and update prisoner counts
+            (sgf-del-captured-stones prisoners color board-2d svg)
+            (if (equal color 'B)     ;todo
+                (setcar pcounts (+ (length prisoners) (car pcounts)))
+              (setcdr pcounts (+ (length prisoners) (cdr pcounts))))
+            (aset game-state 0 next-lnode)
+            (board-svg-add-stone svg interval x y (symbol-name color))
+            (board-svg-add-mvnum svg interval x y mvnum color))
 
-               (setq mvnum (1+ mvnum))
-               (aset game-state 1 mvnum)
-               (setq play (sgf-process-play (aref next-lnode 1)))
-               (setq color (car play)
-                     xy (cdr play)
-                     x (car xy)
-                     y (cdr xy))
-              ;; update game-state: make sure this aset is inplace.
-               (aset (aref board-2d y) x color)
-               (setq new-prisoners (board-capture xy board-2d))
-               (dolist (prison new-prisoners)
-                 (svg-remove svg (board-svg-move-number-id (car prison) (cdr prison)))
-                 (svg-remove svg (board-svg-stone-id (car prison) (cdr prison))))
-               (if (equal color 'B)     ;todo
-                   (setcar prisoners (+ (length new-prisoners) (car prisoners)))
-                 (setcdr prisoners (+ (length new-prisoners) (cdr prisoners))))
-               (aset game-state 0 next-lnode)
-               (board-svg-add-stone svg x y (symbol-name color) interval)
-               (board-svg-add-move-number svg x y mvnum color interval)
-               (overlay-put ol 'display (svg-image svg :map hot-areas))
-               (overlay-put ol 'svg svg)
-               ))))
+          ;; Error handling: Roll back to the previous game state
+          (error
+           (message "Error: %s. Rolling back to the previous game state." err)
+           (setq game-state clone)))
+
+      (overlay-put ol 'display (svg-image svg :map hot-areas))
+      (overlay-put ol 'svg svg))))
+
 
 (defun sgf-backward-node ()
   "Move to the previous node in the game tree and update board."
   (interactive)
   (let* ((ol (car (overlays-in (point-min) (point-max))))
-         (svg  (overlay-get ol 'svg))
-         (hot-areas (overlay-get ol 'hot-areas))
+         (svg        (overlay-get ol 'svg))
+         (hot-areas  (overlay-get ol 'hot-areas))
          (game-state (overlay-get ol 'game-state))
          (curr-lnode (aref game-state 0))
-         (mvnum     (aref game-state 1))
-         (board-2d  (aref game-state 2))
+         (board-2d   (aref game-state 1))
+         (mvnum      (aref game-state 2))
          (prev-lnode (aref curr-lnode 0))
          play xy x y)
-    (if (null game-state) (error "No game state found."))
     (if prev-lnode
-        (progn (setq mvnum (1- mvnum))
-               (aset game-state 1 mvnum)
+        (progn (aset game-state 1 (1- mvnum))
                (setq play (sgf-process-play (aref curr-lnode 1)))
                (setq xy (cdr play)
+                     color (car play)
                      x (car xy)
                      y (cdr xy))
                ;; update game-state: make sure this aset is inplace.
                (aset (aref board-2d y) x 'E)
+               (sgf-add-captured-stones (aref game-state 4)
+                                        color
+                                        board-2d
+                                        svg)
                (aset game-state 0 prev-lnode)
                (svg-remove svg (board-svg-stone-id x y))
-               (svg-remove svg (board-svg-move-number-id x y))
+               (svg-remove svg (board-svg-mvnum-id x y))
                (overlay-put ol 'display (svg-image svg :map hot-areas))
                (overlay-put ol 'svg svg))
       (progn (message "No previous node.") nil))))
+
 
 (defun sgf-first-node ()
   "Move to the first node in the game tree."
   (interactive)
   (while (sgf-backward-node)))
 
+
 (defun sgf-last-node ()
   "Move to the last node in the game tree."
   (interactive)
   (while (sgf-forward-node)))
 
+
 (defun sgf-goto-node (n)
   "Move forward or backward N nodes."
   (interactive "nMove forward (pos number) or backward (neg number) node number: ")
-    (if (> n 0)
-        (dotimes (i n) (sgf-forward-node))
-      (dotimes (i (- n)) (sgf-backward-node))))
+  (if (> n 0)
+      (dotimes (i n) (sgf-forward-node))
+    (dotimes (i (- n)) (sgf-backward-node))))
+
 
 (defun sgf-toggle-move-number()
   "Toggle the display of move numbers."
@@ -426,22 +352,23 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
   (let* ((ol (car (overlays-in (point-min) (point-max))))
          (hot-areas (overlay-get ol 'hot-areas))
          (svg  (overlay-get ol 'svg)))
-    (if (dom-attr (board-svg-move-numbers-group svg) 'visibility)
+    (if (dom-attr (board-svg-mvnums-group svg) 'visibility)
         ;; show the numbers
-        (dom-remove-attribute (board-svg-move-numbers-group svg) 'visibility)
+        (dom-remove-attribute (board-svg-mvnums-group svg) 'visibility)
       ;; add visibility attribute to hide svg move number group
-      (dom-set-attribute (board-svg-move-numbers-group svg) 'visibility "hidden"))
+      (dom-set-attribute (board-svg-mvnums-group svg) 'visibility "hidden"))
     (overlay-put ol 'svg svg)
     (overlay-put ol 'display (svg-image svg :map hot-areas))))
 
+
 (defun sgf-view-next ()
-  "Toggle the display of hint of next move."
+  "Toggle the display of hint of next move(s)."
   (interactive)
   (let* ((ol (car (overlays-in (point-min) (point-max))))
          (svg  (overlay-get ol 'svg))
          (grid (car (dom-by-id "grid")))
          (hot-areas (overlay-get ol 'hot-areas))
-         (interval (nth 0 (overlay-get ol 'board-param)))
+         (interval (nth 0 (overlay-get ol 'svg-params)))
          (game-state (overlay-get ol 'game-state))
          (curr-lnode (aref game-state 0))
          (next-lnodes (aref curr-lnode 2))
@@ -454,8 +381,9 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
                  (y (cdr xy)))
             (board-svg-add-text grid interval x y (string char) 'E)
             (setq char (1+ char))))))
-    (overlay-put ol 'svg svg)
-    (overlay-put ol 'display (svg-image svg :map hot-areas)))
+  (overlay-put ol 'svg svg)
+  (overlay-put ol 'display (svg-image svg :map hot-areas)))
+
 
 (defun sgf-export-svg (&optional filename)
   "Export the board to an SVG file or display it in a buffer."
@@ -475,6 +403,8 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
         (with-temp-file filename
           (svg-print svg))))))
 
+
+;; Modification Functions
 (defun sgf-kill-node ()
   "Delete the current node and all its children."
   (interactive)
@@ -499,7 +429,14 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
             ;; delete the comment
             (aset curr-lnode 1 (assq-delete-all 'C curr-node))
           (setf (cdr (assoc 'C curr-node)) new-comment)))))
-          ;; (aset curr-lnode 1 (alist-put 'C new-comment curr-node))))))
+;; (aset curr-lnode 1 (alist-put 'C new-comment curr-node))))))
+
+;; igo-editor-move-mode-make-move-root
+(defun sgf-make-current-node-root ()
+  "Make the current node the root node.
+1. move all the nodes in between to the root node.
+2. change B, W to AB, AW"
+  (interactive))
 
 
 (defun sgf-edit-game-info ()
@@ -529,11 +466,12 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
          (next-xys (mapcar (lambda (node) (cdr (sgf-process-play (aref node 1)))) next-lnodes))
          (found (car (seq-positions next-xys xy))))
     (cond (found (sgf-forward-node found)) ;; case 1.
-          ((eq xy-state 'E)
+          ((eq xy-state 'E) ; todo need to check it is not a suicide pos or KO pos
            (let ((n (length next-lnodes))
                  (prisoners 0)
-                 (new-lnode (board-linked-node curr-lnode `((B ,xy)))))
+                 (new-lnode (sgf-linked-node curr-lnode `((B ,xy)))))
              (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
+             ;; todo remove any residual mvnum-id stone-id
              ;; get to the root node from any node
              (while (aref root-lnode 0) (setq root-lnode (aref root-lnode 0)))
              (erase-buffer)
@@ -545,9 +483,14 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
           (t (message "Illegal move!"))))) ; case 3.
 
 
+(defun sgf-create-node ()
+
 (defun sgf-pass ()
-  "Pass the current. Add a new node of W[] or B[]"
+  "Pass the current. Add a new node of W[] or B[].
+
+The move number will be incremented."
   (interactive)
+                                        ;todo
   )
 
 (defmacro sgf--add-mark (shape add-mark-func)
@@ -556,14 +499,14 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
           (svg  (overlay-get ol 'svg))
           (game-state (overlay-get ol 'game-state))
           (board-2d (aref game-state 1))
-          (interval (nth 0 (overlay-get ol 'board-param)))
+          (interval (nth 0 (overlay-get ol 'svg-params)))
           (curr-lnode (aref game-state 0))
           (curr-node (aref curr-lnode 1))
           (xy (sgf-mouse-event-to-board-xy last-input-event))
           (x (car xy)) (y (cdr xy))
-          (pos-state (aref (aref board-2d y) x)))
+          (xy-state (aref (aref board-2d y) x)))
      (push curr-node (list shape xy))
-     (apply add-mark-func svg interval x y pos-state)))
+     (apply add-mark-func svg interval x y xy-state)))
 
 
 (defun sgf-add-mark-square ()
@@ -600,16 +543,15 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
   "Convert a mouse click to a board position (X . Y)."
   (if (mouse-event-p event)
       (let* ((ol (car (overlays-in (point-min) (point-max))))
-             (interval   (nth 0 (overlay-get ol 'board-param)))
-             (margin     (nth 1 (overlay-get ol 'board-param)))
-             (bar-height (nth 2 (overlay-get ol 'board-param)))
+             (interval   (nth 0 (overlay-get ol 'svg-params)))
+             (margin     (nth 1 (overlay-get ol 'svg-params)))
+             (bar-height (nth 2 (overlay-get ol 'svg-params)))
              (xy (posn-object-x-y (event-start event)))
              (x (/ (- (float (car xy)) margin) interval))
              (y (/ (- (float (cdr xy)) margin bar-height) interval)))
         (cons (round x) (round y)))))
 
 
-;igo-ui-create-button
 (defvar sgf-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "f" 'sgf-forward-node)
@@ -638,39 +580,49 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
     map))
 
 
-(defun sgf-process-added-bw (root)
-  "Process the AB and AW in root node of an SGF game tree."
+(defun sgf-track-dragging ()
+  "Track dragging on the board. igo-editor-track-dragging"
+  (interactive)
+  (let* ((ol (car (overlays-in (point-min) (point-max))))
+         (svg  (overlay-get ol 'svg))
+         (hot-areas (overlay-get ol 'hot-areas))
+         (interval (car (overlay-get ol 'svg-params)))
+         (game-state (overlay-get ol 'game-state))
+         (curr-lnode  (aref game-state 0))
+         (board-2d   (aref game-state 2))
+         (xy (sgf-mouse-event-to-board-xy last-input-event))
+         (x (car xy)) (y (cdr xy))
+         (pos-state (aref (aref board-2d y) x)))
+    (if (and (eq last-command 'mouse-drag-region)
+             (not (equal pos-state 'E)))
+        (progn
+          (aset (aref board-2d y) x 'E)
+          (board-svg-add-stone svg interval x y 'E)
+          (overlay-put ol 'display (svg-image svg :map hot-areas))
+          (overlay-put ol 'svg svg)))))
 
-  "Process a play node."
-  (let* ((color (if (assoc 'B node) 'B 'W))
-        (xy (car (alist-get color node))))
-    (cons color xy)))
 
-(defun sgf-toggle-board-svg (&optional interval margin bar-height)
+(defun sgf-toggle-board-svg (&optional interval margin bar-height padding)
   "Visualize the board in the current buffer using SVG."
   (interactive)
   (let ((ol (overlays-in (point-min) (point-max))))
     (if ol (dolist (i ol) (delete-overlay i))
       (let* ((game-tree (sgf-str-to-game-tree (buffer-string)))
              (root (car game-tree))
-             (root-lnode (board-linked-node nil root nil))
+             (root-lnode (sgf-linked-node nil root nil))
              (w-h (car (alist-get 'SZ root)))
              (w (car w-h)) (h (cdr w-h))
-             (board-2d (board-create-2d w h))
+             (board-2d (sgf-create-board-2d w h))
              (interval (or interval board-svg-interval))
              (margin (or margin board-svg-margin))
              (bar-height (or bar-height board-svg-bar-height))
-             (svg-hot-areas (board-svg-init w h interval margin bar-height))
+             (padding (or padding board-svg-padding))
+             (svg-hot-areas (board-svg-init w h interval margin bar-height padding))
              (svg (car svg-hot-areas))
              (hot-areas (cdr svg-hot-areas))
              game-state)
-        ;; (setq hot-area-map `(
-        ;;                     ((rect . (,hot-area-upper-left . ,hot-area-bottom-right))
-        ;;                      board-grid
-        ;;                      (help-echo "Click on the intersection" pointer hand))
-        ;;                     ))
 
-        ;; process root node
+        ;; process root node to add stones
         (dolist (prop root)
           (let* ((prop-key (car prop))
                  (prop-vals (cdr prop))
@@ -681,24 +633,18 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
                    (dolist (pos prop-vals)
                      (setq x (car pos) y (cdr pos))
                      (aset (aref board-2d y) x stone-color)
-                     (board-svg-add-stone svg x y stone-color interval))))))
+                     (board-svg-add-stone svg interval x y stone-color))))))
 
         (setq ol (make-overlay (point-min) (point-max)))
         ;; root state
-        (sgf-link-nodes-in-branch (cdr game-tree) root-lnode)
+        (sgf-linkup-nodes-in-game-tree (cdr game-tree) root-lnode)
         (setq game-state
-              (board-game-state root-lnode 0 board-2d nil (cons 0 0) nil))
+              (sgf-game-state root-lnode 0 board-2d nil (cons 0 0) nil))
         (overlay-put ol 'game-state  game-state)
-        (overlay-put ol 'board-param (list interval margin bar-height))
+        (overlay-put ol 'svg-params (list interval margin bar-height))
         (overlay-put ol 'svg svg)
         (overlay-put ol 'hot-areas hot-areas)
         (overlay-put ol 'display (svg-image svg :map hot-areas))))))
-
-
-;; (sgf-file-to-game-tree "tests/test-15x13.sgf")
-
-;; (sgf-str-to-game-tree "(;FF[4]GM[1]SZ[15:13]AB[bb];B[ba];W[aa]SQ[cb]TR[bb](;B[ab]C[capture white stone.])(;B[ca]))")
-
 
 
 (defun sgf-mode-font-lock-keywords ()
