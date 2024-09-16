@@ -123,68 +123,24 @@
         (should (string= (cdr i) (buffer-string)))))))
 
 
-(ert-deftest sgf-process-play-test ()
-  (should (equal (sgf-process-play '((B (1 . 2)) (C "comment")))
-                 '(B 1 . 2)))
-  (should (equal (sgf-process-play '((W) (C "comment")))
-                 '(W))))
 
-(ert-deftest sgf-neighbors-xy-test ()
-  (let ((board-2d [[B B W]
-                   [B W E]
-                   [W E E]]))
-    (sgf-neighbors-xy '(1 . 1) board-2d)
-    (sgf-neighbors-xy nil board-2d)))
-
-
-(ert-deftest sgf-check-alive-test ()
-  (let ((board-2d [[B B W]
-                   [B W E]
-                   [W E E]]))
-    (should (equal (car (sgf-check-alive nil board-2d)) t))
-    (should (equal (car (sgf-check-alive '(1 . 1) board-2d)) t))
-    (should (equal (sgf-check-alive '(0 . 1) board-2d) '(nil (1 . 0) (0 . 0) (0 . 1))))
-    (should (equal (sgf-check-alive '(1 . 0) board-2d) '(nil (0 . 1) (0 . 0) (1 . 0))))))
-
-
-(ert-deftest sgf-capture-stones-test ()
-  (let ((board-2d [[B B W]
-                   [B W E]
-                   [W E E]]))
-    (should (equal (sgf-capture-stones '(2 . 2) board-2d) 0))
-    (should (equal (sgf-capture-stones '(0 . 0) board-2d) 0))
-    (should (equal (sgf-capture-stones '(1 . 1) board-2d) 3))
-    ;;(should (equal (sgf-capture-stones '(0 . 2) board-2d) 3))
-    (should (equal [[E E W]
-                    [E W E]
-                    [W E E]] board-2d))))
+(ert-deftest sgf-str-from-node-test ()
+  (should (string= (sgf-str-from-node '((B (0 . 0) (1 . 0)) (C "comment")))
+                   ";B[aa][ba]C[comment]")))
 
 
 
-(ert-deftest sgf-capture-stones-test ()
-  (let ((board-2d [[B B W]
-                   [B W E]
-                   [W E E]]))
-    (should-not (sgf-capture-stones nil board-2d))
-    (should-not (sgf-capture-stones '(2 . 2) board-2d))
-    (should-not (sgf-capture-stones '(0 . 0) board-2d))
-    (should (equal (sort (sgf-capture-stones '(1 . 1) board-2d))
-                   '((0 . 0) (0 . 1) (1 . 0))))))
-    ;;(should (equal (sgf-capture-stones '(0 . 2) board-2d) 3))
+(ert-deftest sgf-cycle-test ()
+  (let* ((cases '("(;B[aa][ba]C[comment])"
+                  "(;B[aa][ba]C[comment](;W[cc]C[comment])(;W[ee]))")))
+    (dolist (sgf-str cases)
+      (setq sgf-lst (sgf-str-to-game-tree sgf-str))
+      (setq root (car sgf-lst))
+      (setq root-lnode (sgf-linked-node nil root))
+      (sgf-linkup-nodes-in-game-tree (cdr sgf-lst) root-lnode)
+      (should (string= (format "(%s)" (sgf-str-from-game-tree root-lnode)) sgf-str)))))
 
 
-(ert-deftest sgf-suicide-p-test ()
-  (let ((board-2d [[E B W]
-                   [B W E]
-                   [W E E]]))
-    (should (sgf-suicide-p '(0 . 0) 'W board-2d))
-    ;; make sure board-2d is not changed
-    (should (equal (sgf-board-2d-get '(0 . 0) board-2d) 'E))
-    (should (sgf-suicide-p '(0 . 0) 'B board-2d))
-    (should-not (sgf-suicide-p '(2 . 2) 'B board-2d))
-    (should-not (sgf-suicide-p '(2 . 1) 'B board-2d))
-    (should-not (sgf-suicide-p '(1 . 2) 'B board-2d))))
 
-
-(provide 'sgf-mode-test)
+(provide 'sgf-io-test)
 ;;; sgf-mode-test.el ends here

@@ -98,16 +98,32 @@ attributes(cx, cy, fx, fy, r, etc...)"
     ;; Status Bar
     (setq status-bar (svg-node svg 'g :id "status-bar"))
     (svg-rectangle status-bar 0 0 board-w bar-height :fill "gray")
-    (svg-circle status-bar (/ interval 2) (/ interval 2) (/ interval 3) :gradient "B")
-    (svg-circle status-bar (- board-w (/ interval 2)) (/ interval 2) (/ interval 3) :gradient "W")
-    ;; todo igo-editor-update-status-bar
-    ;; show prisoners on status bar todo: show prisnoers in message bar instead
-    ;; (svg-text status-bar "0" :x (* interval 2) :y bar-height :fill "white"
-    ;;           :font-weight "bold" :font-family board-svg-font-family
-    ;;           :text-anchor "middle" :dy "-0.5em")
-    ;; (svg-text status-bar "0" :x (- board-w interval interval) :y bar-height :fill "white"
-    ;;           :font-weight "bold" :font-family board-svg-font-family
-    ;;           :text-anchor "middle" :dy "-0.5em")
+    (svg-circle status-bar (/ interval 2)
+                (/ interval 2) (/ interval 3) :gradient "B")
+    (svg-circle status-bar (- board-w (/ interval 2))
+                (/ interval 2) (/ interval 3) :gradient "W")
+    ;; show what play turn it is
+    (svg-rectangle status-bar 0 (- bar-height padding)
+                   interval padding
+                   :id "status-b" :fill "gray")
+    (svg-rectangle status-bar (- board-w interval) (- bar-height padding)
+                   interval padding
+                   :id "status-w" :fill "gray")
+    ;; show move number
+    (svg-text status-bar "0" :x (/ board-w 2) :y bar-height
+              :id "status-n" :fill "white"
+              :font-family board-svg-font-family :font-weight "bold"
+              :text-anchor "middle" :dy "-0.5em")
+    ;; show prisoner number
+    (svg-text status-bar "0" :x (* interval 2) :y bar-height
+              :id "status-pb" :fill "white"
+              :font-weight "bold" :font-family board-svg-font-family
+              :text-anchor "middle" :dy "-0.5em")
+    (svg-text status-bar "0" :x (- board-w interval interval) :y bar-height
+              :id "status-pw" :fill "white"
+              :font-weight "bold" :font-family board-svg-font-family
+              :text-anchor "middle" :dy "-0.5em")
+
     ;; Board Rect
     (setq board (svg-node svg 'g
                           :id "game-board"
@@ -150,6 +166,7 @@ attributes(cx, cy, fx, fy, r, etc...)"
     ;; Layers: 3 types of information on board ;todo remove hard coding
     (svg-node grid 'g :id "stones")
     (svg-node grid 'g :id "mvnums")
+    (svg-node grid 'g :id "next")
     (svg-node grid 'g :id "marks")
 
     ;; Menu Bar at bottom
@@ -195,13 +212,85 @@ attributes(cx, cy, fx, fy, r, etc...)"
             btns)))
 
 
-(defun board-svg-set-color (xy-state)
-  ;; set mark/text color according to background color of the intersections on board
+(defun board-svg-set-color (xy-state &optional same)
+  "Set mark/text color according to background color of the intersections on board."
   ;; @todo optimize color
-  (cond ((eq xy-state 'B) "#ccc")
-        ((eq xy-state 'W) "#333")
-        ((eq xy-state 'E) "white")
+  (cond ((equal xy-state 'B) (if same "black" "white"))
+        ((equal xy-state 'W) (if same "white" "black"))
+        ((equal xy-state 'E) "white")
         (t "white")))
+
+
+(defun board-svg-update-turn (svg stone)
+  "Show the current turn on the status bar."
+  (let ((status-w (car (dom-by-id svg "^status-w$")))
+        (status-b (car (dom-by-id svg "^status-b$"))))
+    (cond ((equal stone 'B)
+           (dom-set-attribute status-w 'fill "#f00")
+           (dom-set-attribute status-b 'fill "gray"))
+          ((equal stone 'W)
+           (dom-set-attribute status-w 'fill "gray")
+           (dom-set-attribute status-b 'fill "#f00"))
+          (t (error "Invalid stone color %s" stone)))))
+
+
+(defun board-svg-update-mvnum (svg mvnum)
+  "Show the current move number on the status bar."
+  (let ((status-n (car (dom-by-id svg "^status-n$"))))
+    (setcar (nthcdr 2 status-n) (number-to-string mvnum))))
+
+
+(defun board-svg-update-prisoners (svg prisoners)
+  "Show the current prisoners on the status bar."
+  (let ((status-pb (car (dom-by-id svg "^status-pb$")))
+        (status-pw (car (dom-by-id svg "^status-pw$")))
+        (pb (car prisoners))
+        (pw (cdr prisoners)))
+    (setcar (nthcdr 2 status-pb) (number-to-string pb))
+    (setcar (nthcdr 2 status-pw) (number-to-string pw))))
+
+
+(defun board-svg-clear-node-content (node)
+  "Remove all content under the SVG node."
+  (if node
+      ;; Keep the tag name and attributes, remove all children
+      (setcdr (cdr node) nil)))
+
+
+(defun board-svg-update-marks (svg interval node board-2d)
+  "Process and update the marks on the board for a node.
+
+It removes the old marks and adds the new marks."
+  ;; make sure to remove old marks
+  (let ((marks-group (board-svg-group-marks svg))
+        type)
+    (board-svg-clear-node-content marks-group)
+    (dolist (prop node)
+      (setq type (car prop))
+      (if (member type '(SQ TR CR MA))
+          (dolist (xy (cdr prop))
+            (setq x (car xy) y (cdr xy)
+                  xy-state (sgf-board-2d-get xy board-2d))
+            (board-svg-add-mark type marks-group interval x y xy-state))))))
+
+
+(defun board-svg-update-next (svg interval curr-lnode)
+  "Update and show next move(s) on board svg."
+  (let* ((next-lnodes (aref curr-lnode 2))
+         (branch-count (length next-lnodes))
+         (branch-index 0)
+         (next-group (board-svg-group-next svg))
+         text play color xy x y)
+    (board-svg-clear-node-content next-group)
+    (dolist (next-lnode next-lnodes)
+      (if (= branch-count 1)
+          (setq text "x")
+        (setq text (string (+ ?a branch-index))))
+      (setq play (sgf-process-play (aref next-lnode 1))
+            stone (car play) xy (cdr play) x (car xy) y (cdr xy))
+      (if (consp xy) ; xy is not nil, i.e. next move is not pass
+          (board-svg-add-text next-group interval x y text (board-svg-set-color stone t)))
+      (setq branch-index (1+ branch-index)))))
 
 
 (defun board-svg-add-text (svg interval x y text color &optional attributes)
@@ -216,64 +305,63 @@ attributes(cx, cy, fx, fy, r, etc...)"
          :font-weight "bold"
          attributes))
 
-(defun board-svg-marks-group (svg) (car (dom-by-class svg "marks")))
-(defun board-svg-stones-group (svg) (car (dom-by-class svg "stones")))
-(defun board-svg-mvnums-group (svg) (car (dom-by-class svg "mvnums")))
+(defun board-svg-group-next (svg) (car (dom-by-id svg "next")))
+(defun board-svg-group-marks (svg) (car (dom-by-id svg "marks")))
+(defun board-svg-group-stones (svg) (car (dom-by-id svg "stones")))
+(defun board-svg-group-mvnums (svg) (car (dom-by-id svg "mvnums")))
+
 (defun board-svg-stone-id (x y) (format "stone-%s-%s" x y))
 (defun board-svg-mvnum-id (x y) (format "mvnum-%s-%s" x y))
+
 (defun board-svg-add-stone (svg interval x y color)
-  (let* ((cx (* x interval))
-         (cy (* y interval))
-         (r (* interval 0.48)))
-    (svg-circle (board-svg-stones-group svg) cx cy r
+  (let ((cx (* x interval))
+        (cy (* y interval))
+        (r (* interval 0.48)))
+    (svg-circle (board-svg-group-stones svg) cx cy r
                 :id (board-svg-stone-id x y)
                 :gradient color)))
 
 ;; todo  ((eq node current-node) "#f00")
 (defun board-svg-add-mvnum (svg interval x y mvnum color)
     (board-svg-add-text
-     (board-svg-mvnums-group svg)
+     (board-svg-group-mvnums svg)
      interval x y (number-to-string mvnum) color
      (list :id (board-svg-mvnum-id x y))))
 
 
-(defun board-svg-add-square (svg interval x y color)
-  (let ((r (* 0.25 interval)))
-    (svg-rectangle svg
-                   (- (* x interval) r) (- (* y interval) r) (* 2 r) (* 2 r)
-                   :stroke-width 3 :stroke color :fill "none"
-                   :class "mark")))
+(defun board-svg-add-square (svg interval x y &rest attributes)
+  (let ((r (* 0.2 interval)))
+    (apply 'svg-rectangle svg
+           (- (* x interval) r) (- (* y interval) r) (* 2 r) (* 2 r)
+           attributes)))
 
 
-(defun board-svg-add-triangle (svg interval x y color)
+(defun board-svg-add-triangle (svg interval x y &rest attributes)
   (let ((cx (* x interval))
         (cy (* y interval))
-        (r (* 0.3 interval))
-        (rt3 (sqrt 3)))
-    (svg-polygon svg
-                 (list (cons cx (+ cy (* r rt3 -0.55)))
-                       (cons (+ cx r) (+ cy (* r rt3 0.45)))
-                       (cons (- cx r) (+ cy (* r rt3 0.45))))
-                 :stroke-width 3 :stroke color :fill "none"
-                 :class "mark")))
+        (r (* 0.2 interval))
+        (rt3 1.5))
+    (apply 'svg-polygon svg
+           (list (cons cx (+ cy (* r rt3 -0.55)))
+                 (cons (+ cx r) (+ cy (* r rt3 0.45)))
+                 (cons (- cx r) (+ cy (* r rt3 0.45))))
+           attributes)))
 
 
-(defun board-svg-add-circle (svg interval x y color)
-    (svg-circle svg (* x interval) (* y interval) (* 0.3 interval)
-                :stroke-width 3 :stroke color :fill "none" :class "mark"))
+(defun board-svg-add-circle (svg interval x y &rest attributes)
+    (apply 'svg-circle svg (* x interval) (* y interval) (* 0.2 interval) attributes))
 
 
-(defun board-svg-add-cross (svg interval x y color)
+(defun board-svg-add-cross (svg interval x y &rest attributes)
   (let ((cx (* x interval))
         (cy (* y interval))
         (r (* 0.2 interval)))
-    (svg-path svg
+    (apply 'svg-path svg
               (list (list 'moveto (list (cons (- cx r) (- cy r))))
                     (list 'lineto (list (cons (+ cx r) (+ cy r))))
                     (list 'moveto (list (cons (+ cx r) (- cy r))))
                     (list 'lineto (list (cons (- cx r) (+ cy r)))))
-              :stroke-width 3 :stroke color :fill "none"
-              :class "mark")))
+              attributes)))
 
 
 (defun board-svg-add-mark (type svg-group interval x y xy-state)
@@ -283,11 +371,41 @@ attributes(cx, cy, fx, fy, r, etc...)"
                    (CR . board-svg-add-circle)
                    (TR . board-svg-add-triangle)
                    (MA . board-svg-add-cross)))
-         (adder (assoc type adders)))
-    (funcall adder svg-group interval x y xy-state)))
+         (adder (cdr (assoc type adders))))
+    (funcall adder svg-group interval x y
+             :fill "none" :stroke color :stroke-width 2)))
 
 
-(defun board-svg-remove-marks (svg)
-  (let ((parent (igo-svg-overlays-group svg)))
-    (dolist (node (dom-by-class parent "^mark$"))
-      (dom-remove-node parent node))))
+
+(defun igo-svg-last-move (svg game grid-interval)
+  ;; todo
+  (igo-svg-remove-last-move svg)
+
+  (let* ((curr-node (igo-game-current-node game))
+         (move (igo-node-move curr-node)))
+    (if (igo-placement-p move)
+        (let* ((board (igo-game-board game))
+               (x (igo-board-pos-to-x board move))
+               (y (igo-board-pos-to-y board move))
+               (cx (* x grid-interval))
+               (cy (* y grid-interval))
+               (r (ceiling (* grid-interval 0.15)))
+               ;;(color (igo-opposite-color (igo-game-turn game)))
+               )
+          (svg-rectangle
+           ;;(igo-svg-overlays-group svg)
+           (igo-svg-stones-group svg)
+           (- cx r)
+           (- cy r)
+           (* 2 r)
+           (* 2 r)
+           :id "last-move"
+           :fill (cond
+                  ;;((igo-black-p color) "rgba(255,255,255,0.5)")
+                  ;;((igo-white-p color) "rgba(0,0,0,0.5)")
+                  (t "rgba(255,0,0,0.8)")))))))
+
+(defun igo-svg-remove-last-move (svg)
+  (dom-remove-node svg (car (dom-by-id svg "^last-move$"))))
+
+;; Marker
