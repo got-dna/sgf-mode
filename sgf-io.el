@@ -37,7 +37,7 @@
 
 
 (defvar sgf-node-re
-  (rx ";"
+  (rx (group ";") ; this group is not necessary; only for the font lock.
       (regexp sgf-space-re)
       (one-or-more (regexp sgf-property-re)))
   "Regular expression to match a single node. A node starts with a semicolon and contains one or more properties.")

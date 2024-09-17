@@ -6,12 +6,12 @@
 ;; Version: version
 ;; Package-Requires: dependencies
 ;; Homepage: homepage
-;; Keywords: keywords
+;; Keywords: SGF, go, game
 
 ;;; Code:
 
 (require 'sgf-io)
-
+(require 'board-svg)
 
 ;; Linked Node Object
 (defun sgf-linked-node (prev-node &optional current-node next-nodes)
@@ -342,7 +342,7 @@ Optionally update HOT-AREAS as well."
          play xy x y curr-prisoners prev-prisoners)
     (if (null prev-lnode)
         (progn (message "No more previous play.") nil)
-      (progn
+      (sgf-with-safe-update game-state svg
         (aset game-state 2 (1- mvnum)) ;; Update move number
         (setq play (sgf-process-play (aref curr-lnode 1)))
         (setq stone (car play) xy (cdr play) x (car xy) y (cdr xy))
@@ -620,7 +620,7 @@ The move number will be incremented."
 
 (defvar sgf-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-c") 'sgf-toggle-board-svg)
+    (define-key map (kbd "C-c C-c") 'sgf-svg-mode)
     map))
 
 (defvar sgf-svg-mode-map
@@ -641,7 +641,7 @@ The move number will be incremented."
     (define-key map "c" 'sgf-edit-comment)
     (define-key map "i" 'sgf-edit-game-info)
     (define-key map [hot-grid mouse-1] #'sgf-mouse-click)
-    (define-key map [hot-grid mouse-1] #'sgf-menu) ; todo
+    (define-key map [hot-grid mouse-3] #'sgf-menu) ; todo
     (define-key map "p" 'sgf-pass)
     ;; (define-key map (kbd "m s")  'sgf-add-mark-square)
     ;; (define-key map 'sgf-add-mark-triangle)
@@ -673,75 +673,88 @@ The move number will be incremented."
 ;;           (overlay-put ol 'display (svg-image svg :map hot-areas))
 ;;           (overlay-put ol 'svg svg)))))
 
+(defun sgf-setup-overlay (ol &optional interval margin bar-height padding)
+  "Setup overlay properties."
+  (let* ((game-tree (sgf-str-to-game-tree (buffer-string)))
+         (root (car game-tree))
+         (pl-stone (alist-get 'PL root 'B))
+         (stone (if (equal pl-stone 'B) 'W 'B))
+         (root-lnode (sgf-linked-node nil root nil))
+         (w-h (car (alist-get 'SZ root)))
+         (w (car w-h)) (h (cdr w-h))
+         (board-2d (sgf-create-board-2d w h))
+         (interval (or interval board-svg-interval))
+         (margin (or margin board-svg-margin))
+         (bar-height (or bar-height board-svg-bar-height))
+         (padding (or padding board-svg-padding))
+         (svg-hot-areas (board-svg-init w h interval margin bar-height padding))
+         (svg (car svg-hot-areas))
+         (hot-areas (cdr svg-hot-areas))
+         game-state)
+    ;; process root node to add stones
+    (dolist (prop root)
+      (let* ((prop-key (car prop))
+             (prop-vals (cdr prop))
+             x y stone-color)
 
-(defun sgf-toggle-board-svg (&optional interval margin bar-height padding)
-  "Visualize the board in the current buffer using SVG."
+        (cond ((or (eq prop-key 'AB) (eq prop-key 'AW))
+               (setq stone-color (intern (substring (symbol-name prop-key) 1)))
+               (dolist (pos prop-vals)
+                 (setq x (car pos) y (cdr pos))
+                 (aset (aref board-2d y) x stone-color)
+                 (board-svg-add-stone svg interval x y stone-color))))))
+
+    (board-svg-update-turn svg stone)
+
+    (setq ol (make-overlay (point-min) (point-max)))
+    ;; root state
+    (sgf-linkup-nodes-in-game-tree (cdr game-tree) root-lnode)
+    (setq game-state
+          (sgf-game-state root-lnode board-2d 0))
+    (overlay-put ol 'svg-params (list interval margin bar-height padding))
+    (overlay-put ol 'game-state game-state)
+    (overlay-put ol 'svg svg)
+    (overlay-put ol 'hot-areas hot-areas)
+    ol))
+
+
+
+(defun sgf-redo-overlay (&optional interval margin bar-height padding)
+  "Delete old overlay and create and return a new one."
   (interactive)
-  (let ((ol (sgf-get-overlay)))
-    (if ol (delete-overlay ol)
-      (let* ((game-tree (sgf-str-to-game-tree (buffer-string)))
-             (root (car game-tree))
-             (pl-stone (alist-get 'PL root 'B))
-             (stone (if (equal pl-stone 'B) 'W 'B))
-             (root-lnode (sgf-linked-node nil root nil))
-             (w-h (car (alist-get 'SZ root)))
-             (w (car w-h)) (h (cdr w-h))
-             (board-2d (sgf-create-board-2d w h))
-             (interval (or interval board-svg-interval))
-             (margin (or margin board-svg-margin))
-             (bar-height (or bar-height board-svg-bar-height))
-             (padding (or padding board-svg-padding))
-             (svg-hot-areas (board-svg-init w h interval margin bar-height padding))
-             (svg (car svg-hot-areas))
-             (hot-areas (cdr svg-hot-areas))
-             game-state)
+  (let ((old-ol (sgf-get-overlay)))
+    (if old-ol (delete-overlay old-ol)))
+  (let ((new-ol (make-overlay (point-min) (point-max))))
+    (sgf-setup-overlay new-ol)
+    new-ol))
 
-        ;; process root node to add stones
-        (dolist (prop root)
-          (let* ((prop-key (car prop))
-                 (prop-vals (cdr prop))
-                 x y stone-color)
-
-            (cond ((or (eq prop-key 'AB) (eq prop-key 'AW))
-                   (setq stone-color (intern (substring (symbol-name prop-key) 1)))
-                   (dolist (pos prop-vals)
-                     (setq x (car pos) y (cdr pos))
-                     (aset (aref board-2d y) x stone-color)
-                     (board-svg-add-stone svg interval x y stone-color))))))
-
-        (board-svg-update-turn svg stone)
-
-        (setq ol (make-overlay (point-min) (point-max)))
-        ;; root state
-        (sgf-linkup-nodes-in-game-tree (cdr game-tree) root-lnode)
-        (setq game-state
-              (sgf-game-state root-lnode board-2d 0))
-        (overlay-put ol 'svg-params (list interval margin bar-height padding))
-        (sgf-update-overlay game-state svg hot-areas)))))
+;; todo. match only one regexp and highlight different groups
+(defvar sgf-mode-font-lock-keywords
+  `((,sgf-property-re
+     ;; property key
+     (1 font-lock-keyword-face))        ; match the 1st group
+    (,sgf-property-value-re
+     ;; property value
+     (0 font-lock-comment-face))        ; match whole regexp
+    (,sgf-node-re
+     (0 font-lock-builtin-face)))       ; match ;
+  "a list of font-lock keywords for SGF mode.")
 
 
-(defun sgf-mode-font-lock-keywords ()
-  "Return a list of font-lock keywords for SGF mode."
-  (list
-   ;; Node
-   (cons sgf-node-re 'font-lock-keyword-face)
-   ;; Property
-   (cons sgf-property-re 'font-lock-type-face)
-   ;; Property value
-   (cons sgf-property-value-re 'font-lock-string-face)))
 
-(defvar sgf-mode-hook nil)
-
+;; Emacs automatically creates a hook for the mode (e.g.,
+;; sgf-mode-hook), and this hook will be run every time the mode is
+;; enabled.
 (define-derived-mode sgf-mode text-mode "SGF"
   "Major mode for editing SGF files.
 
 The following commands are available:
 
 \\{sgf-mode-map}"
+  :keymap sgf-mode-map
+  (setq font-lock-defaults '(sgf-mode-font-lock-keywords)))
 
-  (setq font-lock-defaults '(sgf-mode-font-lock-keywords t))
-  (run-mode-hooks 'sgf-mode-hook))
-
+(add-to-list 'auto-mode-alist '("\\.sgf\\'" . sgf-mode))
 
 (define-minor-mode sgf-svg-mode
   "Toggle display svg board."
@@ -753,8 +766,27 @@ The following commands are available:
   :group 'sgf
   :keymap sgf-svg-mode-map
   (if sgf-svg-mode
-      (sgf-toggle-board-svg t)
-    (sgf-toggle-board-svg nil)))
+      (sgf-toggle-svg-display 'show)
+    (sgf-toggle-svg-display 'hide)))
+
+
+(defun sgf--display-svg (ol)
+  (let ((svg (overlay-get ol 'svg))
+        (hot-areas (overlay-get ol 'hot-areas)))
+    (overlay-put ol 'display (svg-image svg :map hot-areas))))
+
+
+(defun sgf-toggle-svg-display (&optional choice)
+  (let ((ol (sgf-get-overlay)))
+    (if (not (and ol (overlay-get ol 'svg) (overlay-get ol 'hot-areas)))
+        (sgf-setup-overlay ol))
+    (cond ((equal choice 'hide)
+           (overlay-put ol 'display nil))
+          ((equal choice 'show)
+           (sgf--display-svg ol))
+          (t (if (null overlay-get ol 'display)
+                 (sgf--display-svg ol)
+               (overlay-put ol 'display nil))))))
 
 
 (provide 'sgf-mode)
