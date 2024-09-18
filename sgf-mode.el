@@ -237,19 +237,25 @@ If neither 'B nor 'W is present, return nil."
 
 (defun sgf-get-overlay ()
   "Return the main overlay used in the current buffer."
-  (car (overlays-in (point-min) (point-max))))
+  (let ((ovs (overlays-in (point-min) (point-max)))
+        sgf-ov )
+     (while (and ovs (not sgf-ov))
+      (let ((ov (pop ovs)))
+        (if (overlay-get ov 'sgf-overlay)
+          (setq sgf-ov ov))))
+    sgf-ov))
 
 
 (defun sgf-update-overlay (game-state &optional svg hot-areas)
   "Update the overlay with new SVG and GAME-STATE.
 Optionally update HOT-AREAS as well."
-  (let ((ol (sgf-get-overlay)))
-    (if svg (overlay-put ol 'svg svg))
-    (overlay-put ol 'game-state game-state)
+  (let ((ov (sgf-get-overlay)))
+    (if svg (overlay-put ov 'svg svg))
+    (overlay-put ov 'game-state game-state)
     (if hot-areas
-        (overlay-put ol 'hot-areas hot-areas)
-      (setq hot-areas (overlay-get ol 'hot-areas)))
-    (overlay-put ol 'display (svg-image svg :map hot-areas))))
+        (overlay-put ov 'hot-areas hot-areas)
+      (setq hot-areas (overlay-get ov 'hot-areas)))
+    (overlay-put ov 'display (svg-image svg :map hot-areas))))
 
 ;; todo
 (defmacro sgf-with-safe-update (game-state svg &rest body)
@@ -278,10 +284,10 @@ Optionally update HOT-AREAS as well."
 (defun sgf-forward-node (&optional branch)
   "Move to the next node in the game tree and update board."
   (interactive)
-  (let* ((ol (sgf-get-overlay))
-         (svg         (overlay-get ol 'svg))
-         (interval    (car (overlay-get ol 'svg-params)))
-         (game-state  (overlay-get ol 'game-state))
+  (let* ((ov (sgf-get-overlay))
+         (svg         (overlay-get ov 'svg))
+         (interval    (car (overlay-get ov 'svg-params)))
+         (game-state  (overlay-get ov 'game-state))
          (curr-lnode  (aref game-state 0))
          (board-2d    (aref game-state 1))
          (mvnum       (aref game-state 2))
@@ -298,7 +304,7 @@ Optionally update HOT-AREAS as well."
         (setq play (sgf-process-play next-node))
         (setq stone (car play) xy (cdr play) x (car xy) y (cdr xy))
         (setq mvnum (1+ mvnum))
-
+        (sgf-with-safe-update game-state svg
           (aset game-state 0 next-lnode)
           (aset game-state 2 mvnum) ;; Update move number
           ;; Update board and game state
@@ -324,16 +330,16 @@ Optionally update HOT-AREAS as well."
           (board-svg-update-next svg interval next-lnode)
           (board-svg-update-marks svg interval next-node board-2d)
           ;; (message "Put stone at %d %d" (1+ x) (1+ y))
-          ))))
+          )))))
 
 
 (defun sgf-backward-node ()
   "Move to the previous node in the game tree and update board."
   (interactive)
-  (let* ((ol (sgf-get-overlay))
-         (svg        (overlay-get ol 'svg))
-         (game-state (overlay-get ol 'game-state))
-         (interval    (car (overlay-get ol 'svg-params)))
+  (let* ((ov (sgf-get-overlay))
+         (svg        (overlay-get ov 'svg))
+         (game-state (overlay-get ov 'game-state))
+         (interval    (car (overlay-get ov 'svg-params)))
          (curr-lnode (aref game-state 0))
          (board-2d   (aref game-state 1))
          (mvnum      (aref game-state 2))
@@ -361,7 +367,7 @@ Optionally update HOT-AREAS as well."
         (aset game-state 4 prev-prisoners)
         ;; Remove captured stones and update prisoner counts
         (sgf-del-captured-stones prev-prisoners stone board-2d svg)
-        (if (equal stone 'W)
+        (if (equal stone 'B)
             (setcar pcounts (- (+ (length prev-prisoners) (car pcounts))
                                (length curr-prisoners)))
           (setcdr pcounts (- (+ (length prev-prisoners) (cdr pcounts))
@@ -401,9 +407,9 @@ Optionally update HOT-AREAS as well."
 
 (defun sgf--toggle-layer(layer)
   "Toggle the display of a give layer."
-  (let* ((ol (sgf-get-overlay))
-         (game-state (overlay-get ol 'game-state))
-         (svg  (overlay-get ol 'svg))
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (svg  (overlay-get ov 'svg))
          group)
     (cond ((equal layer 'mvnum)
            (setq group (board-svg-group-mvnums svg)))
@@ -438,8 +444,8 @@ Optionally update HOT-AREAS as well."
 (defun sgf-export-svg (&optional filename)
   "Export the board to an SVG file or display it in a buffer."
   (interactive "FExport file name: ")
-  (let* ((ol (sgf-get-overlay))
-         (svg (overlay-get ol 'svg)))
+  (let* ((ov (sgf-get-overlay))
+         (svg (overlay-get ov 'svg)))
     (if (or (not filename) (string-empty-p filename))
         ;; If no filename is given, display the SVG in a buffer
         (with-current-buffer (get-buffer-create "*SVG Image*")
@@ -457,8 +463,8 @@ Optionally update HOT-AREAS as well."
 (defun sgf-kill-node ()
   "Delete the current node and all its children."
   (interactive)
-  (let* ((ol (sgf-get-overlay))
-         (game-state (overlay-get ol 'game-state))
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0)))
     ;; set the prev lnode to link to nil
     (aset (aref curr-lnode 0) 2 nil)
@@ -468,8 +474,8 @@ Optionally update HOT-AREAS as well."
 (defun sgf-edit-comment ()
   "Edit the comment of the current node."
   (interactive)
-  (let* ((ol (sgf-get-overlay))
-         (game-state (overlay-get ol 'game-state))
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (curr-node (aref curr-lnode 1))
          ;; C[foo][spam] -> "foo spam"
@@ -512,10 +518,10 @@ Optionally update HOT-AREAS as well."
 (defun sgf-mouse-event-to-board-xy (event)
   "Convert a mouse click to a board position (X . Y)."
   (if (mouse-event-p event)
-      (let* ((ol (sgf-get-overlay))
-             (interval   (nth 0 (overlay-get ol 'svg-params)))
-             (margin     (nth 1 (overlay-get ol 'svg-params)))
-             (bar-height (nth 2 (overlay-get ol 'svg-params)))
+      (let* ((ov (sgf-get-overlay))
+             (interval   (nth 0 (overlay-get ov 'svg-params)))
+             (margin     (nth 1 (overlay-get ov 'svg-params)))
+             (bar-height (nth 2 (overlay-get ov 'svg-params)))
              (xy (posn-object-x-y (event-start event)))
              (x (/ (- (float (car xy)) margin) interval))
              (y (/ (- (float (cdr xy)) margin bar-height) interval)))
@@ -532,9 +538,9 @@ Cases:
   (interactive)
   (let* ((xy (sgf-mouse-event-to-board-xy last-input-event))
          (x (car xy)) (y (cdr xy))
-         (ol (sgf-get-overlay))
-         (svg  (overlay-get ol 'svg))
-         (game-state (overlay-get ol 'game-state))
+         (ov (sgf-get-overlay))
+         (svg  (overlay-get ov 'svg))
+         (game-state (overlay-get ov 'game-state))
          (ko (aref game-state 3))
          (curr-lnode  (aref game-state 0))
          (curr-node (aref curr-lnode 1))
@@ -552,8 +558,10 @@ Cases:
                  (new-lnode (sgf-linked-node curr-lnode `((,next-stone ,xy)))))
              ;; add the new node as the last branch
              (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
+             (sgf-update-buffer-from-game curr-lnode)
              (sgf-forward-node n) ; if n=0, case 2.1; otherwise, case 2.2
-             (sgf-update-buffer-from-game curr-lnode)))
+
+             ))
           (t (message "Illegal move!"))))) ; case 3.
 
 
@@ -562,8 +570,8 @@ Cases:
 
 The move number will be incremented."
   (interactive)
-  (let* ((ol (sgf-get-overlay))
-         (game-state (overlay-get ol 'game-state))
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (next-lnodes (aref curr-lnode 2))
          (new-lnode (sgf-linked-node curr-lnode '((W)))))
@@ -573,11 +581,11 @@ The move number will be incremented."
 
 (defmacro sgf--add-mark (shape add-mark-func)
   "Add a mark to the current node."
-  `(let* ((ol (sgf-get-overlay))
-          (svg  (overlay-get ol 'svg))
-          (game-state (overlay-get ol 'game-state))
+  `(let* ((ov (sgf-get-overlay))
+          (svg  (overlay-get ov 'svg))
+          (game-state (overlay-get ov 'game-state))
           (board-2d (aref game-state 1))
-          (interval (nth 0 (overlay-get ol 'svg-params)))
+          (interval (nth 0 (overlay-get ov 'svg-params)))
           (curr-lnode (aref game-state 0))
           (curr-node (aref curr-lnode 1))
           (xy (sgf-mouse-event-to-board-xy last-input-event))
@@ -617,49 +625,14 @@ The move number will be incremented."
   (interactive))
 
 
-
-(defvar sgf-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-c") 'sgf-toggle-svg-display)
-    map))
-
-(defvar sgf-mode-graphical-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map "f" 'sgf-forward-node)
-    (define-key map [hot-forward mouse-1] 'sgf-forward-node)
-    (define-key map "b" 'sgf-backward-node)
-    (define-key map [hot-backward mouse-1] 'sgf-backward-node)
-    (define-key map "a" 'sgf-first-node)
-    (define-key map [hot-first mouse-1] 'sgf-first-node)
-    (define-key map "e" 'sgf-last-node)
-    (define-key map [hot-last mouse-1] 'sgf-last-node)
-    (define-key map "g" 'sgf-goto-node)
-    (define-key map "n" 'sgf-toggle-move-number)
-    (define-key map "v" 'sgf-view-next)
-    (define-key map "k" 'sgf-kill-node)
-    (define-key map "s" 'sgf-export-svg)
-    (define-key map "c" 'sgf-edit-comment)
-    (define-key map "i" 'sgf-edit-game-info)
-    (define-key map [hot-grid mouse-1] #'sgf-mouse-click)
-    (define-key map [hot-grid mouse-3] #'sgf-menu) ; todo
-    (define-key map "p" 'sgf-pass)
-    ;; (define-key map (kbd "m s")  'sgf-add-mark-square)
-    ;; (define-key map 'sgf-add-mark-triangle)
-    ;; (define-key map 'sgf-add-mark-circle)
-    ;; (define-key map 'sgf-add-mark-cross)
-    ;; (define-key map 'sgf-add-mark-label)
-    ;; (define-key map 'sgf-del-mark)
-    map))
-
-
 ;; (defun sgf-track-dragging ()
 ;;   "Track dragging on the board. igo-editor-track-dragging"
 ;;   (interactive)
-;;   (let* ((ol (car (overlays-in (point-min) (point-max))))
-;;          (svg  (overlay-get ol 'svg))
-;;          (hot-areas (overlay-get ol 'hot-areas))
-;;          (interval (car (overlay-get ol 'svg-params)))
-;;          (game-state (overlay-get ol 'game-state))
+;;   (let* ((ov (car (overlays-in (point-min) (point-max))))
+;;          (svg  (overlay-get ov 'svg))
+;;          (hot-areas (overlay-get ov 'hot-areas))
+;;          (interval (car (overlay-get ov 'svg-params)))
+;;          (game-state (overlay-get ov 'game-state))
 ;;          (curr-lnode  (aref game-state 0))
 ;;          (board-2d   (aref game-state 2))
 ;;          (xy (sgf-mouse-event-to-board-xy last-input-event))
@@ -670,12 +643,29 @@ The move number will be incremented."
 ;;         (progn
 ;;           (aset (aref board-2d y) x 'E)
 ;;           (board-svg-add-stone svg interval x y 'E)
-;;           (overlay-put ol 'display (svg-image svg :map hot-areas))
-;;           (overlay-put ol 'svg svg)))))
+;;           (overlay-put ov 'display (svg-image svg :map hot-areas))
+;;           (overlay-put ov 'svg svg)))))
 
-(defun sgf-setup-overlay (ol &optional interval margin bar-height padding)
+(defun sgf-toggle-svg-display (&optional choice)
+  (interactive)
+  (let ((ov (or (sgf-get-overlay) (sgf-setup-overlay))))
+    (cond ((equal choice 'hide)
+           (sgf--hide-svg ov))
+          ((equal choice 'show)
+           (sgf--display-svg ov))
+          (t (if (null (overlay-get ov 'display))
+                 (sgf--display-svg ov)
+               (sgf--hide-svg ov))))))
+
+
+(defun sgf-setup-overlay (&optional interval margin bar-height padding)
   "Setup overlay properties."
-  (let* ((game-tree (sgf-str-to-game-tree (buffer-string)))
+  (let* ((ov (or (sgf-get-overlay)
+                 ;; set front- and rear-advance parameters to allow
+                 ;; the overlay cover the whole buffer even if it is
+                 ;; updated from game playing.
+                 (make-overlay (point-min) (point-max) nil nil t)))
+         (game-tree (sgf-str-to-game-tree (buffer-string)))
          (root (car game-tree))
          (pl-stone (alist-get 'PL root 'B))
          (stone (if (equal pl-stone 'B) 'W 'B))
@@ -709,21 +699,35 @@ The move number will be incremented."
     (sgf-linkup-nodes-in-game-tree (cdr game-tree) root-lnode)
     (setq game-state
           (sgf-game-state root-lnode board-2d 0))
-    (overlay-put ol 'svg-params (list interval margin bar-height padding))
-    (overlay-put ol 'game-state game-state)
-    (overlay-put ol 'svg svg)
-    (overlay-put ol 'hot-areas hot-areas)
-    ol))
+
+    ;; label this overlay to distinguish from others
+    (overlay-put ov 'sgf-overlay t)
+    (overlay-put ov 'svg-params (list interval margin bar-height padding))
+    (overlay-put ov 'game-state game-state)
+    (overlay-put ov 'svg svg)
+    (overlay-put ov 'hot-areas hot-areas)
+    ov))
 
 
+(defun sgf--display-svg (ov)
+  (let ((svg (overlay-get ov 'svg))
+        (hot-areas (overlay-get ov 'hot-areas)))
+    (unless (and svg hot-areas)
+      (error "Overlay %S does not have 'svg' or 'hot-areas' properties" ov))
+    (overlay-put ov 'keymap sgf-mode-graphical-map)
+    (overlay-put ov 'display (svg-image svg :map hot-areas))))
 
-(defun sgf-redo-overlay ()
-  "Delete old overlay and create and return a new one."
-  (let ((old-ols (overlays-in (point-min) (point-max))))
-    (dolist (old-ol old-ols) (delete-overlay old-ol)))
-  (let ((new-ol (make-overlay (point-min) (point-max))))
-    (sgf-setup-overlay new-ol)
-    new-ol))
+(defun sgf--hide-svg (ov)
+  (overlay-put ov 'display nil)
+  (overlay-put ov 'keymap nil))
+
+
+;; (defun sgf-redo-overlay ()
+;;   "Delete old overlay and create and return a new one."
+;;   ;(remove-overlays) ; remove all the overlays in the buffer
+;;   (let ((new-ov (make-overlay (point-min) (point-max) (current-buffer) nil t)))
+;;     (sgf-setup-overlay new-ov)
+;;     new-ov))
 
 ;; todo. match only one regexp and highlight different groups
 (defvar sgf-mode-font-lock-keywords
@@ -736,6 +740,43 @@ The move number will be incremented."
     (,sgf-node-re
      (0 font-lock-builtin-face)))       ; match ;
   "a list of font-lock keywords for SGF mode.")
+
+
+
+(defvar sgf-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-c") 'sgf-toggle-svg-display)
+    map)
+  "Keymap for SGF major mode.")
+
+(defvar sgf-mode-graphical-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "f" 'sgf-forward-node)
+    (define-key map [hot-forward mouse-1] 'sgf-forward-node)
+    (define-key map "b" 'sgf-backward-node)
+    (define-key map [hot-backward mouse-1] 'sgf-backward-node)
+    (define-key map "a" 'sgf-first-node)
+    (define-key map [hot-first mouse-1] 'sgf-first-node)
+    (define-key map "e" 'sgf-last-node)
+    (define-key map [hot-last mouse-1] 'sgf-last-node)
+    (define-key map "g" 'sgf-goto-node)
+    (define-key map "n" 'sgf-toggle-move-number)
+    (define-key map "v" 'sgf-view-next)
+    (define-key map "k" 'sgf-kill-node)
+    (define-key map "s" 'sgf-export-svg)
+    (define-key map "c" 'sgf-edit-comment)
+    (define-key map "i" 'sgf-edit-game-info)
+    (define-key map [hot-grid mouse-1] #'sgf-mouse-click)
+    (define-key map [hot-grid mouse-3] #'sgf-menu) ; todo
+    (define-key map "p" 'sgf-pass)
+    ;; (define-key map (kbd "m s")  'sgf-add-mark-square)
+    ;; (define-key map 'sgf-add-mark-triangle)
+    ;; (define-key map 'sgf-add-mark-circle)
+    ;; (define-key map 'sgf-add-mark-cross)
+    ;; (define-key map 'sgf-add-mark-label)
+    ;; (define-key map 'sgf-del-mark)
+    map)
+  "Keymap set for the overlay svg display in. It is only activated when the overlay is displayed.")
 
 
 
@@ -754,28 +795,6 @@ The following commands are available:
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.sgf\\'" . sgf-mode))
-
-
-(defun sgf--display-svg (ol)
-  (let ((svg (overlay-get ol 'svg))
-        (hot-areas (overlay-get ol 'hot-areas)))
-    (overlay-put ol 'keymap sgf-mode-graphical-map)
-    (overlay-put ol 'display (svg-image svg :map hot-areas))))
-
-(defun sgf--hide-svg (ol)
-  (overlay-put ol 'display nil)
-  (overlay-put ol 'keymap nil))
-
-(defun sgf-toggle-svg-display (&optional choice)
-  (interactive)
-  (let ((ol (or (sgf-get-overlay) (sgf-redo-overlay))))
-    (cond ((equal choice 'hide)
-           (sgf--hide-svg ol))
-          ((equal choice 'show)
-           (sgf--display-svg ol))
-          (t (if (null (overlay-get ol 'display))
-                 (sgf--display-svg ol)
-               (sgf--hide-svg ol))))))
 
 
 (provide 'sgf-mode)
