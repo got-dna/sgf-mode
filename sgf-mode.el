@@ -298,7 +298,7 @@ Optionally update HOT-AREAS as well."
         (setq play (sgf-process-play next-node))
         (setq stone (car play) xy (cdr play) x (car xy) y (cdr xy))
         (setq mvnum (1+ mvnum))
-        (sgf-with-safe-update game-state svg
+
           (aset game-state 0 next-lnode)
           (aset game-state 2 mvnum) ;; Update move number
           ;; Update board and game state
@@ -324,7 +324,7 @@ Optionally update HOT-AREAS as well."
           (board-svg-update-next svg interval next-lnode)
           (board-svg-update-marks svg interval next-node board-2d)
           ;; (message "Put stone at %d %d" (1+ x) (1+ y))
-          )))))
+          ))))
 
 
 (defun sgf-backward-node ()
@@ -620,10 +620,10 @@ The move number will be incremented."
 
 (defvar sgf-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-c") 'sgf-svg-mode)
+    (define-key map (kbd "C-c C-c") 'sgf-toggle-svg-display)
     map))
 
-(defvar sgf-svg-mode-map
+(defvar sgf-mode-graphical-map
   (let ((map (make-sparse-keymap)))
     (define-key map "f" 'sgf-forward-node)
     (define-key map [hot-forward mouse-1] 'sgf-forward-node)
@@ -705,8 +705,6 @@ The move number will be incremented."
                  (board-svg-add-stone svg interval x y stone-color))))))
 
     (board-svg-update-turn svg stone)
-
-    (setq ol (make-overlay (point-min) (point-max)))
     ;; root state
     (sgf-linkup-nodes-in-game-tree (cdr game-tree) root-lnode)
     (setq game-state
@@ -719,11 +717,10 @@ The move number will be incremented."
 
 
 
-(defun sgf-redo-overlay (&optional interval margin bar-height padding)
+(defun sgf-redo-overlay ()
   "Delete old overlay and create and return a new one."
-  (interactive)
-  (let ((old-ol (sgf-get-overlay)))
-    (if old-ol (delete-overlay old-ol)))
+  (let ((old-ols (overlays-in (point-min) (point-max))))
+    (dolist (old-ol old-ols) (delete-overlay old-ol)))
   (let ((new-ol (make-overlay (point-min) (point-max))))
     (sgf-setup-overlay new-ol)
     new-ol))
@@ -745,6 +742,7 @@ The move number will be incremented."
 ;; Emacs automatically creates a hook for the mode (e.g.,
 ;; sgf-mode-hook), and this hook will be run every time the mode is
 ;; enabled.
+;;;###autoload
 (define-derived-mode sgf-mode text-mode "SGF"
   "Major mode for editing SGF files.
 
@@ -754,39 +752,30 @@ The following commands are available:
   :keymap sgf-mode-map
   (setq font-lock-defaults '(sgf-mode-font-lock-keywords)))
 
+;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.sgf\\'" . sgf-mode))
-
-(define-minor-mode sgf-svg-mode
-  "Toggle display svg board."
-  :lighter " svg"
-  ;; the minor mode is local to the buffer, i.e. it can be
-  ;; enabled or disabled independently in each buffer, rather than
-  ;; globally across all buffers.
-  :global nil
-  :group 'sgf
-  :keymap sgf-svg-mode-map
-  (if sgf-svg-mode
-      (sgf-toggle-svg-display 'show)
-    (sgf-toggle-svg-display 'hide)))
 
 
 (defun sgf--display-svg (ol)
   (let ((svg (overlay-get ol 'svg))
         (hot-areas (overlay-get ol 'hot-areas)))
+    (overlay-put ol 'keymap sgf-mode-graphical-map)
     (overlay-put ol 'display (svg-image svg :map hot-areas))))
 
+(defun sgf--hide-svg (ol)
+  (overlay-put ol 'display nil)
+  (overlay-put ol 'keymap nil))
 
 (defun sgf-toggle-svg-display (&optional choice)
-  (let ((ol (sgf-get-overlay)))
-    (if (not (and ol (overlay-get ol 'svg) (overlay-get ol 'hot-areas)))
-        (sgf-setup-overlay ol))
+  (interactive)
+  (let ((ol (or (sgf-get-overlay) (sgf-redo-overlay))))
     (cond ((equal choice 'hide)
-           (overlay-put ol 'display nil))
+           (sgf--hide-svg ol))
           ((equal choice 'show)
            (sgf--display-svg ol))
-          (t (if (null overlay-get ol 'display)
+          (t (if (null (overlay-get ol 'display))
                  (sgf--display-svg ol)
-               (overlay-put ol 'display nil))))))
+               (sgf--hide-svg ol))))))
 
 
 (provide 'sgf-mode)
