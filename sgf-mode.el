@@ -182,9 +182,9 @@ If neither 'B nor 'W is present, return nil."
     (_ nil)))                                 ;; If nothing found, return nil
 
 (defun sgf-show-comment (node)
-  (let ((comment (alist-get 'C node)))
-    (if comment
-        (message (car comment)))))
+  "Show the comment of the node."
+  ;; if 'C' does not exist, it shows empty str.
+  (message (mapconcat 'identity (alist-get 'C node) " ")))
 
 (defun nested-level-of-first (lst)
   "Return the nesting level of the first element in the list LST.
@@ -250,8 +250,10 @@ If neither 'B nor 'W is present, return nil."
   "Update the overlay with new SVG and GAME-STATE.
 Optionally update HOT-AREAS as well."
   (let ((ov (sgf-get-overlay)))
-    (if svg (overlay-put ov 'svg svg))
     (overlay-put ov 'game-state game-state)
+    (if svg
+        (overlay-put ov 'svg svg)
+      (setq svg (overlay-get ov 'svg)))
     (if hot-areas
         (overlay-put ov 'hot-areas hot-areas)
       (setq hot-areas (overlay-get ov 'hot-areas)))
@@ -482,11 +484,14 @@ Optionally update HOT-AREAS as well."
          (old-comment (mapconcat 'identity (alist-get 'C curr-node) " "))
          (new-comment (read-string "Comment: " old-comment)))
     ;; only update if the comment is changed
-    (when (not (string= old-comment new-comment))
-      ;; delete the comment
-      (if (string-empty-p new-comment)
-          (aset curr-lnode 1 (assq-delete-all 'C curr-node))
-        (setf (cdr (assoc 'C curr-node)) (list new-comment)))
+    (unless (string= old-comment new-comment)
+       ;; Update or remove the 'C' property based on new-comment
+      (aset curr-lnode 1
+            (if (string-empty-p new-comment)
+                ;; delete the comment property if the new comment is empty
+                (assq-delete-all 'C curr-node)
+              (nconc (assq-delete-all 'C curr-node)
+                     (list (list 'C new-comment)))))
       (sgf-update-buffer-from-game curr-lnode)
       (sgf-update-overlay game-state))))
 
@@ -560,7 +565,6 @@ Cases:
              (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
              (sgf-update-buffer-from-game curr-lnode)
              (sgf-forward-node n) ; if n=0, case 2.1; otherwise, case 2.2
-
              ))
           (t (message "Illegal move!"))))) ; case 3.
 
@@ -776,7 +780,7 @@ The move number will be incremented."
     ;; (define-key map 'sgf-add-mark-label)
     ;; (define-key map 'sgf-del-mark)
     map)
-  "Keymap set for the overlay svg display in. It is only activated when the overlay is displayed.")
+  "Keymap set for the overlay svg display. It is only activated when the overlay is displayed.")
 
 
 
