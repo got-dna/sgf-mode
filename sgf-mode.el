@@ -11,7 +11,7 @@
 ;;; Code:
 
 (require 'sgf-io)
-(require 'board-svg)
+(require 'sgf-svg)
 
 ;; Linked Node Object
 (defun sgf-linked-node (prev-node &optional current-node next-nodes)
@@ -219,9 +219,9 @@ If neither 'B nor 'W is present, return nil."
     (let ((x (car xy)) (y (cdr xy)))
       (aset (aref board-2d y) x stone)
       ;; change mvnum color to contrast the stone color
-      (dom-set-attribute (car (dom-by-id svg (board-svg-mvnum-id x y)))
-                         'fill (board-svg-set-color stone t))
-      (dom-remove-attribute (car (dom-by-id svg (board-svg-stone-id x y))) 'visibility))))
+      (dom-set-attribute (car (dom-by-id svg (sgf-svg-mvnum-id x y)))
+                         'fill (sgf-svg-set-color stone t))
+      (dom-remove-attribute (car (dom-by-id svg (sgf-svg-stone-id x y))) 'visibility))))
 
 
 (defun sgf-del-captured-stones (xys stone board-2d svg)
@@ -230,9 +230,9 @@ If neither 'B nor 'W is present, return nil."
     (let ((x (car xy)) (y (cdr xy)))
       (aset (aref board-2d y) x 'E)
       ;; change mvnum color to the same with deleted stone
-      (dom-set-attribute (car (dom-by-id svg (board-svg-mvnum-id x y)))
-                         'fill (board-svg-set-color stone))
-      (dom-set-attribute (car (dom-by-id svg (board-svg-stone-id x y))) 'visibility "hidden"))))
+      (dom-set-attribute (car (dom-by-id svg (sgf-svg-mvnum-id x y)))
+                         'fill (sgf-svg-set-color stone))
+      (dom-set-attribute (car (dom-by-id svg (sgf-svg-stone-id x y))) 'visibility "hidden"))))
 
 
 (defun sgf-get-overlay ()
@@ -315,8 +315,7 @@ Optionally update HOT-AREAS as well."
           (aset game-state 4 prisoners)
           ;; Remove captured stones and update prisoner counts
           (sgf-del-captured-stones prisoners stone board-2d svg)
-          (if (null (car (sgf-check-alive xy board-2d)))
-              (error "Illegal move!"))
+
           (if prisoners
               (if (equal stone 'B)
                   (setcar pcounts (+ (length prisoners) (car pcounts)))
@@ -324,13 +323,13 @@ Optionally update HOT-AREAS as well."
           (sgf-show-comment next-node)
           ;; Update move on svg
           (when (consp xy) ; xy could be nil (a pass)
-            (board-svg-add-stone svg interval x y (symbol-name stone))
-            (board-svg-add-mvnum svg interval x y mvnum (board-svg-set-color stone)))
-          (board-svg-update-prisoners svg pcounts)
-          (board-svg-update-turn svg stone)
-          (board-svg-update-mvnum svg mvnum)
-          (board-svg-update-next svg interval next-lnode)
-          (board-svg-update-marks svg interval next-node board-2d)
+            (sgf-svg-add-stone svg interval x y (symbol-name stone))
+            (sgf-svg-add-mvnum svg interval x y mvnum (sgf-svg-set-color stone)))
+          (sgf-svg-update-prisoners svg pcounts)
+          (sgf-svg-update-turn svg stone)
+          (sgf-svg-update-mvnum svg mvnum)
+          (sgf-svg-update-next svg interval next-lnode)
+          (sgf-svg-update-marks svg interval next-node board-2d)
           ;; (message "Put stone at %d %d" (1+ x) (1+ y))
           )))))
 
@@ -355,8 +354,8 @@ Optionally update HOT-AREAS as well."
         (setq play (sgf-process-play (aref curr-lnode 1)))
         (setq stone (car play) xy (cdr play) x (car xy) y (cdr xy))
 
-        (svg-remove svg (board-svg-stone-id x y))
-        (svg-remove svg (board-svg-mvnum-id x y))
+        (svg-remove svg (sgf-svg-stone-id x y))
+        (svg-remove svg (sgf-svg-mvnum-id x y))
         ;; revert changes from current move on board
         (sgf-board-2d-set xy 'E board-2d)
         (setq curr-prisoners (aref game-state 4))
@@ -378,11 +377,11 @@ Optionally update HOT-AREAS as well."
         (aset game-state 0 prev-lnode)
         ;; Update move on svg
 
-        (board-svg-update-prisoners svg pcounts)
-        (board-svg-update-turn svg (if (equal stone 'B) 'W 'B))
-        (board-svg-update-mvnum svg mvnum)
-        (board-svg-update-next svg interval prev-lnode)
-        (board-svg-update-marks svg interval (aref prev-lnode 1) board-2d)
+        (sgf-svg-update-prisoners svg pcounts)
+        (sgf-svg-update-turn svg (if (equal stone 'B) 'W 'B))
+        (sgf-svg-update-mvnum svg mvnum)
+        (sgf-svg-update-next svg interval prev-lnode)
+        (sgf-svg-update-marks svg interval (aref prev-lnode 1) board-2d)
         ;; overlay and SVG update
         (sgf-update-overlay game-state svg)))))
 
@@ -414,11 +413,11 @@ Optionally update HOT-AREAS as well."
          (svg  (overlay-get ov 'svg))
          group)
     (cond ((equal layer 'mvnum)
-           (setq group (board-svg-group-mvnums svg)))
+           (setq group (sgf-svg-group-mvnums svg)))
           ((equal layer 'marks)
-           (setq group (board-svg-group-marks svg)))
+           (setq group (sgf-svg-group-marks svg)))
           ((equal layer 'next)
-           (setq group (board-svg-group-next svg))))
+           (setq group (sgf-svg-group-next svg))))
     (if (dom-attr group 'visibility)
         ;; show the numbers
         (dom-remove-attribute group 'visibility)
@@ -563,9 +562,20 @@ Cases:
                  (new-lnode (sgf-linked-node curr-lnode `((,next-stone ,xy)))))
              ;; add the new node as the last branch
              (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
-             (sgf-update-buffer-from-game curr-lnode)
              (sgf-forward-node n) ; if n=0, case 2.1; otherwise, case 2.2
-             ))
+             (let ((stone next-stone)
+                   (board-2d (aref game-state 1)))
+               (if (null (car (sgf-check-alive xy board-2d)))
+                   ;; Move is illegal
+                   (progn
+                     ;; Remove the new node from the game tree
+                     (aset curr-lnode 2 next-lnodes)
+                     ;; Revert the game state
+                     (sgf-backward-node)
+                     (message "Illegal move!"))
+                 ;; Move is legal, update the buffer
+                 (sgf-update-buffer-from-game curr-lnode)))))
+
           (t (message "Illegal move!"))))) ; case 3.
 
 
@@ -602,23 +612,23 @@ The move number will be incremented."
 (defun sgf-add-mark-square ()
   "Add a square mark on the board of current game state."
   (interactive)
-  (sgf--add-mark 'SQ 'board-svg-add-square)
+  (sgf--add-mark 'SQ 'sgf-svg-add-square)
   (message "Add square mark."))
 
 (defun sgf-add-mark-triangle ()
   "Add a triangle mark on the board of current game state."
   (interactive)
-  (sgf--add-mark 'TR 'board-svg-add-triangle))
+  (sgf--add-mark 'TR 'sgf-svg-add-triangle))
 
 (defun sgf-add-mark-circle ()
   "Add a circle mark on the board of current game state."
   (interactive)
-  (sgf--add-mark 'CR 'board-svg-add-circle))
+  (sgf--add-mark 'CR 'sgf-svg-add-circle))
 
 (defun sgf-add-mark-cross ()
   "Add a cross mark on the board of current game state."
   (interactive)
-  (sgf--add-mark 'MA 'board-svg-add-cross))
+  (sgf--add-mark 'MA 'sgf-svg-add-cross))
 
 (defun sgf-add-mark-label ()
   "Add a label mark on the board of current game state."
@@ -646,7 +656,7 @@ The move number will be incremented."
 ;;              (not (equal pos-state 'E)))
 ;;         (progn
 ;;           (aset (aref board-2d y) x 'E)
-;;           (board-svg-add-stone svg interval x y 'E)
+;;           (sgf-svg-add-stone svg interval x y 'E)
 ;;           (overlay-put ov 'display (svg-image svg :map hot-areas))
 ;;           (overlay-put ov 'svg svg)))))
 
@@ -677,11 +687,11 @@ The move number will be incremented."
          (w-h (car (alist-get 'SZ root)))
          (w (car w-h)) (h (cdr w-h))
          (board-2d (sgf-create-board-2d w h))
-         (interval (or interval board-svg-interval))
-         (margin (or margin board-svg-margin))
-         (bar-height (or bar-height board-svg-bar-height))
-         (padding (or padding board-svg-padding))
-         (svg-hot-areas (board-svg-init w h interval margin bar-height padding))
+         (interval (or interval sgf-svg-interval))
+         (margin (or margin sgf-svg-margin))
+         (bar-height (or bar-height sgf-svg-bar-height))
+         (padding (or padding sgf-svg-padding))
+         (svg-hot-areas (sgf-svg-init w h interval margin bar-height padding))
          (svg (car svg-hot-areas))
          (hot-areas (cdr svg-hot-areas))
          game-state)
@@ -696,9 +706,9 @@ The move number will be incremented."
                (dolist (pos prop-vals)
                  (setq x (car pos) y (cdr pos))
                  (aset (aref board-2d y) x stone-color)
-                 (board-svg-add-stone svg interval x y stone-color))))))
+                 (sgf-svg-add-stone svg interval x y stone-color))))))
 
-    (board-svg-update-turn svg stone)
+    (sgf-svg-update-turn svg stone)
     ;; root state
     (sgf-linkup-nodes-in-game-tree (cdr game-tree) root-lnode)
     (setq game-state

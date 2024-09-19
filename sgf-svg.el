@@ -1,31 +1,39 @@
-;;; board-svg.el --- svg visualization  -*- lexical-binding: t; -*-
+;;; sgf-svg.el --- svg visualization  -*- lexical-binding: t; -*-
 
-(defcustom board-svg-interval 25
+;; Author: Zech Xu
+;; Version: version
+;; Package-Requires: dependencies
+;; Homepage: homepage
+;; Keywords: svg, go, game
+
+;;; Code:
+
+(defcustom sgf-svg-interval 25
   "Default pixels for the size of grid cells.
 It is a reference for all other element sizes."
   :type '(integer)
-  :group 'board-svg)
+  :group 'sgf-svg)
 
-(defcustom board-svg-margin 30
+(defcustom sgf-svg-margin 30
   "Default pixels for the margin of the board."
   :type '(integer)
-  :group 'board-svg)
+  :group 'sgf-svg)
 
-(defcustom board-svg-bar-height 27
+(defcustom sgf-svg-bar-height 27
   "Default pixels for the bar of the board."
   :type '(integer)
-  :group 'board-svg)
+  :group 'sgf-svg)
 
-(defcustom board-svg-padding 5
+(defcustom sgf-svg-padding 5
   "Default padding for the board. Used in buttons and other elements.")
 
-(defcustom board-svg-font-family "Arial"
+(defcustom sgf-svg-font-family "Arial"
   "Default font family for the board."
   :type '(string)
-  :group 'board-svg)
+  :group 'sgf-svg)
 
 
-(defun board-svg-gradient (svg id type stops &rest args)
+(defun sgf-svg-gradient (svg id type stops &rest args)
   "Instead of svg-gradient. svg-gradient not support additional
 attributes(cx, cy, fx, fy, r, etc...)"
   (svg--def
@@ -43,17 +51,17 @@ attributes(cx, cy, fx, fy, r, etc...)"
                          (stop-color . ,(cdr stop)))))
      stops))))
 
-(defun board-svg-stone-gradient (svg color stops)
-  (board-svg-gradient
+(defun sgf-svg-stone-gradient (svg color stops)
+  (sgf-svg-gradient
    svg "black" 'radial '((0 . "#606060") (100 . "#000000"))
    :cx 0.5 :cy 0.5 :fx 0.7 :fy 0.3 :r 0.55)
-  (board-svg-gradient
+  (sgf-svg-gradient
    svg "white" 'radial '((0 . "#ffffff") (80 . "#e0e0e0") (100 . "#b0b0b0"))
    :cx 0.5 :cy 0.5 :fx 0.7 :fy 0.3 :r 0.6)
   svg)
 
 ;; Create the SVG object
-(defun board-svg-stone-gradient (svg color stops)
+(defun sgf-svg-stone-gradient (svg color stops)
   "Create stone gradients"
   (let* ((defs (svg-node svg 'defs)) ; Create the <defs> node
          ;; Create the stone gradient
@@ -68,12 +76,12 @@ attributes(cx, cy, fx, fy, r, etc...)"
 ;; (svg-node gradient-white 'stop :offset "100%" :stop-color "#b0b0b0")))
 
 ;; (let ((svg  (svg-create 800 800)))
-;;   (board-svg-stone-gradient svg "black" '((0 . "#606060") (100 . "#000000")))
+;;   (sgf-svg-stone-gradient svg "black" '((0 . "#606060") (100 . "#000000")))
 ;;   (svg-print svg))
 
 
 ;; <rect width=\"34\" height=\"4\" x=\"0\" y=\"30\" id=\"status-turn\" fill=\"#f00\"></rect>
-(defun board-svg-init (w h interval margin bar-height padding)
+(defun sgf-svg-init (w h interval margin bar-height padding)
   (let* ((font-size (/ interval 2))
          (grid-w (* interval (1- w)))
          (grid-h (* interval (1- h)))
@@ -91,10 +99,10 @@ attributes(cx, cy, fx, fy, r, etc...)"
          idx)
     ;; Note that the order of svg elements matters
     (setq svg (svg-create board-w (+ bar-height board-h bar-height)
-                          :font-family board-svg-font-family))
+                          :font-family sgf-svg-font-family))
     ;; Stones' Gradient
-    (board-svg-stone-gradient svg "B" '((0 . "#606060") (100 . "#000000")))
-    (board-svg-stone-gradient svg "W" '((0 . "#ffffff") (100 . "#b0b0b0")))
+    (sgf-svg-stone-gradient svg "B" '((0 . "#606060") (100 . "#000000")))
+    (sgf-svg-stone-gradient svg "W" '((0 . "#ffffff") (100 . "#b0b0b0")))
     ;; Status Bar
     (setq status-bar (svg-node svg 'g :id "status-bar"))
     (svg-rectangle status-bar 0 0 board-w bar-height :fill "gray")
@@ -112,16 +120,16 @@ attributes(cx, cy, fx, fy, r, etc...)"
     ;; show move number
     (svg-text status-bar "0" :x (/ board-w 2) :y bar-height
               :id "status-n" :fill "white"
-              :font-family board-svg-font-family :font-weight "bold"
+              :font-family sgf-svg-font-family :font-weight "bold"
               :text-anchor "middle" :dy "-0.5em")
     ;; show prisoner number
     (svg-text status-bar "0" :x (* interval 2) :y bar-height
               :id "status-pb" :fill "white"
-              :font-weight "bold" :font-family board-svg-font-family
+              :font-weight "bold" :font-family sgf-svg-font-family
               :text-anchor "middle" :dy "-0.5em")
     (svg-text status-bar "0" :x (- board-w interval interval) :y bar-height
               :id "status-pw" :fill "white"
-              :font-weight "bold" :font-family board-svg-font-family
+              :font-weight "bold" :font-family sgf-svg-font-family
               :text-anchor "middle" :dy "-0.5em")
 
     ;; Board Rect
@@ -173,12 +181,12 @@ attributes(cx, cy, fx, fy, r, etc...)"
     (setq menu-bar (svg-node svg 'g :id "menu-bar" :fill "gray"
                              :transform (format "translate(%s, %s)" 0 menu-bar-y)))
     ;; (svg-rectangle menu-bar 0 menu-bar-y board-w bar-height :fill "gray")
-    (nconc hot-areas (board-svg-create-menu-buttons menu-bar menu-bar-y bar-height padding))
+    (nconc hot-areas (sgf-svg-create-menu-buttons menu-bar menu-bar-y bar-height padding))
 
     (cons svg hot-areas)))
 
 
-(defun board-svg-create-menu-buttons (menu-bar menu-bar-y bar-height padding)
+(defun sgf-svg-create-menu-buttons (menu-bar menu-bar-y bar-height padding)
   "Create all the buttons and return the hot areas for the buttons"
   (let ((btns '((hot-menu "Menu" "menu")
                 (hot-first "|<" "Move to the beginning of the game")
@@ -212,7 +220,7 @@ attributes(cx, cy, fx, fy, r, etc...)"
             btns)))
 
 
-(defun board-svg-set-color (xy-state &optional same)
+(defun sgf-svg-set-color (xy-state &optional same)
   "Set mark/text color according to background color of the intersections on board."
   ;; @todo optimize color
   (cond ((equal xy-state 'B) (if same "black" "white"))
@@ -221,7 +229,7 @@ attributes(cx, cy, fx, fy, r, etc...)"
         (t "white")))
 
 
-(defun board-svg-update-turn (svg stone)
+(defun sgf-svg-update-turn (svg stone)
   "Show the current turn on the status bar."
   (let ((status-w (car (dom-by-id svg "^status-w$")))
         (status-b (car (dom-by-id svg "^status-b$"))))
@@ -234,13 +242,13 @@ attributes(cx, cy, fx, fy, r, etc...)"
           (t (error "Invalid stone color %s" stone)))))
 
 
-(defun board-svg-update-mvnum (svg mvnum)
+(defun sgf-svg-update-mvnum (svg mvnum)
   "Show the current move number on the status bar."
   (let ((status-n (car (dom-by-id svg "^status-n$"))))
     (setcar (nthcdr 2 status-n) (number-to-string mvnum))))
 
 
-(defun board-svg-update-prisoners (svg prisoners)
+(defun sgf-svg-update-prisoners (svg prisoners)
   "Show the current prisoners on the status bar."
   (let ((status-pb (car (dom-by-id svg "^status-pb$")))
         (status-pw (car (dom-by-id svg "^status-pw$")))
@@ -250,38 +258,38 @@ attributes(cx, cy, fx, fy, r, etc...)"
     (setcar (nthcdr 2 status-pw) (number-to-string pw))))
 
 
-(defun board-svg-clear-node-content (node)
+(defun sgf-svg-clear-node-content (node)
   "Remove all content under the SVG node."
   (if node
       ;; Keep the tag name and attributes, remove all children
       (setcdr (cdr node) nil)))
 
 
-(defun board-svg-update-marks (svg interval node board-2d)
+(defun sgf-svg-update-marks (svg interval node board-2d)
   "Process and update the marks on the board for a node.
 
 It removes the old marks and adds the new marks."
   ;; make sure to remove old marks
-  (let ((marks-group (board-svg-group-marks svg))
+  (let ((marks-group (sgf-svg-group-marks svg))
         type)
-    (board-svg-clear-node-content marks-group)
+    (sgf-svg-clear-node-content marks-group)
     (dolist (prop node)
       (setq type (car prop))
       (if (member type '(SQ TR CR MA))
           (dolist (xy (cdr prop))
             (setq x (car xy) y (cdr xy)
                   xy-state (sgf-board-2d-get xy board-2d))
-            (board-svg-add-mark type marks-group interval x y xy-state))))))
+            (sgf-svg-add-mark type marks-group interval x y xy-state))))))
 
 
-(defun board-svg-update-next (svg interval curr-lnode)
+(defun sgf-svg-update-next (svg interval curr-lnode)
   "Update and show next move(s) on board svg."
   (let* ((next-lnodes (aref curr-lnode 2))
          (branch-count (length next-lnodes))
          (branch-index 0)
-         (next-group (board-svg-group-next svg))
+         (next-group (sgf-svg-group-next svg))
          text play color xy x y)
-    (board-svg-clear-node-content next-group)
+    (sgf-svg-clear-node-content next-group)
     (dolist (next-lnode next-lnodes)
       (if (= branch-count 1)
           (setq text "x")
@@ -289,11 +297,11 @@ It removes the old marks and adds the new marks."
       (setq play (sgf-process-play (aref next-lnode 1))
             stone (car play) xy (cdr play) x (car xy) y (cdr xy))
       (if (consp xy) ; xy is not nil, i.e. next move is not pass
-          (board-svg-add-text next-group interval x y text (board-svg-set-color stone t)))
+          (sgf-svg-add-text next-group interval x y text (sgf-svg-set-color stone t)))
       (setq branch-index (1+ branch-index)))))
 
 
-(defun board-svg-add-text (svg interval x y text color &optional attributes)
+(defun sgf-svg-add-text (svg interval x y text color &optional attributes)
   (apply #'svg-text svg text
          :x (* x interval) :y (* y interval) :fill color
          :text-anchor "middle"
@@ -301,42 +309,42 @@ It removes the old marks and adds the new marks."
          ;; :baseline-shift "-30%"
          ;; librsvg issue: https://github.com/lovell/sharp/issues/1996
          ;; :alignment-baseline "central"
-         :font-family board-svg-font-family
+         :font-family sgf-svg-font-family
          :font-weight "bold"
          attributes))
 
-(defun board-svg-group-next (svg) (car (dom-by-id svg "next")))
-(defun board-svg-group-marks (svg) (car (dom-by-id svg "marks")))
-(defun board-svg-group-stones (svg) (car (dom-by-id svg "stones")))
-(defun board-svg-group-mvnums (svg) (car (dom-by-id svg "mvnums")))
+(defun sgf-svg-group-next (svg) (car (dom-by-id svg "next")))
+(defun sgf-svg-group-marks (svg) (car (dom-by-id svg "marks")))
+(defun sgf-svg-group-stones (svg) (car (dom-by-id svg "stones")))
+(defun sgf-svg-group-mvnums (svg) (car (dom-by-id svg "mvnums")))
 
-(defun board-svg-stone-id (x y) (format "stone-%s-%s" x y))
-(defun board-svg-mvnum-id (x y) (format "mvnum-%s-%s" x y))
+(defun sgf-svg-stone-id (x y) (format "stone-%s-%s" x y))
+(defun sgf-svg-mvnum-id (x y) (format "mvnum-%s-%s" x y))
 
-(defun board-svg-add-stone (svg interval x y color)
+(defun sgf-svg-add-stone (svg interval x y color)
   (let ((cx (* x interval))
         (cy (* y interval))
         (r (* interval 0.48)))
-    (svg-circle (board-svg-group-stones svg) cx cy r
-                :id (board-svg-stone-id x y)
+    (svg-circle (sgf-svg-group-stones svg) cx cy r
+                :id (sgf-svg-stone-id x y)
                 :gradient color)))
 
 ;; todo  ((eq node current-node) "#f00")
-(defun board-svg-add-mvnum (svg interval x y mvnum color)
-    (board-svg-add-text
-     (board-svg-group-mvnums svg)
+(defun sgf-svg-add-mvnum (svg interval x y mvnum color)
+    (sgf-svg-add-text
+     (sgf-svg-group-mvnums svg)
      interval x y (number-to-string mvnum) color
-     (list :id (board-svg-mvnum-id x y))))
+     (list :id (sgf-svg-mvnum-id x y))))
 
 
-(defun board-svg-add-square (svg interval x y &rest attributes)
+(defun sgf-svg-add-square (svg interval x y &rest attributes)
   (let ((r (* 0.2 interval)))
     (apply 'svg-rectangle svg
            (- (* x interval) r) (- (* y interval) r) (* 2 r) (* 2 r)
            attributes)))
 
 
-(defun board-svg-add-triangle (svg interval x y &rest attributes)
+(defun sgf-svg-add-triangle (svg interval x y &rest attributes)
   (let ((cx (* x interval))
         (cy (* y interval))
         (r (* 0.2 interval))
@@ -348,11 +356,11 @@ It removes the old marks and adds the new marks."
            attributes)))
 
 
-(defun board-svg-add-circle (svg interval x y &rest attributes)
+(defun sgf-svg-add-circle (svg interval x y &rest attributes)
     (apply 'svg-circle svg (* x interval) (* y interval) (* 0.2 interval) attributes))
 
 
-(defun board-svg-add-cross (svg interval x y &rest attributes)
+(defun sgf-svg-add-cross (svg interval x y &rest attributes)
   (let ((cx (* x interval))
         (cy (* y interval))
         (r (* 0.2 interval)))
@@ -364,13 +372,13 @@ It removes the old marks and adds the new marks."
               attributes)))
 
 
-(defun board-svg-add-mark (type svg-group interval x y xy-state)
+(defun sgf-svg-add-mark (type svg-group interval x y xy-state)
   "Add a mark to the marks group in a svg."
-  (let* ((color (board-svg-set-color xy-state))
-         (adders '((SQ . board-svg-add-square)
-                   (CR . board-svg-add-circle)
-                   (TR . board-svg-add-triangle)
-                   (MA . board-svg-add-cross)))
+  (let* ((color (sgf-svg-set-color xy-state))
+         (adders '((SQ . sgf-svg-add-square)
+                   (CR . sgf-svg-add-circle)
+                   (TR . sgf-svg-add-triangle)
+                   (MA . sgf-svg-add-cross)))
          (adder (cdr (assoc type adders))))
     (funcall adder svg-group interval x y
              :fill "none" :stroke color :stroke-width 2)))
@@ -408,4 +416,4 @@ It removes the old marks and adds the new marks."
 (defun igo-svg-remove-last-move (svg)
   (dom-remove-node svg (car (dom-by-id svg "^last-move$"))))
 
-;; Marker
+(provide 'sgf-svg)
