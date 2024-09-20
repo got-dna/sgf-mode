@@ -19,13 +19,21 @@ It is a reference for all other element sizes."
   :type '(integer)
   :group 'sgf-svg)
 
-(defcustom sgf-svg-bar-height 27
-  "Default pixels for the bar of the board."
+(defcustom sgf-svg-bar 27
+  "Default pixels for the bar height of the board."
   :type '(integer)
   :group 'sgf-svg)
 
 (defcustom sgf-svg-padding 5
-  "Default padding for the board. Used in buttons and other elements.")
+  "Default padding for the board. Used in buttons and other elements."
+  :type '(integer)
+  :group 'sgf-svg)
+
+
+(defcustom sgf-svg-font-size  (/ sgf-svg-interval 2)
+  "Default font family for the board."
+  :type '(integer)
+  :group 'sgf-svg)
 
 (defcustom sgf-svg-font-family "Arial"
   "Default font family for the board."
@@ -81,53 +89,52 @@ attributes(cx, cy, fx, fy, r, etc...)"
 
 
 ;; <rect width=\"34\" height=\"4\" x=\"0\" y=\"30\" id=\"status-turn\" fill=\"#f00\"></rect>
-(defun sgf-svg-init (w h interval margin bar-height padding)
-  (let* ((font-size (/ interval 2))
-         (grid-w (* interval (1- w)))
-         (grid-h (* interval (1- h)))
-         (board-w (+ margin grid-w margin))
-         (board-h (+ margin grid-h margin))
-         (menu-bar-y (+ bar-height board-h))
+(defun sgf-svg-init (w h)
+  (let* ((grid-w (* sgf-svg-interval (1- w)))
+         (grid-h (* sgf-svg-interval (1- h)))
+         (board-w (+ sgf-svg-margin grid-w sgf-svg-margin))
+         (board-h (+ sgf-svg-margin grid-h sgf-svg-margin))
+         (menu-bar-y (+ sgf-svg-bar board-h))
          (line-width 0.5)
          (star-radius 3)
-         (hot-grid-u-l (cons margin (+ bar-height margin)))
-         (hot-grid-b-r (cons (+ margin (* (1- w) interval))
-                             (+ bar-height margin (* (1- h) interval))))
+         (hot-grid-u-l (cons sgf-svg-margin (+ sgf-svg-bar sgf-svg-margin)))
+         (hot-grid-b-r (cons (+ sgf-svg-margin (* (1- w) sgf-svg-interval))
+                             (+ sgf-svg-bar sgf-svg-margin (* (1- h) sgf-svg-interval))))
          (hot-areas (list (list (cons 'rect (cons hot-grid-u-l hot-grid-b-r))
                                 'hot-grid (list 'pointer 'hand))))
          svg statu-bar board grid menu-bar ; svg nodes
          idx)
     ;; Note that the order of svg elements matters
-    (setq svg (svg-create board-w (+ bar-height board-h bar-height)
+    (setq svg (svg-create board-w (+ sgf-svg-bar board-h sgf-svg-bar)
                           :font-family sgf-svg-font-family))
     ;; Stones' Gradient
     (sgf-svg-stone-gradient svg "B" '((0 . "#606060") (100 . "#000000")))
     (sgf-svg-stone-gradient svg "W" '((0 . "#ffffff") (100 . "#b0b0b0")))
     ;; Status Bar
     (setq status-bar (svg-node svg 'g :id "status-bar"))
-    (svg-rectangle status-bar 0 0 board-w bar-height :fill "gray")
-    (svg-circle status-bar (/ interval 2)
-                (/ interval 2) (/ interval 3) :gradient "B")
-    (svg-circle status-bar (- board-w (/ interval 2))
-                (/ interval 2) (/ interval 3) :gradient "W")
+    (svg-rectangle status-bar 0 0 board-w sgf-svg-bar :fill "gray")
+    (svg-circle status-bar (/ sgf-svg-interval 2)
+                (/ sgf-svg-interval 2) (/ sgf-svg-interval 3) :gradient "B")
+    (svg-circle status-bar (- board-w (/ sgf-svg-interval 2))
+                (/ sgf-svg-interval 2) (/ sgf-svg-interval 3) :gradient "W")
     ;; show what play turn it is
-    (svg-rectangle status-bar 0 (- bar-height padding)
-                   interval padding
+    (svg-rectangle status-bar 0 (- sgf-svg-bar sgf-svg-padding)
+                   sgf-svg-interval sgf-svg-padding
                    :id "status-b" :fill "gray")
-    (svg-rectangle status-bar (- board-w interval) (- bar-height padding)
-                   interval padding
+    (svg-rectangle status-bar (- board-w sgf-svg-interval) (- sgf-svg-bar sgf-svg-padding)
+                   sgf-svg-interval sgf-svg-padding
                    :id "status-w" :fill "gray")
     ;; show move number
-    (svg-text status-bar "0" :x (/ board-w 2) :y bar-height
+    (svg-text status-bar "0" :x (/ board-w 2) :y sgf-svg-bar
               :id "status-n" :fill "white"
               :font-family sgf-svg-font-family :font-weight "bold"
               :text-anchor "middle" :dy "-0.5em")
     ;; show prisoner number
-    (svg-text status-bar "0" :x (* interval 2) :y bar-height
+    (svg-text status-bar "0" :x (* sgf-svg-interval 2) :y sgf-svg-bar
               :id "status-pb" :fill "white"
               :font-weight "bold" :font-family sgf-svg-font-family
               :text-anchor "middle" :dy "-0.5em")
-    (svg-text status-bar "0" :x (- board-w interval interval) :y bar-height
+    (svg-text status-bar "0" :x (- board-w sgf-svg-interval sgf-svg-interval) :y sgf-svg-bar
               :id "status-pw" :fill "white"
               :font-weight "bold" :font-family sgf-svg-font-family
               :text-anchor "middle" :dy "-0.5em")
@@ -135,41 +142,41 @@ attributes(cx, cy, fx, fy, r, etc...)"
     ;; Board Rect
     (setq board (svg-node svg 'g
                           :id "game-board"
-                          :transform (format "translate(%s, %s)" 0 bar-height)
+                          :transform (format "translate(%s, %s)" 0 sgf-svg-bar)
                           :fill "black"))
     (svg-rectangle board 0 0 board-w board-h :fill "#e3aa4e")
     ;; Board Grid
     (setq grid (svg-node board 'g
                          :id "game-grid"
-                         :font-size font-size
-                         :transform (format "translate(%s, %s)" margin margin)))
+                         :font-size sgf-svg-font-size
+                         :transform (format "translate(%s, %s)" sgf-svg-margin sgf-svg-margin)))
     ;; Grid Lines
     (dotimes (n w)
       ;; vertical lines
       (setq idx (format "%c" (if (< n (- ?I ?A)) (+ ?A n) (+ ?A n 1)))) ; skip char I
       (svg-text grid idx :class "grid-idx"
-                :x (* interval n) :y (- font-size)
+                :x (* sgf-svg-interval n) :y (- sgf-svg-font-size)
                 :dominant-baseline "hanging" :text-anchor "middle")
       (svg-text grid idx :class "grid-idx"
-                :x (* interval n) :y (* interval h)
+                :x (* sgf-svg-interval n) :y (* sgf-svg-interval h)
                 :text-anchor "middle")
-      (svg-line grid (* interval n) 0 (* interval n) (* grid-h)
+      (svg-line grid (* sgf-svg-interval n) 0 (* sgf-svg-interval n) (* grid-h)
                 :stroke "black" :stroke-width line-width))
     (dotimes (n h)
       ;; horizontal lines
       (setq idx (number-to-string (- h n)))
       (svg-text grid idx :class "grid-idx"
-                :x (- font-size) :y (* interval n)
+                :x (- sgf-svg-font-size) :y (* sgf-svg-interval n)
                 :text-anchor "end" :dy ".25em")
       (svg-text grid idx :class "grid-idx"
-                :x (+ grid-w font-size) :y (* interval n)
+                :x (+ grid-w sgf-svg-font-size) :y (* sgf-svg-interval n)
                 :text-anchor "start" :dy ".25em")
-      (svg-line grid 0 (* interval n) grid-w (* interval n)
+      (svg-line grid 0 (* sgf-svg-interval n) grid-w (* sgf-svg-interval n)
                 :stroke "black" :stroke-width line-width))
 
     ;; Stars
     (dolist (hoshi (sgf-board-hoshi w h))
-      (svg-circle grid (* interval (car hoshi)) (* interval (cdr hoshi)) star-radius))
+      (svg-circle grid (* sgf-svg-interval (car hoshi)) (* sgf-svg-interval (cdr hoshi)) star-radius))
 
     ;; Layers: 3 types of information on board ;todo remove hard coding
     (svg-node grid 'g :id "stones")
@@ -180,14 +187,17 @@ attributes(cx, cy, fx, fy, r, etc...)"
     ;; Menu Bar at bottom
     (setq menu-bar (svg-node svg 'g :id "menu-bar" :fill "gray"
                              :transform (format "translate(%s, %s)" 0 menu-bar-y)))
-    ;; (svg-rectangle menu-bar 0 menu-bar-y board-w bar-height :fill "gray")
-    (nconc hot-areas (sgf-svg-create-menu-buttons menu-bar menu-bar-y bar-height padding))
+    ;; (svg-rectangle menu-bar 0 menu-bar-y board-w sgf-svg-bar :fill "gray")
+    (nconc hot-areas (sgf-svg-create-menu-buttons menu-bar menu-bar-y))
 
     (cons svg hot-areas)))
 
 
-(defun sgf-svg-create-menu-buttons (menu-bar menu-bar-y bar-height padding)
-  "Create all the buttons and return the hot areas for the buttons"
+(defun sgf-svg-create-menu-buttons (menu-bar menu-bar-y)
+  "Create all the buttons and return the hot areas for the buttons.
+
+MENU-BAR is a svg node;
+MENU-BAR-Y is the starting y coordinate for menu bar."
   (let ((btns '((hot-menu "Menu" "menu")
                 (hot-first "|<" "Move to the beginning of the game")
                 (hot-backward "<" "Move backward")
@@ -195,14 +205,14 @@ attributes(cx, cy, fx, fy, r, etc...)"
                 (hot-last ">|" "Move to the end of the game")
                 (hot-del "Del" "Delete the current move")
                 (hot-pass "Pass" "Pass the current move")))
-        (x padding) (y padding)
-        (height (- bar-height (* 2 padding))))
+        (x sgf-svg-padding) (y sgf-svg-padding)
+        (height (- sgf-svg-bar (* 2 sgf-svg-padding))))
 
     (mapcar (lambda (btn)
               (let* ((hot-area-id (nth 0 btn))
                      (name        (nth 1 btn))
                      (tooltip     (nth 2 btn))
-                     (width (+ (* 2 padding) (string-pixel-width name)))
+                     (width (+ (* 2 sgf-svg-padding) (string-pixel-width name)))
                      hot-area)
                 (svg-rectangle menu-bar x y width height :rx 3 :ry 3 :fill "#fff")
                 (svg-text menu-bar name
@@ -212,10 +222,10 @@ attributes(cx, cy, fx, fy, r, etc...)"
                                            (cons (cons x
                                                        menu-bar-y)
                                                  (cons (+ x width)
-                                                       (+ bar-height menu-bar-y))))
+                                                       (+ sgf-svg-bar menu-bar-y))))
                                      hot-area-id (list 'pointer 'hand
                                                        'help-echo tooltip)))
-                (setq x (+ x width padding))
+                (setq x (+ x width sgf-svg-padding))
                 hot-area))
             btns)))
 
@@ -229,8 +239,8 @@ attributes(cx, cy, fx, fy, r, etc...)"
         (t "white")))
 
 
-(defun sgf-svg-update-turn (svg stone)
-  "Show the current turn on the status bar."
+(defun sgf-svg-update-status-turn (svg stone)
+  "Update the current turn on the status bar."
   (let ((status-w (car (dom-by-id svg "^status-w$")))
         (status-b (car (dom-by-id svg "^status-b$"))))
     (cond ((equal stone 'B)
@@ -242,13 +252,14 @@ attributes(cx, cy, fx, fy, r, etc...)"
           (t (error "Invalid stone color %s" stone)))))
 
 
-(defun sgf-svg-update-mvnum (svg mvnum)
-  "Show the current move number on the status bar."
+(defun sgf-svg-update-status-mvnum (svg mvnum)
+  "Update the current move number on the status bar."
   (let ((status-n (car (dom-by-id svg "^status-n$"))))
+    ;; update the svg element text
     (setcar (nthcdr 2 status-n) (number-to-string mvnum))))
 
 
-(defun sgf-svg-update-prisoners (svg prisoners)
+(defun sgf-svg-update-status-prisoners (svg prisoners)
   "Show the current prisoners on the status bar."
   (let ((status-pb (car (dom-by-id svg "^status-pb$")))
         (status-pw (car (dom-by-id svg "^status-pw$")))
@@ -265,7 +276,7 @@ attributes(cx, cy, fx, fy, r, etc...)"
       (setcdr (cdr node) nil)))
 
 
-(defun sgf-svg-update-marks (svg interval node board-2d)
+(defun sgf-svg-update-marks (svg node board-2d)
   "Process and update the marks on the board for a node.
 
 It removes the old marks and adds the new marks."
@@ -277,12 +288,21 @@ It removes the old marks and adds the new marks."
       (setq type (car prop))
       (if (member type '(SQ TR CR MA))
           (dolist (xy (cdr prop))
-            (setq x (car xy) y (cdr xy)
-                  xy-state (sgf-board-2d-get xy board-2d))
-            (sgf-svg-add-mark type marks-group interval x y xy-state))))))
+            (let ((x (car xy))
+                  (y (cdr xy))
+                  (xy-state (sgf-board-2d-get xy board-2d)))
+              (sgf-svg-add-mark type marks-group x y xy-state))))
+      (if (equal type 'LB)
+          (dolist (prop-val (cdr prop))
+            (let* ((label (cdr prop-val))
+                  (xy (car prop-val))
+                  (x (car xy))
+                  (y (cdr xy))
+                  (xy-state (sgf-board-2d-get xy board-2d)))
+              (sgf-svg-add-text marks-group x y label xy-state)))))))
 
 
-(defun sgf-svg-update-next (svg interval curr-lnode)
+(defun sgf-svg-update-next (svg curr-lnode)
   "Update and show next move(s) on board svg."
   (let* ((next-lnodes (aref curr-lnode 2))
          (branch-count (length next-lnodes))
@@ -297,13 +317,14 @@ It removes the old marks and adds the new marks."
       (setq play (sgf-process-play (aref next-lnode 1))
             stone (car play) xy (cdr play) x (car xy) y (cdr xy))
       (if (consp xy) ; xy is not nil, i.e. next move is not pass
-          (sgf-svg-add-text next-group interval x y text (sgf-svg-set-color stone t)))
+          (sgf-svg-add-text next-group x y text (sgf-svg-set-color stone t)))
       (setq branch-index (1+ branch-index)))))
 
 
-(defun sgf-svg-add-text (svg interval x y text color &optional attributes)
+(defun sgf-svg-add-text (svg x y text color &optional attributes)
   (apply #'svg-text svg text
-         :x (* x interval) :y (* y interval) :fill color
+         :x (* x sgf-svg-interval) :y (* y sgf-svg-interval)
+         :fill color
          :text-anchor "middle"
          :dy ".25em" ; or
          ;; :baseline-shift "-30%"
@@ -321,33 +342,34 @@ It removes the old marks and adds the new marks."
 (defun sgf-svg-stone-id (x y) (format "stone-%s-%s" x y))
 (defun sgf-svg-mvnum-id (x y) (format "mvnum-%s-%s" x y))
 
-(defun sgf-svg-add-stone (svg interval x y color)
-  (let ((cx (* x interval))
-        (cy (* y interval))
-        (r (* interval 0.48)))
+(defun sgf-svg-add-stone (svg x y stone)
+  "STONE is a symbol."
+  (let ((cx (* x sgf-svg-interval))
+        (cy (* y sgf-svg-interval))
+        (r (* sgf-svg-interval 0.48)))
     (svg-circle (sgf-svg-group-stones svg) cx cy r
                 :id (sgf-svg-stone-id x y)
-                :gradient color)))
+                :gradient stone)))
 
 ;; todo  ((eq node current-node) "#f00")
-(defun sgf-svg-add-mvnum (svg interval x y mvnum color)
-    (sgf-svg-add-text
-     (sgf-svg-group-mvnums svg)
-     interval x y (number-to-string mvnum) color
-     (list :id (sgf-svg-mvnum-id x y))))
+(defun sgf-svg-add-mvnum (svg x y mvnum color)
+  "COLOR is str."
+  (sgf-svg-add-text (sgf-svg-group-mvnums svg)
+                    x y (number-to-string mvnum) color
+                    (list :id (sgf-svg-mvnum-id x y))))
 
 
-(defun sgf-svg-add-square (svg interval x y &rest attributes)
-  (let ((r (* 0.2 interval)))
+(defun sgf-svg-add-square (svg x y &rest attributes)
+  (let ((r (* 0.2 sgf-svg-interval)))
     (apply 'svg-rectangle svg
-           (- (* x interval) r) (- (* y interval) r) (* 2 r) (* 2 r)
+           (- (* x sgf-svg-interval) r) (- (* y sgf-svg-interval) r) (* 2 r) (* 2 r)
            attributes)))
 
 
-(defun sgf-svg-add-triangle (svg interval x y &rest attributes)
-  (let ((cx (* x interval))
-        (cy (* y interval))
-        (r (* 0.2 interval))
+(defun sgf-svg-add-triangle (svg x y &rest attributes)
+  (let ((cx (* x sgf-svg-interval))
+        (cy (* y sgf-svg-interval))
+        (r (* 0.2 sgf-svg-interval))
         (rt3 1.5))
     (apply 'svg-polygon svg
            (list (cons cx (+ cy (* r rt3 -0.55)))
@@ -356,23 +378,23 @@ It removes the old marks and adds the new marks."
            attributes)))
 
 
-(defun sgf-svg-add-circle (svg interval x y &rest attributes)
-    (apply 'svg-circle svg (* x interval) (* y interval) (* 0.2 interval) attributes))
+(defun sgf-svg-add-circle (svg x y &rest attributes)
+  (apply 'svg-circle svg (* x sgf-svg-interval) (* y sgf-svg-interval) (* 0.2 sgf-svg-interval) attributes))
 
 
-(defun sgf-svg-add-cross (svg interval x y &rest attributes)
-  (let ((cx (* x interval))
-        (cy (* y interval))
-        (r (* 0.2 interval)))
+(defun sgf-svg-add-cross (svg x y &rest attributes)
+  (let ((cx (* x sgf-svg-interval))
+        (cy (* y sgf-svg-interval))
+        (r (* 0.2 sgf-svg-interval)))
     (apply 'svg-path svg
-              (list (list 'moveto (list (cons (- cx r) (- cy r))))
-                    (list 'lineto (list (cons (+ cx r) (+ cy r))))
-                    (list 'moveto (list (cons (+ cx r) (- cy r))))
-                    (list 'lineto (list (cons (- cx r) (+ cy r)))))
-              attributes)))
+           (list (list 'moveto (list (cons (- cx r) (- cy r))))
+                 (list 'lineto (list (cons (+ cx r) (+ cy r))))
+                 (list 'moveto (list (cons (+ cx r) (- cy r))))
+                 (list 'lineto (list (cons (- cx r) (+ cy r)))))
+           attributes)))
 
 
-(defun sgf-svg-add-mark (type svg-group interval x y xy-state)
+(defun sgf-svg-add-mark (type svg-group x y xy-state)
   "Add a mark to the marks group in a svg."
   (let* ((color (sgf-svg-set-color xy-state))
          (adders '((SQ . sgf-svg-add-square)
@@ -380,12 +402,12 @@ It removes the old marks and adds the new marks."
                    (TR . sgf-svg-add-triangle)
                    (MA . sgf-svg-add-cross)))
          (adder (cdr (assoc type adders))))
-    (funcall adder svg-group interval x y
+    (funcall adder svg-group x y
              :fill "none" :stroke color :stroke-width 2)))
 
 
 
-(defun igo-svg-last-move (svg game grid-interval)
+(defun igo-svg-last-move (svg game grid-sgf-svg-interval)
   ;; todo
   (igo-svg-remove-last-move svg)
 
@@ -395,9 +417,9 @@ It removes the old marks and adds the new marks."
         (let* ((board (igo-game-board game))
                (x (igo-board-pos-to-x board move))
                (y (igo-board-pos-to-y board move))
-               (cx (* x grid-interval))
-               (cy (* y grid-interval))
-               (r (ceiling (* grid-interval 0.15)))
+               (cx (* x grid-sgf-svg-interval))
+               (cy (* y grid-sgf-svg-interval))
+               (r (ceiling (* grid-sgf-svg-interval 0.15)))
                ;;(color (igo-opposite-color (igo-game-turn game)))
                )
           (svg-rectangle
