@@ -212,26 +212,29 @@ If neither 'B nor 'W is present, return nil."
              (setq prev-lnode curr-lnode))))))
 
 
-
 (defun sgf-add-captured-stones (xys stone board-2d svg)
-  "Add captured stones to the board. STONE is the stone opponent to the captured stone(s)"
+  "Add captured stones to the board. STONE indicate color of the captured stone(s)"
   (dolist (xy xys)
-    (let ((x (car xy)) (y (cdr xy)))
-      (aset (aref board-2d y) x stone)
-      ;; change mvnum color to contrast the stone color
-      (dom-set-attribute (car (dom-by-id svg (sgf-svg-mvnum-id x y)))
-                         'fill (sgf-svg-set-color stone t))
+    (let* ((x (car xy)) (y (cdr xy))
+           (mvnum-id (car (dom-by-id svg (sgf-svg-mvnum-id x y)))))
+      (sgf-board-2d-set xy stone board-2d)
+      ;; the mvnum svg element may not exist if the stone is pre-set before the game starts.
+      (if mvnum-id
+          ;; change mvnum color to contrast the stone color
+          (dom-set-attribute mvnum-id 'fill (sgf-svg-set-color stone)))
       (dom-remove-attribute (car (dom-by-id svg (sgf-svg-stone-id x y))) 'visibility))))
 
 
 (defun sgf-del-captured-stones (xys stone board-2d svg)
   "Delete captured stones from the board."
   (dolist (xy xys)
-    (let ((x (car xy)) (y (cdr xy)))
-      (aset (aref board-2d y) x 'E)
-      ;; change mvnum color to the same with deleted stone
-      (dom-set-attribute (car (dom-by-id svg (sgf-svg-mvnum-id x y)))
-                         'fill (sgf-svg-set-color stone))
+    (let* ((x (car xy)) (y (cdr xy))
+           (mvnum-id (car (dom-by-id svg (sgf-svg-mvnum-id x y)))))
+      (sgf-board-2d-set xy 'E board-2d)
+      ;; the mvnum svg element may not exist if the stone is pre-set before the game starts.
+      (if mvnum-id
+          ;; change mvnum color to the same color with that of deleted stone
+          (dom-set-attribute mvnum-id 'fill (sgf-svg-set-color stone t)))
       (dom-set-attribute (car (dom-by-id svg (sgf-svg-stone-id x y))) 'visibility "hidden"))))
 
 
