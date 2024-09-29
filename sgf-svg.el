@@ -411,7 +411,7 @@ property, not include setup node."
                             (sgf-svg-set-color (sgf-enemy-stone stone))
                           (sgf-svg-set-color xy-state))))
             (setq mvnum
-                  (cond ((null mvnum) curr-mvnum)
+                  (cond ((null mvnum) (setq color "red") curr-mvnum)
                         ((alist-get 'MN node) (sgf-lnode-move-number curr-lnode))
                         (t (1- mvnum))))
             (sgf-svg-add-mvnum svg-group (car xy) (cdr xy) mvnum color)
@@ -472,37 +472,5 @@ property, not include setup node."
     (funcall adder svg-group x y
              :fill "none" :stroke color :stroke-width 2)))
 
-
-
-(defun igo-svg-last-move (svg game grid-sgf-svg-interval)
-  ;; todo
-  (igo-svg-remove-last-move svg)
-
-  (let* ((curr-node (igo-game-current-node game))
-         (move (igo-node-move curr-node)))
-    (if (igo-placement-p move)
-        (let* ((board (igo-game-board game))
-               (x (igo-board-pos-to-x board move))
-               (y (igo-board-pos-to-y board move))
-               (cx (* x grid-sgf-svg-interval))
-               (cy (* y grid-sgf-svg-interval))
-               (r (ceiling (* grid-sgf-svg-interval 0.15)))
-               ;;(color (igo-opposite-color (igo-game-turn game)))
-               )
-          (svg-rectangle
-           ;;(igo-svg-overlays-group svg)
-           (igo-svg-stones-group svg)
-           (- cx r)
-           (- cy r)
-           (* 2 r)
-           (* 2 r)
-           :id "last-move"
-           :fill (cond
-                  ;;((igo-black-p color) "rgba(255,255,255,0.5)")
-                  ;;((igo-white-p color) "rgba(0,0,0,0.5)")
-                  (t "rgba(255,0,0,0.8)")))))))
-
-(defun igo-svg-remove-last-move (svg)
-  (dom-remove-node svg (car (dom-by-id svg "^last-move$"))))
 
 (provide 'sgf-svg)
