@@ -445,7 +445,9 @@ Optionally update HOT-AREAS as well."
          (curr-node  (aref curr-lnode 1)))
     ;; Add stones
     (sgf-svg-add-stones svg game-state)
-    (sgf-svg-add-mvnums svg game-state)
+    (when (not (sgf-root-lnode-p curr-lnode))
+      (sgf-svg-add-mvnums svg game-state)
+      (sgf-svg-highlight-last-move svg curr-node))
     (sgf-svg-update-status-prisoners svg pcounts)
     (sgf-svg-update-status-turn svg turn)
     (sgf-svg-update-next svg curr-lnode)
