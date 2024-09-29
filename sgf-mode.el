@@ -333,17 +333,16 @@ If neither 'B nor 'W is present, return nil."
              (setq prev-lnode curr-lnode))))))
 
 
-(defun sgf-update-display (&optional svg hot-areas)
+(defun sgf-update-display (ov &optional svg hot-areas)
   "Update the overlay with new SVG and GAME-STATE.
 Optionally update HOT-AREAS as well."
-  (let ((ov (sgf-get-overlay)))
-    (if svg
-        (overlay-put ov 'svg svg)
-      (setq svg (overlay-get ov 'svg)))
-    (if hot-areas
-        (overlay-put ov 'hot-areas hot-areas)
-      (setq hot-areas (overlay-get ov 'hot-areas)))
-    (overlay-put ov 'display (svg-image svg :map hot-areas))))
+  (if svg
+      (overlay-put ov 'svg svg)
+    (setq svg (overlay-get ov 'svg)))
+  (if hot-areas
+      (overlay-put ov 'hot-areas hot-areas)
+    (setq hot-areas (overlay-get ov 'hot-areas)))
+  (overlay-put ov 'display (svg-image svg :map hot-areas)))
 
 
 (defun sgf-branch-selection (n &optional branch)
@@ -389,7 +388,7 @@ Optionally update HOT-AREAS as well."
         (sgf-apply-node next-node game-state)
         (aset game-state 0 next-lnode)
         (sgf-update-svg game-state svg)
-        (sgf-update-display)))))
+        (sgf-update-display ov)))))
 
 (defun sgf-backward-move ()
   "Move to the previous move in the game tree and update board."
@@ -404,7 +403,7 @@ Optionally update HOT-AREAS as well."
         (sgf-revert-undo (sgf-pop-undo game-state) game-state)
         (aset game-state 0 (aref curr-lnode 0))
         (sgf-update-svg game-state svg)
-        (sgf-update-display)))))
+        (sgf-update-display ov)))))
 
 
 (defun sgf-apply-node (node game-state)
@@ -490,7 +489,7 @@ Optionally update HOT-AREAS as well."
         (dom-remove-attribute group 'visibility)
       ;; add visibility attribute to hide svg move number group
       (dom-set-attribute group 'visibility "hidden"))
-    (sgf-update-display)))
+    (sgf-update-display ov)))
 
 
 (defun sgf-toggle-move-number ()
@@ -546,8 +545,8 @@ Optionally update HOT-AREAS as well."
       (aset curr-lnode 1
             (nconc (assq-delete-all 'MN curr-node)
                    (list (list 'MN new-mvnum))))
-      (sgf-update-buffer-from-game curr-lnode)
-      (sgf-update-display))))
+      (sgf-update-buffer-from-game curr-lnode (overlay-buffer ov))
+      (sgf-update-display ov))))
 
 
 (defun sgf-edit-comment ()
@@ -569,8 +568,8 @@ Optionally update HOT-AREAS as well."
                 (assq-delete-all 'C curr-node)
               (nconc (assq-delete-all 'C curr-node)
                      (list (list 'C new-comment)))))
-      (sgf-update-buffer-from-game curr-lnode)
-      (sgf-update-display))))
+      (sgf-update-buffer-from-game curr-lnode (overlay-buffer ov))
+      (sgf-update-display ov))))
 
 
 ;; igo-editor-move-mode-make-move-root
@@ -592,7 +591,7 @@ Optionally update HOT-AREAS as well."
          (lnodes-del (remove lnode lnodes)))
     (aset prev-lnode 2 lnodes-del)
     (sgf-backward-move)
-    (sgf-update-buffer-from-game prev-lnode)))
+    (sgf-update-buffer-from-game prev-lnode (overlay-buffer ov))))
 
 
 (defun sgf-edit-game-info ()
@@ -647,7 +646,7 @@ Cases:
          ;; add the new node as the last branch
          (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
          (sgf-forward-move n) ; if n=0, case 2.1; otherwise, case 2.2
-         (sgf-update-buffer-from-game curr-lnode)))
+         (sgf-update-buffer-from-game curr-lnode (overlay-buffer ov))))
       ;; Case 3.
       (t (message "Illegal move!")))))
 
@@ -713,7 +712,7 @@ The move number will be incremented."
          (next-lnodes (aref curr-lnode 2))
          (new-lnode (sgf-linked-node curr-lnode '((W)))))
     (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
-    (sgf-update-display)))
+    (sgf-update-display ov)))
 
 
 (defmacro sgf--add-mark (shape add-mark-func)

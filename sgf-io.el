@@ -247,13 +247,14 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
           (concat node-str "(" (mapconcat #'identity next-strs ")(") ")"))))))
 
 
-(defun sgf-update-buffer-from-game (lnode &optional beg end)
+(defun sgf-update-buffer-from-game (lnode &optional buffer beg end)
   "Update the current buffer region with the SGF string representation of game."
   ;; move to the root node
   (while (aref lnode 0) (setq lnode (aref lnode 0)))
   (let ((sgf-str (sgf-str-from-game-tree lnode)))
-    (delete-region (or beg (point-min)) (or end (point-max)))
-    (insert "(" sgf-str ")")))
+    (with-current-buffer (or buffer (current-buffer))
+      (delete-region (or beg (point-min)) (or end (point-max)))
+      (insert "(" sgf-str ")"))))
 
 
 (defconst sgf-game-info-properties
