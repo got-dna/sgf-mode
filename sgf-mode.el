@@ -13,6 +13,19 @@
 (require 'sgf-io)
 (require 'sgf-svg)
 
+
+(defvar sgf-allow-suicide-move nil
+  "Allow suicide or not. Some rule set allow suicide: https://senseis.xmp.net/?Suicide")
+
+(defvar sgf-show-next-hint t
+  "Show the hint mark(s) for next move(s).")
+
+(defvar sgf-show-move-number t
+  "Show move number on the stones.")
+
+(defvar sgf-show-mark t
+  "Show marks on the board.")
+
 ;; Linked Node Object
 (defun sgf-linked-node (prev-node &optional current-node next-nodes)
   "Define node object. It is doubly linked list."
@@ -21,26 +34,88 @@
 ;; Game State
 (defun sgf-game-state (linked-node
                        board-2d
-                       move-num
-                       &optional ko
-                       prisoners prisoner-counts)
+                       &optional
+                         ko
+                         turn
+                         prisoners
+                         undos)
   "Define game state object. The move number, board-2d, ko, prisoners are re-computed every time when traversing the moves."
   (vector linked-node                 ; 0 current node
           board-2d                    ; 1
-          move-num                    ; 2
           ko                          ; 3 ko position
-          prisoners                   ; 4 a list of cons (x . y) after current move
-          (if (null prisoner-counts)
-              '(0 . 0)
-            prisoner-counts) ; 5 accumulated number (b . w)
-          ))
+          (or turn 'B)                        ; 2 move turn
+          ;; 4. accumulated number of prisoners (b . w)
+          (or prisoners (cons 0 0))
+          ;; 5. stack of changes. each change contains:
+          ;; - a list of cons cells: xy positions for black stones
+          ;; - a list of cons cells: xy positions for white stones
+          ;; - a list of cons cells: xy positions for empty
+          ;; - ko position (cons cell)
+          ;; - turn
+          undos))
 
 
-(defun sgf-create-board-2d (w h)
-  "Create a empty 2D board of size WxH."
+(defun sgf-revert-undo (change game-state)
+  "Revert the CHANGE for the GAME-STATE"
+  (let ((black-xys (aref change 0))
+        (white-xys (aref change 1))
+        (empty-xys (aref change 2))
+        (ko (aref change 3))
+        (turn (aref change 4))
+        (board-2d (aref game-state 1))
+        (pcounts  (aref game-state 4)))
+    (dolist (xy black-xys) (sgf-board-2d-set xy 'B board-2d))
+    (dolist (xy white-xys) (sgf-board-2d-set xy 'W board-2d))
+    (dolist (xy empty-xys) (sgf-board-2d-set xy 'E board-2d))
+    (aset game-state 3 turn)
+    (aset game-state 2 ko)
+    (setcar pcounts (- (car pcounts) (length black-xys)))
+    (setcdr pcounts (- (cdr pcounts) (length white-xys)))))
+
+
+(defun sgf-root-lnode-p (lnode)
+  "Check if LNODE is the root node."
+  (null (aref lnode 0)))
+
+
+(defun sgf-valid-stone-p (stone)
+  "Check if STONE is a valid color."
+  (or (equal stone 'B) (equal stone 'W)))
+
+
+(defun sgf-xy-on-board-p (xy board-2d)
+  "Check if XY is on the board."
+  (if xy
+      (let ((x (car xy)) (y (cdr xy)))
+        (and (>= x 0) (< x (length (aref board-2d 0)))
+             (>= y 0) (< y (length board-2d))))))
+
+
+(defun sgf-xy-is-empty-p (xy board-2d)
+  "Check if XY is empty on the board."
+  (if xy
+      (equal (sgf-board-2d-get xy board-2d) 'E)))
+
+
+(defun sgf-valid-move-p (xy stone game-state &optional allow-suicide)
+  "Check if the move of STONE at XY position on BOARD-2D is valid"
+  (let* ((board-2d (aref game-state 1))
+         (ko (aref game-state 2)))
+    (and
+     board-2d
+     (sgf-valid-stone-p stone)             ;; valid color
+     (sgf-xy-on-board-p xy board-2d) ;; position is on board
+     (sgf-xy-is-empty-p xy board-2d) ;; no stone at this position yet
+     (not (equal xy ko))             ;; pos is not ko
+     (if (not allow-suicide) (not (sgf-suicide-stones xy board-2d)) ;; not suicide move
+       ))))
+
+
+(defun sgf-create-board-2d (w h &optional default)
+  "Create a empty 2D board of size WxH with DEFAULT value."
   (let ((board-2d (make-vector h nil)))
     (dotimes (i h) ;; for each row
-      (aset board-2d i (make-vector w 'E)))
+      (aset board-2d i (make-vector w default)))
     board-2d))
 
 
@@ -75,7 +150,7 @@
              (cons (/ (1- w) 2) (- h 4))))))
 
 
-(defun sgf-opponent-stone (stone)
+(defun sgf-enemy-stone (stone)
   "Return the opponent stone of STONE."
   (if (equal stone 'B) 'W 'B))
 
@@ -100,19 +175,23 @@ Return nil if xy is nil."
                       (cons (+ x dx) (+ y dy)))))
                 neighbors))))
 
+
 (defun sgf-neighbors (xy board-2d)
   "Return a list of neighbors of XY on a board of size WxH."
   (mapcar (lambda (pos)
             (sgf-board-2d-get pos board-2d))
           (sgf-neighbors-xy xy board-2d)))
 
-(defun sgf-check-alive (xy board-2d &optional last-color visited)
-  "Check if the stone on position XY of BOARD-2D is alive.
+
+(defun sgf-check-liberty (xy board-2d &optional last-color visited)
+  "Check if the stone on position XY of BOARD-2D is alive or suiciding.
 
 It returns a cons cell of the form (LIBERTY-FOUND . VISITED). Its car
 indicates if a liberty is found, and its cdr is a list of visited
 positions to avoid loops, which also stores all the dead positions if no
-liberty is found."
+liberty is found.
+
+If xy is nil (for a move of pass), it returns (t . nil)."
   (let ((curr-color (sgf-board-2d-get xy board-2d)))
     (cond
      ((null xy) (cons t nil))
@@ -123,7 +202,7 @@ liberty is found."
       (let ((liberty-found nil))
         (dolist (neighbor (sgf-neighbors-xy xy board-2d) (cons liberty-found visited))
           (when neighbor
-            (let ((result (sgf-check-alive neighbor board-2d curr-color visited)))
+            (let ((result (sgf-check-liberty neighbor board-2d curr-color visited)))
               (if (car result)
                   (setq liberty-found t)
                 (setq visited (cdr result))))))))
@@ -131,20 +210,54 @@ liberty is found."
 
 
 (defun sgf-capture-stones (xy board-2d)
-  "Capture the opponent stone after the play of position XY.
+  "Compute the captured enemy stones after the play of position XY.
 Return the list of positions for the prisoners captured.
-If XY is nil, it returns nil."
+If XY is nil (for a move of pass), it returns nil."
   (let ((curr-color (sgf-board-2d-get xy board-2d))
         (prisoners nil))
     (dolist (neighbor-xy (sgf-neighbors-xy xy board-2d))
       (when (and neighbor-xy
                  (not (member neighbor-xy prisoners))
                  (not (equal curr-color (sgf-board-2d-get neighbor-xy board-2d))))
-        (let* ((results (sgf-check-alive neighbor-xy board-2d))
+        (let* ((results (sgf-check-liberty neighbor-xy board-2d))
                (alive-p (car results)))
           (unless alive-p
             (setq prisoners (nconc (cdr results) prisoners))))))
     prisoners))
+
+
+(defun sgf-suicide-stones (xy board-2d)
+  "Compute the suiciding stones after the play of position XY.
+Return the list of positions for the suiciding stones.
+If XY is nil (for a move of pass), it returns nil."
+  (let ((results (sgf-check-liberty xy board-2d)))
+    (unless (car results)
+      (cdr results))))
+
+
+
+(defun sgf-get-ko (xy stone board-2d captured-xys)
+  "Check if any neighbor of XY is a KO position *after* putting STONE at XY
+on BOARD-2D and possibly captured enemy stones at positions
+CAPTURED-XYS (which is a list of cons cells indicating captured
+positions).
+
+Returns nil or (x . y) for KO position. "
+  (if (or (/= 1 (length captured-xys))
+          (equal stone 'E))
+      nil ; not a KO if more than 1 stones were captured in the XY move
+    (let ((empty-or-same-color-count 0)
+          empty-or-same-color-position
+          state-i)
+      (dolist (xy-i (sgf-neighbors-xy xy board-2d))
+        (when xy-i
+          (setq state-i (sgf-board-2d-get xy-i board-2d))
+          (when (or (equal state-i stone) (equal state-i 'E))
+            (setq empty-or-same-color-count (1+ empty-or-same-color-count))
+            (setq empty-or-same-color-position xy-i))))
+      (if (= empty-or-same-color-count 1)
+          empty-or-same-color-position
+        nil))))
 
 
 (defun sgf-valid-move-p (stone xy board-2d)
@@ -156,7 +269,7 @@ If XY is nil, it returns nil."
   (sgf-board-2d-set xy stone board-2d)
   (let ((prisoners (sgf-capture-stones xy board-2d)))
     (if (null prisoners)
-        (let ((alive (car (sgf-check-alive xy board-2d))))
+        (let ((alive (car (sgf-check-liberty xy board-2d))))
           (if alive t ; case 2
             (progn (message "Illegal move of %S at position %S" stone xy)
                    (sgf-board-2d-set xy 'E board-2d)
@@ -165,7 +278,7 @@ If XY is nil, it returns nil."
 
 
 ;; Alternative implementation
-;; (defun sgf-process-play (node)
+;; (defun sgf-process-move (node)
 ;;   "Process a play node.
 ;; If 'B is present in the node, return (B) or (B . xy) depending on the presence of value.
 ;; If 'W is present in the node, return (W) or (W . xy) similarly.
@@ -175,7 +288,7 @@ If XY is nil, it returns nil."
 ;;    ((assoc 'W node) (cons 'W (car (alist-get 'W node))))
 ;;    (t nil)))  ;; Return nil if neither 'B nor 'W is found
 
-(defun sgf-process-play (node)
+(defun sgf-process-move (node)
   "Process a play node.
 If 'B or 'W is present in the node, return (B x . y) or (W x . y).
 If 'B or 'W exists without coordinates, return (B) or (W).
@@ -187,8 +300,8 @@ If neither 'B nor 'W is present, return nil."
 
 
 (defun sgf-show-comment (node)
-  "Show the comment of the node."
-  ;; if 'C' does not exist, it shows empty str.
+  "Show the comment of the move/node."
+  ;; if 'C' does not exist, it shows an empty str.
   (message (mapconcat 'identity (alist-get 'C node) " ")))
 
 
@@ -220,48 +333,10 @@ If neither 'B nor 'W is present, return nil."
              (setq prev-lnode curr-lnode))))))
 
 
-(defun sgf-add-captured-stones (xys stone board-2d svg)
-  "Add captured stones to the board. STONE indicate color of the captured stone(s)"
-  (dolist (xy xys)
-    (let* ((x (car xy)) (y (cdr xy))
-           (mvnum-id (car (dom-by-id svg (sgf-svg-mvnum-id x y)))))
-      (sgf-board-2d-set xy stone board-2d)
-      ;; the mvnum svg element may not exist if the stone is pre-set before the game starts.
-      (if mvnum-id
-          ;; change mvnum color to contrast the stone color
-          (dom-set-attribute mvnum-id 'fill (sgf-svg-set-color stone)))
-      (dom-remove-attribute (car (dom-by-id svg (sgf-svg-stone-id x y))) 'visibility))))
-
-
-(defun sgf-del-captured-stones (xys stone board-2d svg)
-  "Delete captured stones from the board."
-  (dolist (xy xys)
-    (let* ((x (car xy)) (y (cdr xy))
-           (mvnum-id (car (dom-by-id svg (sgf-svg-mvnum-id x y)))))
-      (sgf-board-2d-set xy 'E board-2d)
-      ;; the mvnum svg element may not exist if the stone is pre-set before the game starts.
-      (if mvnum-id
-          ;; change mvnum color to the same color with that of deleted stone
-          (dom-set-attribute mvnum-id 'fill (sgf-svg-set-color stone t)))
-      (dom-set-attribute (car (dom-by-id svg (sgf-svg-stone-id x y))) 'visibility "hidden"))))
-
-
-(defun sgf-get-overlay ()
-  "Return the main overlay used in the current buffer."
-  (let ((ovs (overlays-in (point-min) (point-max)))
-        sgf-ov )
-    (while (and ovs (not sgf-ov))
-      (let ((ov (pop ovs)))
-        (if (overlay-get ov 'sgf-overlay)
-            (setq sgf-ov ov))))
-    sgf-ov))
-
-
-(defun sgf-update-overlay (game-state &optional svg hot-areas)
+(defun sgf-update-display (&optional svg hot-areas)
   "Update the overlay with new SVG and GAME-STATE.
 Optionally update HOT-AREAS as well."
   (let ((ov (sgf-get-overlay)))
-    (overlay-put ov 'game-state game-state)
     (if svg
         (overlay-put ov 'svg svg)
       (setq svg (overlay-get ov 'svg)))
@@ -269,19 +344,6 @@ Optionally update HOT-AREAS as well."
         (overlay-put ov 'hot-areas hot-areas)
       (setq hot-areas (overlay-get ov 'hot-areas)))
     (overlay-put ov 'display (svg-image svg :map hot-areas))))
-
-;; todo
-(defmacro sgf-with-safe-update (game-state svg &rest body)
-  "Safely execute BODY with rollback on error for GAME-STATE."
-  (declare (debug (symbolp symbolp body)) (indent 2))
-  `(let ((clone-game-state (copy-sequence ,game-state))
-         (clone-svg (copy-sequence ,svg)))  ;; Clone for rollback
-     (condition-case err
-         (progn ,@body
-                (sgf-update-overlay ,game-state ,svg))
-       (error
-        (message "Error: %s. Rolling back game state." err)
-        (sgf-update-overlay clone-game-state clone-svg)))))  ;; Roll back to cloned state
 
 
 (defun sgf-branch-selection (n &optional branch)
@@ -293,129 +355,122 @@ Optionally update HOT-AREAS as well."
         branch
       (error "Invalid branch selection: %c" (+ branch ?a)))))
 
-;; Navigation Functions
-(defun sgf-forward-node (&optional branch)
-  "Move to the next node in the game tree and update board."
+
+(defun sgf-push-undo (change game-state)
+  "Push a game CHANGE to the undo stack in GAME-STATE."
+  (let ((undos (aref game-state 5)))
+    (aset game-state 5 (cons change undos))))
+
+(defun sgf-pop-undo (game-state)
+  "Pop a game CHANGE from the undo stack in GAME.STATE"
+  (let ((undos (aref game-state 5)))
+    (if undos
+        (let ((change (car undos)))
+          (aset game-state 5 (cdr undos))
+          change)
+      nil)))
+
+(defun sgf-forward-move (&optional branch)
+  "Move to the next move in the game tree and update board."
   (interactive)
-  (let* ((ov (sgf-get-overlay))
-         (svg         (overlay-get ov 'svg))
+  (let* ((ov         (sgf-get-overlay))
+         (svg        (overlay-get ov 'svg))
          (game-state  (overlay-get ov 'game-state))
          (curr-lnode  (aref game-state 0))
-         (board-2d    (aref game-state 1))
-         (mvnum       (aref game-state 2))
          (next-lnodes (aref curr-lnode 2))
          (n           (length next-lnodes))
-         (pcounts     (aref game-state 5))
-         next-lnode next-node play xy x y color prisoners)
+         next-lnode next-node)
     (if (= n 0)
         (progn (message "No more next play.") nil)
       (progn
         (setq branch (sgf-branch-selection n branch))
         (setq next-lnode (nth branch next-lnodes))
-        (setq next-node (aref next-lnode 1))
-        (setq play (sgf-process-play next-node))
-        (setq stone (car play) xy (cdr play) x (car xy) y (cdr xy))
-        (setq mvnum (1+ mvnum))
-        (sgf-with-safe-update game-state svg
-          (aset game-state 0 next-lnode)
-          (aset game-state 2 mvnum) ;; Update move number
-          ;; Update board and game state
-          (sgf-board-2d-set xy stone board-2d)
-          (setq prisoners (sgf-capture-stones xy board-2d))
-          (aset game-state 4 prisoners)
-          ;; Remove captured stones and update prisoner counts
-          (sgf-del-captured-stones prisoners (sgf-opponent-stone stone) board-2d svg)
-          (message "---%S %S" pcounts prisoners)
-          (if prisoners
-              (if (equal stone 'B)
-                  (setcar pcounts (+ (length prisoners) (car pcounts)))
-                (setcdr pcounts (+ (length prisoners) (cdr pcounts)))))
-          (message "%S %S" pcounts prisoners)
-          (sgf-show-comment next-node)
-          ;; Update move on svg
-          (when (consp xy) ; xy could be nil (a pass)
-            (sgf-svg-add-stone svg x y stone)
-            (sgf-svg-add-mvnum svg x y mvnum (sgf-svg-set-color stone)))
-          (sgf-svg-update-status-prisoners svg pcounts)
-          (sgf-svg-update-status-turn svg stone)
-          (sgf-svg-update-status-mvnum svg mvnum)
-          (sgf-svg-update-next svg next-lnode)
-          (sgf-svg-update-marks svg next-node board-2d)
-          ;; (message "Put stone at %d %d" (1+ x) (1+ y))
-          )))))
+        (setq next-node  (aref next-lnode 1))
+        (sgf-apply-node next-node game-state)
+        (aset game-state 0 next-lnode)
+        (sgf-update-svg game-state svg)
+        (sgf-update-display)))))
 
-
-(defun sgf-backward-node ()
-  "Move to the previous node in the game tree and update board."
+(defun sgf-backward-move ()
+  "Move to the previous move in the game tree and update board."
   (interactive)
-  (let* ((ov (sgf-get-overlay))
+  (let* ((ov         (sgf-get-overlay))
          (svg        (overlay-get ov 'svg))
-         (game-state (overlay-get ov 'game-state))
-         (curr-lnode (aref game-state 0))
-         (board-2d   (aref game-state 1))
-         (mvnum      (aref game-state 2))
-         (prev-lnode (aref curr-lnode 0))
-         (pcounts    (aref game-state 5))
-         play xy x y prev-node curr-prisoners prev-prisoners)
-    (if (null prev-lnode)
+         (game-state  (overlay-get ov 'game-state))
+         (curr-lnode  (aref game-state 0)))
+    (if (sgf-root-lnode-p curr-lnode)
         (progn (message "No more previous play.") nil)
-      (sgf-with-safe-update game-state svg
-        (aset game-state 0 prev-lnode)
-        ;; Update move on svg
-        (setq mvnum (1- mvnum))
-        ;; Update move number
-        (aset game-state 2 mvnum)
-        (setq play (sgf-process-play (aref curr-lnode 1)))
-        (setq stone (car play) xy (cdr play) x (car xy) y (cdr xy))
-        (svg-remove svg (sgf-svg-stone-id x y))
-        (svg-remove svg (sgf-svg-mvnum-id x y))
-        ;; revert changes from current move on board
-        (sgf-board-2d-set xy 'E board-2d)
-        ;; add prisoners back on board
-        (setq curr-prisoners (aref game-state 4))
-        (sgf-add-captured-stones curr-prisoners (sgf-opponent-stone stone) board-2d svg)
-        (setq prev-node (aref prev-lnode 1))
-        ;; apply changes from prev move
-        (setq play (sgf-process-play prev-node))
-        (setq xy (cdr play) x (car xy) y (cdr xy))
-        ;; run capture
-        (setq prev-prisoners (sgf-capture-stones xy board-2d))
-        (aset game-state 4 prev-prisoners)
-        ;; Remove captured stones and update prisoner counts
-        (sgf-del-captured-stones prev-prisoners (sgf-opponent-stone stone) board-2d svg)
-        (if (equal stone 'B)
-            (setcar pcounts (- (+ (length prev-prisoners) (car pcounts))
-                               (length curr-prisoners)))
-          (setcdr pcounts (- (+ (length prev-prisoners) (cdr pcounts))
-                             (length curr-prisoners))))
-        ;; Update move on svg
-        (sgf-svg-update-status-prisoners svg pcounts)
-        (sgf-svg-update-status-turn svg (sgf-opponent-stone stone))
-        (sgf-svg-update-status-mvnum svg mvnum)
-        (sgf-svg-update-next svg prev-lnode)
-        (sgf-svg-update-marks svg prev-node board-2d)
-        ;; overlay and SVG update
-        (sgf-update-overlay game-state svg)))))
+      (progn
+        (sgf-revert-undo (sgf-pop-undo game-state) game-state)
+        (aset game-state 0 (aref curr-lnode 0))
+        (sgf-update-svg game-state svg)
+        (sgf-update-display)))))
 
 
-(defun sgf-first-node ()
+(defun sgf-apply-node (node game-state)
+  "Apply the node of move to the game state."
+  (let* ((move (sgf-process-move node))
+         (stone (car move))
+         (xy (cdr move))
+         (board-2d (aref game-state 1))
+         (xy-state-old (sgf-board-2d-get xy board-2d))
+         (turn-old (aref game-state 3))
+         (turn-new (sgf-enemy-stone turn-old))
+         (ko-old (aref game-state 2))
+         (pcounts (aref game-state 4))
+         black-xys white-xys empty-xys)
+    (sgf-board-2d-set xy stone board-2d)
+    (setq prisoners (sgf-capture-stones xy board-2d))
+    ;; Remove captured stones
+    (dolist (xy prisoners) (sgf-board-2d-set xy 'E board-2d))
+    ;; Check for KO: need to put after prisoners are removed.
+    (setq ko-new (sgf-get-ko xy stone board-2d prisoners))
+    (aset game-state 3 turn-new)
+    (aset game-state 2 ko-new)
+    (if (equal stone 'B)
+        (progn (setcdr pcounts (+ (length prisoners) (cdr pcounts)))
+               (setq white-xys prisoners))
+      (progn (setcar pcounts (+ (length prisoners) (car pcounts)))
+             (setq black-xys prisoners)))
+    (if (equal xy-state-old 'E)
+        (setq empty-xys (list xy)))
+    (sgf-push-undo (vector black-xys white-xys empty-xys ko-old turn-old)
+                   game-state)))
+
+(defun sgf-update-svg (game-state svg)
+  "Update the svg object of the game state."
+  (let* ((board-2d   (aref game-state 1))
+         (turn       (aref game-state 3))
+         (pcounts    (aref game-state 4))
+         (curr-lnode (aref game-state 0))
+         (curr-node  (aref curr-lnode 1)))
+    ;; Add stones
+    (sgf-svg-add-stones svg game-state)
+    (sgf-svg-add-mvnums svg game-state)
+    (sgf-svg-update-status-prisoners svg pcounts)
+    (sgf-svg-update-status-turn svg turn)
+    (sgf-svg-update-next svg curr-lnode)
+    (sgf-svg-update-marks svg curr-node board-2d)))
+
+
+(defun sgf-first-move ()
   "Move to the first node in the game tree."
   (interactive)
-  (while (sgf-backward-node)))
+  (while (sgf-backward-move)))
 
 
-(defun sgf-last-node ()
+(defun sgf-last-move ()
   "Move to the last node in the game tree."
   (interactive)
-  (while (sgf-forward-node)))
+  (while (sgf-forward-move)))
 
 
-(defun sgf-goto-node (n)
+(defun sgf-goto-move (n)
   "Move forward or backward N nodes."
   (interactive "nMove _ plays forward (pos number) or backward (neg number): ")
   (if (> n 0)
-      (dotimes (i n) (sgf-forward-node))
-    (dotimes (i (- n)) (sgf-backward-node))))
+      (dotimes (i n) (sgf-forward-move))
+    (dotimes (i (- n)) (sgf-backward-move))))
 
 
 (defun sgf--toggle-layer(layer)
@@ -435,7 +490,7 @@ Optionally update HOT-AREAS as well."
         (dom-remove-attribute group 'visibility)
       ;; add visibility attribute to hide svg move number group
       (dom-set-attribute group 'visibility "hidden"))
-    (sgf-update-overlay game-state svg)))
+    (sgf-update-display)))
 
 
 (defun sgf-toggle-move-number ()
@@ -451,14 +506,15 @@ Optionally update HOT-AREAS as well."
 (defun sgf-toggle-marks ()
   "Toggle the display of marks."
   (interactive)
-  (sgf--toggle-layer 'marks))
+  (sgf--toggle-layer 'mark))
 
 
-(defun sgf-export-svg (&optional filename)
+(defun sgf-export-image (&optional filename)
   "Export the board to an SVG file or display it in a buffer."
   (interactive "FExport file name: ")
   (let* ((ov (sgf-get-overlay))
          (svg (overlay-get ov 'svg)))
+    ;; todo clone svg and delete menu bar
     (if (or (not filename) (string-empty-p filename))
         ;; If no filename is given, display the SVG in a buffer
         (with-current-buffer (get-buffer-create "*SVG Image*")
@@ -472,16 +528,26 @@ Optionally update HOT-AREAS as well."
           (svg-print svg))))))
 
 
-;; Modification Functions
-(defun sgf-kill-node ()
-  "Delete the current node and all its children."
+(defun sgf-edit-move-number ()
+  "Edit the move number of the current node."
   (interactive)
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
-         (curr-lnode (aref game-state 0)))
-    ;; set the prev lnode to link to nil
-    (aset (aref curr-lnode 0) 2 nil)
-    (sgf-update-buffer-from-game curr-lnode)))
+         (curr-lnode (aref game-state 0))
+         (curr-node  (aref curr-lnode 1))
+         (old-mvnum  (car (alist-get 'MN curr-node)))
+         new-mvnum valid)
+    (while (not valid)
+      (setq new-mvnum (read-number "Move number: " old-mvnum))
+      (if (not (integerp new-mvnum))
+          (message "Invalid move number. Please enter an integer.")
+        (setq valid t)))
+    (unless (equal old-mvnum new-mvnum)
+      (aset curr-lnode 1
+            (nconc (assq-delete-all 'MN curr-node)
+                   (list (list 'MN new-mvnum))))
+      (sgf-update-buffer-from-game curr-lnode)
+      (sgf-update-display))))
 
 
 (defun sgf-edit-comment ()
@@ -504,7 +570,7 @@ Optionally update HOT-AREAS as well."
               (nconc (assq-delete-all 'C curr-node)
                      (list (list 'C new-comment)))))
       (sgf-update-buffer-from-game curr-lnode)
-      (sgf-update-overlay game-state))))
+      (sgf-update-display))))
 
 
 ;; igo-editor-move-mode-make-move-root
@@ -513,6 +579,20 @@ Optionally update HOT-AREAS as well."
 1. move all the nodes in between to the root node.
 2. change B, W to AB, AW"
   (interactive))
+
+
+;; Modification Functions
+(defun sgf-delete-this-node (lnode)
+  "Delete the current node and all its children."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (prev-lnode (aref lnode 0))
+         (lnodes (aref prev-lnode 2))
+         (lnodes-del (remove lnode lnodes)))
+    (aset prev-lnode 2 lnodes-del)
+    (sgf-backward-move)
+    (sgf-update-buffer-from-game prev-lnode)))
 
 
 (defun sgf-edit-game-info ()
@@ -534,58 +614,92 @@ Optionally update HOT-AREAS as well."
 (defun sgf-mouse-event-to-xy (event)
   "Convert a mouse click to a board position (X . Y)."
   (if (mouse-event-p event)
-      (let* ((ov (sgf-get-overlay))
-             (xy (posn-object-x-y (event-start event)))
+      (let* ((xy (posn-object-x-y (event-start event)))
              (x (/ (- (float (car xy)) sgf-svg-margin) sgf-svg-interval))
              (y (/ (- (float (cdr xy)) sgf-svg-margin sgf-svg-bar) sgf-svg-interval)))
         (cons (round x) (round y)))))
 
-(defun sgf-mouse-click ()
+(defun sgf-board-click-left ()
   "Add stone by mouse click on board.
 Cases:
-1. click on the next move position: the same as `sgf-forward-node';
+1. click on the next move position: the same as `sgf-forward-move';
 2. click on other position: put a stone at the clicked position
 2.1 if it is at the end of node, create a new node;
 2.2 otherwise, create a new branch of game tree.
 3. other illegal positions"
   (interactive)
   (let* ((xy (sgf-mouse-event-to-xy last-input-event))
-         (x (car xy)) (y (cdr xy))
          (ov (sgf-get-overlay))
-         (svg  (overlay-get ov 'svg))
          (game-state (overlay-get ov 'game-state))
-         (ko (aref game-state 3))
-         (curr-lnode  (aref game-state 0))
-         (curr-node (aref curr-lnode 1))
-         (play (sgf-process-play curr-node))
-         (curr-stone (car play))
-         (next-stone (if (equal curr-stone 'B) 'W 'B))
-         (board-2d   (aref game-state 1))
-         (xy-state   (sgf-board-2d-get xy board-2d))
+         (curr-lnode (aref game-state 0))
+         (ko   (aref game-state 2))
+         (turn (aref game-state 3))
          (next-lnodes (aref curr-lnode 2))
-         (next-xys (mapcar (lambda (node) (cdr (sgf-process-play (aref node 1)))) next-lnodes))
+         (next-xys (mapcar (lambda (node) (cdr (sgf-process-move (aref node 1)))) next-lnodes))
          (found (car (seq-positions next-xys xy))))
-    (cond (found (sgf-forward-node found)) ;; case 1.
-          ((and (equal xy-state 'E) (not (equal xy ko))) ; todo need to check it is not a suicide pos or KO pos
-           (let ((n (length next-lnodes))
-                 (new-lnode (sgf-linked-node curr-lnode `((,next-stone ,xy)))))
-             ;; add the new node as the last branch
-             (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
-             (sgf-forward-node n) ; if n=0, case 2.1; otherwise, case 2.2
-             (let ((stone next-stone)
-                   (board-2d (aref game-state 1)))
-               (if (null (car (sgf-check-alive xy board-2d)))
-                   ;; Move is illegal
-                   (progn
-                     ;; Remove the new node from the game tree
-                     (aset curr-lnode 2 next-lnodes)
-                     ;; Revert the game state
-                     (sgf-backward-node)
-                     (message "Illegal move!"))
-                 ;; Move is legal, update the buffer
-                 (sgf-update-buffer-from-game curr-lnode)))))
+    (cond
+      ;; Case 1: Clicked on the next move position
+      (found (sgf-forward-move found))
+      ;; Case 2: Clicked on an empty position not equal to ko
+      ((sgf-valid-move-p xy turn game-state sgf-allow-suicide-move)
+       (let ((n (length next-lnodes))
+             (new-lnode (sgf-linked-node curr-lnode `((,turn ,xy)))))
+         ;; add the new node as the last branch
+         (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
+         (sgf-forward-move n) ; if n=0, case 2.1; otherwise, case 2.2
+         (sgf-update-buffer-from-game curr-lnode)))
+      ;; Case 3.
+      (t (message "Illegal move!")))))
 
-          (t (message "Illegal move!"))))) ; case 3.
+
+(defun sgf-board-click-right ()
+  "Right click on board."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (curr-lnode (aref game-state 0))
+         (xy (sgf-mouse-event-to-xy last-input-event))
+         (clicked-lnode (sgf-find-and-goto-node xy game-state))
+         (menu  `(keymap
+                  "Move Action"
+                  (sgf-goto-this-node
+                   menu-item "Back to This Move"
+                   sgf-goto-this-node
+                   :enable ,(not (equal curr-lnode clicked-lnode)))
+                  (sgf-delete-this-node
+                   menu-item "Delete This Move and After"
+                   sgf-delete-this-node
+                   :enable ,(aref clicked-lnode 0)) ; not root node
+                  (sgf-root-this-node
+                   menu-item "Make This Move the Root"
+                   sgf-root-this-node
+                   :enable ,(aref clicked-lnode 0))))
+         (events (x-popup-menu last-input-event menu)))
+  (if (functionp (car events))
+      (funcall (car events) clicked-lnode))))
+
+
+(defun sgf-find-and-goto-node (xy game-state)
+  "Find the node at position XY from the current game state, searching backwards.
+There could be multiple nodes at the same position during the game; this
+function finds the closest one to the current game state.
+
+Returns node found or nil if not."
+  (let* ((board-2d  (aref game-state 1))  ;; Extract the current board
+         (stone (sgf-board-2d-get xy board-2d))  ;; Get the stone at the XY position
+         curr-lnode found-node)
+    (while (not found-node)  ;; Loop until node is found or root is reached
+      (setq curr-lnode (aref game-state 0))  ;; Get the current linked node
+      (let* ((curr-node (aref curr-lnode 1))  ;; Extract the SGF node data
+             (play (sgf-process-move curr-node))  ;; Process the current move
+             (stone-i (car play))  ;; Stone placed in this node
+             (xy-i (cdr play)))  ;; Coordinates of the move
+        (if (and (equal stone-i stone) (equal xy-i xy))  ;; Check if it's the node we're looking for
+            (setq found-node curr-lnode)  ;; Node found
+          (if (null (aref curr-lnode 0))  ;; If we reach the root node, stop the loop
+              (error "No move is found at position %S." xy)
+            (sgf-backward-move)))))  ;; Move to the previous node
+    found-node))  ;; Return the found node, or nil if not found
 
 
 (defun sgf-pass ()
@@ -599,7 +713,7 @@ The move number will be incremented."
          (next-lnodes (aref curr-lnode 2))
          (new-lnode (sgf-linked-node curr-lnode '((W)))))
     (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
-    (sgf-update-overlay game-state svg)))
+    (sgf-update-display)))
 
 
 (defmacro sgf--add-mark (shape add-mark-func)
@@ -688,11 +802,22 @@ The move number will be incremented."
          (root-lnode (sgf-linked-node nil root nil))
          (w-h (car (alist-get 'SZ root)))
          (w (car w-h)) (h (cdr w-h))
-         (board-2d (sgf-create-board-2d w h)))
+         (turn (car (alist-get 'PL root)))
+         (board-2d (sgf-create-board-2d w h 'E)))
     ;; root state
     (sgf-linkup-nodes-in-game-tree (cdr game-tree) root-lnode)
+
+    ;; process root node to add setup stones
+    (dolist (prop root)
+      (let* ((prop-key (car prop))
+             (prop-vals (cdr prop))
+             setup-stone)
+        (cond ((member prop-key '(AB AW))
+               (setq setup-stone (intern (substring (symbol-name prop-key) 1)))
+               (dolist (xy prop-vals)
+                 (sgf-board-2d-set xy setup-stone board-2d))))))
     ;; return game-state
-    (sgf-game-state root-lnode board-2d 0)))
+    (sgf-game-state root-lnode board-2d nil turn)))
 
 
 (defun sgf-setup-overlay ()
@@ -705,40 +830,81 @@ The move number will be incremented."
          (board-2d   (aref game-state 1))
          (h (length board-2d))
          (w (length (aref board-2d 0)))
-         (root (aref (aref game-state 0) 1))
-         (first-stone (alist-get 'PL root 'B))
          (svg-hot-areas (sgf-svg-init w h))
          (svg (car svg-hot-areas))
          (hot-areas (cdr svg-hot-areas)))
 
-    ;; process root node to add setup stones
-    (dolist (prop root)
-      (let* ((prop-key (car prop))
-             (prop-vals (cdr prop))
-             setup-stone)
-        (cond ((member prop-key '(AB AW))
-               (setq setup-stone (intern (substring (symbol-name prop-key) 1)))
-               (dolist (xy prop-vals)
-                 (sgf-board-2d-set xy setup-stone board-2d)
-                 (sgf-svg-add-stone svg (car xy) (cdr xy) setup-stone))))))
+    (sgf-update-svg game-state svg)
 
-    (sgf-svg-update-marks svg root board-2d)
-    (sgf-svg-update-status-turn  svg (sgf-opponent-stone first-stone))
     ;; label this overlay to distinguish from others
     (overlay-put ov 'sgf-overlay t)
+    ;; game state
     (overlay-put ov 'game-state game-state)
+    ;; game properties
+    (overlay-put ov 'game-plist
+                 (list :show-next-hint sgf-show-next-hint
+                       :show-move-number sgf-show-move-number
+                       :show-mark sgf-show-mark
+                       :allow-suicide-move sgf-allow-suicide-move
+                       :editable t))
     (overlay-put ov 'svg svg)
     (overlay-put ov 'hot-areas hot-areas)
     ov))
 
 
+
+(defun sgf-get-overlay-at (&optional pos)
+  "Return the SGF overlay at POS position in the current buffer."
+  (let* ((pos (or pos (point)))
+         (ovs (overlays-in (1- pos) (1+ pos)))
+         sgf-ov)
+    (while (and ovs (not sgf-ov))
+      (let ((ov (pop ovs)))
+        (if (overlay-get ov 'sgf-overlay)
+            (setq sgf-ov ov))))
+    sgf-ov))
+
+
+(defun sgf-get-overlay ()
+  "Return the SGF overlay (even if mouse clicked on non current buffer)."
+  (if (or (mouse-event-p last-input-event)
+          (memq (event-basic-type last-input-event) '(wheel-up wheel-down)))
+      (let* ((mouse-pos (event-start last-input-event))
+             (pos    (posn-point mouse-pos))
+             (window (posn-window mouse-pos))
+             (buffer (window-buffer window)))
+        (set-window-point window pos)
+        (with-current-buffer buffer
+          (sgf-get-overlay-at pos)))
+    (sgf-get-overlay-at)))
+
+
+(defun sgf-game-property-get (ov key)
+  "Return game property of KEY"
+  (let ((game-plist (overlay-get ov 'game-plist)))
+    (plist-get game-plist key)))
+
+
+(defun sgf-game-property-set (ov key value)
+  (let ((game-plist (overlay-get ov 'game-plist)))
+    (plist-put game-plist key value)))
+
+
+(defun sgf-game-property-toggle (ov key)
+  "Toggle the game property of KEY."
+  (let ((game-plist (overlay-get ov 'game-plist)))
+    (sgf-game-property-set ov key (not (plist-get game-plist key)))))
+
+
 (defun sgf--display-svg (ov)
+  "Display SVG in the overlay (as well as setting up keyboard)."
   (let ((svg (overlay-get ov 'svg))
         (hot-areas (overlay-get ov 'hot-areas)))
     (unless (and svg hot-areas)
       (error "Overlay %S does not have 'svg' or 'hot-areas' properties" ov))
     (overlay-put ov 'keymap sgf-mode-graphical-map)
     (overlay-put ov 'display (svg-image svg :map hot-areas))))
+
 
 (defun sgf--hide-svg (ov)
   (overlay-put ov 'display nil)
@@ -772,32 +938,80 @@ The move number will be incremented."
     map)
   "Keymap for SGF major mode.")
 
+
+(defun sgf-menu ()
+  "Show the main menu for the SGF mode."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (menu `(keymap "Main Menu"
+                        (sgf-toggle-move-number
+                         menu-item "Show Move Number"
+                         sgf-toggle-move-number
+                         :button
+                         (:toggle . (sgf-game-property-get ,ov :show-move-number)))
+                        (sgf-toggle-next-hint
+                         menu-item "Show Next Hint"
+                         sgf-toggle-next-hint
+                         :button
+                         (:toggle . (sgf-game-property-get ,ov :show-next-hint)))
+                        (sgf-toggle-marks
+                         menu-item "Show Marks"
+                         sgf-toggle-marks
+                         :button
+                         (:toggle . (sgf-game-property-get ,ov :show-mark)))
+                        (seperator-1 menu-item "--")
+                        (sgf-toggle-allow-suicide-move
+                         menu-item "Allow Illegal Move"
+                         sgf-toggle-allow-suicide-move
+                         :button
+                         (:toggle . (sgf-game-property-get ,ov :allow-suicide-move)))
+                        (seperator-2 menu-item "--")
+                        (sgf-edit-move-number
+                         menu-item "Edit Move Number"
+                         sgf-edit-move-number)
+                        (sgf-edit-comment
+                         menu-item "Edit Comment"
+                         sgf-edit-comment)
+                        (seperator-3 menu-item "--")
+                        (sgf-export-image
+                         menu-item "Export Image"
+                         sgf-export-image)
+                        (sgf-mark-edit-mode
+                         menu-item "Mark Edit Mode"
+                         sgf-mark-edit-mode
+                         :button)))
+         (events (x-popup-menu last-input-event menu)))
+    (if (functionp (car events))
+        (funcall (car events)))))
+
+
 (defvar sgf-mode-graphical-map
   (let ((map (make-sparse-keymap)))
-    (define-key map "f" 'sgf-forward-node)
-    (define-key map [hot-forward mouse-1] 'sgf-forward-node)
-    (define-key map "b" 'sgf-backward-node)
-    (define-key map [hot-backward mouse-1] 'sgf-backward-node)
-    (define-key map "a" 'sgf-first-node)
-    (define-key map [hot-first mouse-1] 'sgf-first-node)
-    (define-key map "e" 'sgf-last-node)
-    (define-key map [hot-last mouse-1] 'sgf-last-node)
-    (define-key map "g" 'sgf-goto-node)
+    (define-key map "f" 'sgf-forward-move)
+    (define-key map [hot-forward mouse-1] 'sgf-forward-move)
+    (define-key map "b" 'sgf-backward-move)
+    (define-key map [hot-backward mouse-1] 'sgf-backward-move)
+    (define-key map "a" 'sgf-first-move)
+    (define-key map [hot-first mouse-1] 'sgf-first-move)
+    (define-key map "e" 'sgf-last-move)
+    (define-key map [hot-last mouse-1] 'sgf-last-move)
+    (define-key map "g" 'sgf-goto-move)
     (define-key map "n" 'sgf-toggle-move-number)
+    (define-key map "m" 'sgf-toggle-marks)
     (define-key map "v" 'sgf-view-next)
     (define-key map "k" 'sgf-kill-node)
     (define-key map "s" 'sgf-export-svg)
     (define-key map "c" 'sgf-edit-comment)
     (define-key map "i" 'sgf-edit-game-info)
-    (define-key map [hot-grid mouse-1] #'sgf-mouse-click)
-    (define-key map [hot-grid mouse-3] #'sgf-menu) ; todo
+    (define-key map [hot-grid mouse-1] #'sgf-board-click-left)
+    (define-key map [hot-grid mouse-3] #'sgf-board-click-right)
+    (define-key map [hot-menu mouse-1] #'sgf-menu) ; todo
     (define-key map "p" 'sgf-pass)
     ;; (define-key map (kbd "m s")  'sgf-add-mark-square)
     ;; (define-key map 'sgf-add-mark-triangle)
     ;; (define-key map 'sgf-add-mark-circle)
     ;; (define-key map 'sgf-add-mark-cross)
     ;; (define-key map 'sgf-add-mark-label)
-    ;; (define-key map 'sgf-del-mark)
     map)
   "Keymap set for the overlay svg display. It is only activated when the overlay is displayed.")
 
@@ -822,3 +1036,7 @@ The following commands are available:
 
 (provide 'sgf-mode)
 ;;; sgf-mode.el ends here
+
+;;; Local Variables:
+;;; lisp-indent-function: common-lisp-indent-function
+;;; End:

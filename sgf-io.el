@@ -92,7 +92,6 @@
     (dolist (i cases)
       (should (equal (sgf-convert-multi-positions (car i)) (cdr i))))))
 
-
 (defun sgf-convert-LB (label-str)
   "for property LB: label a position or stone. e.g. LB[ee:label]"
   (let ((re (rx (group (repeat 2 (any "a-zA-Z"))) ":" (group (zero-or-more anything)))))
@@ -138,6 +137,10 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
                      (setq prop-val (sgf-convert-SZ prop-val)))
                     ((string= prop-key "LB")
                      (setq prop-val (sgf-convert-LB prop-val)))
+                    ((string= prop-key "MN") ; move number
+                     (setq prop-val (string-to-number prop-val)))
+                    ((string= prop-key "PL")
+                     (setq prop-val (if (string= prop-val "B") 'B 'W)))
                     (t                 ;; try convert to a number
                      (setq prop-val (or (string-to-number-or-nil prop-val)
                                         (format "%S" prop-val)))))
@@ -194,6 +197,7 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
 (sgf-str-from-prop '(FF 4)) => FF[4]
 (sgf-str-from-prop '(AB (1 . 1) (1 . 2))) => AB[bb][bc]
 (sgf-str-from-prop '(SZ (15 . 13))) => SZ[15:13]
+(sgf-str-from-prop '(LB (0 . 0) \"label\")) => LB[aa:label]
 (sgf-str-from-prop '(C \"comment\")) => C[comment]"
   (let ((prop-key (car prop))
         (prop-val (cdr prop))
@@ -207,7 +211,12 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
                                 (format "[%c%c]"
                                         (+ ?a (car prop-val))
                                         (+ ?a (cdr prop-val))))
-                               ((eq prop-key 'SZ)
+                               ((equal prop-key 'LB)
+                                (format "[%c%c:%s]"
+                                        (+ ?a (car (car prop-val)))
+                                        (+ ?a (cdr (car prop-val)))
+                                        (cdr prop-val)))
+                               ((equal prop-key 'SZ)
                                 (let ((x (car prop-val))
                                       (y (cdr prop-val)))
                                   (if (= x y) (format "[%d]" x) (format "[%d:%d]" x y))))
@@ -240,12 +249,11 @@ If SGF-BUFFER is nil, use the current buffer. The buffer content should be SGF s
 
 (defun sgf-update-buffer-from-game (lnode &optional beg end)
   "Update the current buffer region with the SGF string representation of game."
-
   ;; move to the root node
   (while (aref lnode 0) (setq lnode (aref lnode 0)))
   (let ((sgf-str (sgf-str-from-game-tree lnode)))
     (delete-region (or beg (point-min)) (or end (point-max)))
-    (insert sgf-str)))
+    (insert "(" sgf-str ")")))
 
 
 (defconst sgf-game-info-properties

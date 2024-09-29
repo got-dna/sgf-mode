@@ -40,6 +40,17 @@ It is a reference for all other element sizes."
   :type '(string)
   :group 'sgf-svg)
 
+(defvar sgf-svg--node-id-stones "stones"
+  "The id of the group node for stones on the board.")
+
+(defvar sgf-svg--node-id-mvnums "mvnums"
+  "The id of the group node for move numbers on the board.")
+
+(defvar sgf-svg--node-id-nexts "nexts"
+  "The id of the group node for next moves on the board.")
+
+(defvar sgf-svg--node-id-marks "marks"
+  "The id of the group node for marks on the board.")
 
 (defun sgf-svg-gradient (svg id type stops &rest args)
   "Instead of svg-gradient. svg-gradient not support additional
@@ -174,15 +185,15 @@ attributes(cx, cy, fx, fy, r, etc...)"
       (svg-line grid 0 (* sgf-svg-interval n) grid-w (* sgf-svg-interval n)
                 :stroke "black" :stroke-width line-width))
 
-    ;; Stars
+    ;; Hoshi/Stars
     (dolist (hoshi (sgf-board-hoshi w h))
       (svg-circle grid (* sgf-svg-interval (car hoshi)) (* sgf-svg-interval (cdr hoshi)) star-radius))
 
-    ;; Layers: 3 types of information on board ;todo remove hard coding
-    (svg-node grid 'g :id "stones")
-    (svg-node grid 'g :id "mvnums")
-    (svg-node grid 'g :id "next")
-    (svg-node grid 'g :id "marks")
+    ;; Layers: different types of information on board
+    (svg-node grid 'g :id sgf-svg--node-id-stones)
+    (svg-node grid 'g :id sgf-svg--node-id-mvnums)
+    (svg-node grid 'g :id sgf-svg--node-id-nexts)
+    (svg-node grid 'g :id sgf-svg--node-id-marks)
 
     ;; Menu Bar at bottom
     (setq menu-bar (svg-node svg 'g :id "menu-bar" :fill "gray"
@@ -230,11 +241,11 @@ MENU-BAR-Y is the starting y coordinate for menu bar."
             btns)))
 
 
-(defun sgf-svg-set-color (xy-state &optional same)
+(defun sgf-svg-set-color (xy-state)
   "Set mark/text color according to background color of the intersections on board."
   ;; @todo optimize color
-  (cond ((equal xy-state 'B) (if same "black" "white"))
-        ((equal xy-state 'W) (if same "white" "black"))
+  (cond ((equal xy-state 'B) "white")
+        ((equal xy-state 'W) "black")
         ((equal xy-state 'E) "white")
         (t "white")))
 
@@ -243,10 +254,10 @@ MENU-BAR-Y is the starting y coordinate for menu bar."
   "Update the current turn on the status bar."
   (let ((status-w (car (dom-by-id svg "^status-w$")))
         (status-b (car (dom-by-id svg "^status-b$"))))
-    (cond ((equal stone 'B)
+    (cond ((equal stone 'W)
            (dom-set-attribute status-w 'fill "#f00")
            (dom-set-attribute status-b 'fill "gray"))
-          ((equal stone 'W)
+          ((equal stone 'B)
            (dom-set-attribute status-w 'fill "gray")
            (dom-set-attribute status-b 'fill "#f00"))
           (t (error "Invalid stone color %s" stone)))))
@@ -260,7 +271,8 @@ MENU-BAR-Y is the starting y coordinate for menu bar."
 
 
 (defun sgf-svg-update-status-prisoners (svg prisoners)
-  "Show the current prisoners on the status bar."
+  "Show the current prisoners on the status bar.
+PRISONERS is a cons cell of black and white prisoner counts."
   (let ((status-pb (car (dom-by-id svg "^status-pb$")))
         (status-pw (car (dom-by-id svg "^status-pw$")))
         (pb (car prisoners))
@@ -270,7 +282,7 @@ MENU-BAR-Y is the starting y coordinate for menu bar."
 
 
 (defun sgf-svg-clear-node-content (node)
-  "Remove all content under the SVG node."
+  "Remove all content under the SVG NODE."
   (if node
       ;; Keep the tag name and attributes, remove all children
       (setcdr (cdr node) nil)))
@@ -314,10 +326,10 @@ It removes the old marks and adds the new marks."
       (if (= branch-count 1)
           (setq text "x")
         (setq text (string (+ ?a branch-index))))
-      (setq play (sgf-process-play (aref next-lnode 1))
+      (setq play (sgf-process-move (aref next-lnode 1))
             stone (car play) xy (cdr play) x (car xy) y (cdr xy))
       (if (consp xy) ; xy is not nil, i.e. next move is not pass
-          (sgf-svg-add-text next-group x y text (sgf-svg-set-color stone t)))
+          (sgf-svg-add-text next-group x y text (sgf-svg-set-color (sgf-enemy-stone stone))))
       (setq branch-index (1+ branch-index)))))
 
 
@@ -334,27 +346,82 @@ It removes the old marks and adds the new marks."
          :font-weight "bold"
          attributes))
 
-(defun sgf-svg-group-next (svg) (car (dom-by-id svg "next")))
-(defun sgf-svg-group-marks (svg) (car (dom-by-id svg "marks")))
-(defun sgf-svg-group-stones (svg) (car (dom-by-id svg "stones")))
-(defun sgf-svg-group-mvnums (svg) (car (dom-by-id svg "mvnums")))
+(defun sgf-svg-group-next (svg) (car (dom-by-id svg sgf-svg--node-id-nexts)))
+(defun sgf-svg-group-marks (svg) (car (dom-by-id svg sgf-svg--node-id-marks)))
+(defun sgf-svg-group-stones (svg) (car (dom-by-id svg sgf-svg--node-id-stones)))
+(defun sgf-svg-group-mvnums (svg) (car (dom-by-id svg sgf-svg--node-id-mvnums)))
 
 (defun sgf-svg-stone-id (x y) (format "stone-%s-%s" x y))
 (defun sgf-svg-mvnum-id (x y) (format "mvnum-%s-%s" x y))
 
-(defun sgf-svg-add-stone (svg x y stone)
+
+(defun sgf-svg-add-stones (svg game-state)
+  "Add stones to the board."
+  (let ((svg-group (sgf-svg-group-stones svg))
+        (board-2d (aref game-state 1)))
+    (sgf-svg-clear-node-content svg-group)
+    (dotimes (y (length board-2d))
+      (dotimes (x (length (aref board-2d y)))
+        (let ((state (sgf-board-2d-get (cons x y) board-2d)))
+          (unless (equal state 'E) (sgf-svg-add-stone svg-group x y state)))))))
+
+
+(defun sgf-svg-add-stone (svg-group x y stone)
   "STONE is a symbol."
   (let ((cx (* x sgf-svg-interval))
         (cy (* y sgf-svg-interval))
         (r (* sgf-svg-interval 0.48)))
-    (svg-circle (sgf-svg-group-stones svg) cx cy r
+    (svg-circle svg-group cx cy r
                 :id (sgf-svg-stone-id x y)
                 :gradient stone)))
 
-;; todo  ((eq node current-node) "#f00")
-(defun sgf-svg-add-mvnum (svg x y mvnum color)
+
+(defun sgf-lnode-move-number (lnode)
+  "Return the move number for the LNODE.
+
+It computes the depth of LNODE from the root node or previous MN
+property, not include setup node."
+  (let ((num 0) mn-prop)
+    (while (and (not (sgf-root-lnode-p lnode))
+                (not (setq mn-prop (car (alist-get 'MN (aref lnode 1)))))
+      (setq num (1+ num)))
+      (setq lnode (aref lnode 0)))
+    (+ (or mn-prop 0) num)))
+
+
+(defun sgf-svg-add-mvnums (svg game-state)
+  "Add move numbers to the board."
+  (let* ((svg-group (sgf-svg-group-mvnums svg))
+         (board-2d (aref game-state 1))
+         (curr-lnode (aref game-state 0))
+         (curr-mvnum (sgf-lnode-move-number curr-lnode))
+         (numbered-xys (make-hash-table :test 'equal))
+         mvnum)
+    (sgf-svg-update-status-mvnum svg curr-mvnum)
+    (sgf-svg-clear-node-content svg-group)
+    (while (not (sgf-root-lnode-p curr-lnode))
+      (let* ((node (aref curr-lnode 1))
+             (move (sgf-process-move node))
+             (xy (cdr move)))
+        (unless (gethash xy numbered-xys)
+          ;; add move number only if it does not already have a number.
+          (let* ((stone (car move))
+                 (xy-state (sgf-board-2d-get xy board-2d))
+                 (color (if (eq xy-state 'E)
+                            (sgf-svg-set-color (sgf-enemy-stone stone))
+                          (sgf-svg-set-color xy-state))))
+            (setq mvnum
+                  (cond ((null mvnum) curr-mvnum)
+                        ((alist-get 'MN node) (sgf-lnode-move-number curr-lnode))
+                        (t (1- mvnum))))
+            (sgf-svg-add-mvnum svg-group (car xy) (cdr xy) mvnum color)
+            (puthash xy t numbered-xys)))
+        (setq curr-lnode (aref curr-lnode 0))))))
+
+
+(defun sgf-svg-add-mvnum (svg-group x y mvnum color)
   "COLOR is str."
-  (sgf-svg-add-text (sgf-svg-group-mvnums svg)
+  (sgf-svg-add-text svg-group
                     x y (number-to-string mvnum) color
                     (list :id (sgf-svg-mvnum-id x y))))
 

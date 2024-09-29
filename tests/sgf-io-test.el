@@ -42,8 +42,8 @@
     (when failed-cases
       (ert-fail failed-cases))))
 
-;; (sgf-process-pos "aa:ac")
-(ert-deftest sgf-process-pos-test ()
+;; (sgf-convert-pos "aa:ac")
+(ert-deftest sgf-convert-pos-test ()
   (let ((cases '(("aa" . "(0 . 0)")
                  ("ab" . "(0 . 1)")
                  ("ba" . "(1 . 0)")
@@ -53,23 +53,23 @@
         pos)
     (dolist (i cases)
       (setq pos (car i))
-      (should (equal (cdr i) (sgf-process-pos pos))))))
+      (should (equal (cdr i) (sgf-convert-pos pos))))))
 
-(ert-deftest sgf-process-LB-test ()
-  (let ((cases '(("ee:foo" . (((4 . 4) . "foo")))
-                 ("bb:spam" . (((1 . 1) . "spam")))))
+(ert-deftest sgf-convert-LB-test ()
+  (let ((cases '(("ee:foo" . ((4 . 4) . "foo"))
+                 ("bb:spam" . ((1 . 1) . "spam"))))
         label)
     (dolist (i cases)
       (setq label (car i))
-      (should (equal (cdr i) (sgf-process-LB label))))))
+      (should (equal (format "%S" (cdr i)) (sgf-convert-LB label))))))
 
-(ert-deftest sgf-process-SZ-test ()
-  (should (equal (sgf-process-SZ "15") '(15 . 15)))
-  (should (equal (sgf-process-SZ "15:13") '(15 . 13))))
+(ert-deftest sgf-convert-SZ-test ()
+  (should (equal (sgf-convert-SZ "15") '(15 . 15)))
+  (should (equal (sgf-convert-SZ "15:13") '(15 . 13))))
 
-(ert-deftest sgf-process-DT-test ()
-  (should (equal (sgf-process-DT "2008-12-14") '(0 0 0 14 12 2008 nil nil nil)))
-  (should (equal (sgf-process-DT "2008") '(0 0 0 1 1 2008 nil nil nil))))
+(ert-deftest sgf-convert-DT-test ()
+  (should (equal (sgf-convert-DT "2008-12-14") '(0 0 0 14 12 2008 nil nil nil)))
+  (should (equal (sgf-convert-DT "2008") '(0 0 0 1 1 2008 nil nil nil))))
 
 (ert-deftest sgf-property-value-re-test ()
   "check if the re matches and extracts the a property value in SGF"
@@ -131,7 +131,9 @@
 
 
 (ert-deftest sgf-cycle-test ()
-  (let* ((cases '("(;B[aa][ba]C[comment])"
+  "Test `sgf-str-to-game-tree' and `sgf-str-from-game-tree'."
+  (let* ((cases '("(;FF[4]GM[1]SZ[3:2];B[aa];W[ba])"
+                  "(;B[aa][ba]C[comment])"
                   "(;B[aa][ba]C[comment](;W[cc]C[comment])(;W[ee]))")))
     (dolist (sgf-str cases)
       (setq sgf-lst (sgf-str-to-game-tree sgf-str))
