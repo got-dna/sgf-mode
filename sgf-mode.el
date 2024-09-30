@@ -579,6 +579,23 @@ If neither 'B nor 'W is present, return nil."
     (sgf-update-buffer-from-game prev-lnode (overlay-buffer ov))))
 
 
+(defun sgf-prune ()
+  "Delete all its children of the current node."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (curr-lnode (aref game-state 0)))
+    (aset curr-lnode 2 nil)
+    (sgf-update-buffer-from-game curr-lnode (overlay-buffer ov))))
+
+
+(defun sgf-prune-inclusive ()
+  "Delete all its children of the current node including the current node."
+  (interactive)
+  (sgf-backward-move)
+  (sgf-prune))
+
+
 (defun sgf-edit-game-info ()
   "Edit the game information."
   (interactive))
@@ -663,27 +680,46 @@ Cases:
     (popup-menu menu)))
 
 
-(defun sgf-find-and-goto-node (xy game-state)
+(defun sgf-goto-node (lnode)
+  "Move game state to the given LNODE and update svg board."
+  (let* ((ov  (sgf-get-overlay))
+         (svg (overlay-get ov 'svg))
+         (game-state  (overlay-get ov 'game-state))
+         found)
+    (while (not found)
+      (let* ((curr-lnode  (aref game-state 0))
+             (prev-lnode  (aref curr-lnode 0)))
+        (if (equal curr-lnode lnode)
+            (setq found t)
+          (progn
+            (sgf-revert-undo (sgf-pop-undo game-state) game-state)
+            (aset game-state 0 prev-lnode)))))
+    (sgf-update-svg game-state svg)
+    (sgf-update-display ov)))
+
+
+
+(defun sgf-find-node (xy game-state)
   "Find the node at position XY from the current game state, searching backwards.
 There could be multiple nodes at the same position during the game; this
 function finds the closest one to the current game state.
 
-Returns node found or nil if not."
-  (let* ((board-2d  (aref game-state 1))  ;; Extract the current board
-         (stone (sgf-board-2d-get xy board-2d))  ;; Get the stone at the XY position
-         curr-lnode found-node)
-    (while (not found-node)  ;; Loop until node is found or root is reached
-      (setq curr-lnode (aref game-state 0))  ;; Get the current linked node
-      (let* ((curr-node (aref curr-lnode 1))  ;; Extract the SGF node data
-             (play (sgf-process-move curr-node))  ;; Process the current move
-             (stone-i (car play))  ;; Stone placed in this node
-             (xy-i (cdr play)))  ;; Coordinates of the move
-        (if (and (equal stone-i stone) (equal xy-i xy))  ;; Check if it's the node we're looking for
-            (setq found-node curr-lnode)  ;; Node found
-          (if (null (aref curr-lnode 0))  ;; If we reach the root node, stop the loop
-              (error "No move is found at position %S." xy)
-            (sgf-backward-move)))))  ;; Move to the previous node
-    found-node))  ;; Return the found node, or nil if not found
+Returns node found or nil if not. The game-state does not changes."
+(let* ((board-2d  (aref game-state 1))  ;; Extract the current board
+       (stone (sgf-board-2d-get xy board-2d))  ;; Get the stone at the XY position
+       (curr-lnode (aref game-state 0))
+       found-lnode)
+  (while (not found-lnode)  ;; Loop until node is found or root is reached
+    (let* ((curr-node (aref curr-lnode 1))  ;; Extract the SGF node data
+           (play (sgf-process-move curr-node))  ;; Process the current move
+           (stone-i (car play))  ;; Stone placed in this node
+           (xy-i (cdr play)))  ;; Coordinates of the move
+      (if (and (equal stone-i stone) (equal xy-i xy))  ;; Check if it's the node we're looking for
+          (setq found-lnode curr-lnode)  ;; Node found
+        (if (null (aref curr-lnode 0))  ;; If we reach the root node, stop the loop
+            (error "No move is found at position %S." xy)
+          (setq curr-lnode (aref curr-lnode 0))))))  ;; Move to the previous node
+  found-lnode))  ;; Return the found node, or nil if not found
 
 
 (defun sgf-pass ()
@@ -990,8 +1026,9 @@ Mark edit mode allows the user to add and remove marks on the board."
     (define-key map "g" 'sgf-goto-move)
     (define-key map "n" 'sgf-toggle-move-number)
     (define-key map "m" 'sgf-toggle-marks)
+    (define-key map "h" 'sgf-toggle-next-hint)
     (define-key map "v" 'sgf-view-next)
-    (define-key map "k" 'sgf-kill-node)
+    (define-key map "k" 'sgf-prune-inclusive) ; kill node
     (define-key map "s" 'sgf-export-svg)
     (define-key map "c" 'sgf-edit-comment)
     (define-key map "i" 'sgf-edit-game-info)
