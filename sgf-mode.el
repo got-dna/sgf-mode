@@ -644,33 +644,22 @@ Cases:
          (curr-lnode (aref game-state 0))
          (xy (sgf-mouse-event-to-xy last-input-event))
          (clicked-lnode (sgf-find-node xy game-state))
-         (menu  `(
-                  "Move Action"
-                  (edit-comment         ; arbitrary unique symbol for each menu item
-                   menu-item "Edit Comment of This Move"
-                   ,(lambda () (interactive) (sgf-edit-comment clicked-lnode))
-                   :help "Edit the comment")
-                  (edit-mvnum
-                   menu-item "Edit Move Number of This Move"
-                   ,(lambda () (interactive) (sgf-edit-move-number clicked-lnode))
-                   :help "Edit the number"
-                   :enable ,(not (sgf-root-lnode-p clicked-lnode)))
-                  (goto-node
-                   menu-item "Back to This Move"
-                   ,(lambda () (interactive) (sgf-goto-node clicked-lnode))
-                   :help "Move game state to this move"
-                   :enable ,(not (equal curr-lnode clicked-lnode)))
-                  (del-node
-                   menu-item "Delete This Move and After"
-                   (lambda () (interactive)
-                     (sgf-goto-node clicked-lnode)
-                     (sgf-delete-current-node))
-                   :enable ,(not (sgf-root-lnode-p clicked-lnode))) ; not root node
-                  (root-node
-                   menu-item "Make This Move the Root"
-                   sgf-root-this-node
-                   :enable ,(not (sgf-root-lnode-p clicked-lnode)))))
-         )
+         (menu `("ACTION ON THIS MOVE"
+                 ["Edit Comment"
+                  ,(lambda () (interactive) (sgf-edit-comment clicked-lnode))]
+                 ["Edit Move Number"
+                  ,(lambda () (interactive) (sgf-edit-move-number clicked-lnode))
+                  :enable ,(not (sgf-root-lnode-p clicked-lnode))]
+                 ["Back to This"
+                  ,(lambda () (interactive) (sgf-goto-node clicked-lnode))
+                  :help "Move game state to this move"
+                  :enable ,(not (equal curr-lnode clicked-lnode))]
+                 ["Prune to This"
+                  ,(lambda () (interactive) (sgf-goto-node clicked-lnode) (sgf-prune))
+                  :enable ,(not (sgf-root-lnode-p clicked-lnode))] ; not root node
+                 ["Put as Setup"
+                  ,(lambda () (interactive) (sgf-root-this-node))
+                  :enable ,(not (sgf-root-lnode-p clicked-lnode))])))
     (popup-menu menu)))
 
 
@@ -941,48 +930,45 @@ The move number will be incremented."
   "Show the main menu for the SGF mode."
   (interactive)
   (let* ((ov (sgf-get-overlay))
-         (menu `(keymap "Main Menu"
-                        (sgf-toggle-move-number
-                         menu-item "Show Move Number"
-                         sgf-toggle-move-number
-                         :button
-                         (:toggle . (sgf-game-property-get ,ov :show-move-number)))
-                        (sgf-toggle-next-hint
-                         menu-item "Show Next Hint"
-                         sgf-toggle-next-hint
-                         :button
-                         (:toggle . (sgf-game-property-get ,ov :show-next-hint)))
-                        (sgf-toggle-marks
-                         menu-item "Show Marks"
-                         sgf-toggle-marks
-                         :button
-                         (:toggle . (sgf-game-property-get ,ov :show-mark)))
-                        (seperator-1 menu-item "--")
-                        (sgf-toggle-allow-suicide-move
-                         menu-item "Allow Illegal Move"
-                         sgf-toggle-allow-suicide-move
-                         :button
-                         (:toggle . (sgf-game-property-get ,ov :allow-suicide-move)))
-                        (seperator-2 menu-item "--")
-                        (sgf-edit-move-number
-                         menu-item "Edit Move Number"
-                         sgf-edit-move-number)
-                        (sgf-edit-comment
-                         menu-item "Edit Comment"
-                         sgf-edit-comment)
-                        (seperator-3 menu-item "--")
-                        (sgf-export-image
-                         menu-item "Export Image"
-                         sgf-export-image)
-                        (sgf-mark-edit-mode
-                         menu-item "Mark Edit Mode"
-                         sgf-mark-edit-mode
-                         :button)))
-         (events (x-popup-menu last-input-event menu)))
-    (if (functionp (car events))
-        (funcall (car events)))))
-
-(defun sgf-mark-edit-mode ()
+         (menu-keymap
+          ;; https://www.gnu.org/software/emacs/manual/html_node/elisp/Menu-Example.html
+          `(keymap "Main Menu"
+                   (sgf-toggle-move-number ; key symbol
+                    menu-item "Show Move Number"
+                    sgf-toggle-move-number
+                    :button
+                    (:toggle . (sgf-game-property-get ,ov :show-move-number)))
+                   (sgf-toggle-next-hint
+                    menu-item "Show Next Hint"
+                    sgf-toggle-next-hint
+                    :button
+                    (:toggle . (sgf-game-property-get ,ov :show-next-hint)))
+                   (sgf-toggle-marks
+                    menu-item "Show Marks"
+                    sgf-toggle-marks
+                    :button
+                    (:toggle . (sgf-game-property-get ,ov :show-mark)))
+                   (seperator-1 menu-item "--")
+                   (sgf-toggle-allow-suicide-move
+                    menu-item "Allow Illegal Move"
+                    sgf-toggle-allow-suicide-move
+                    :button
+                    (:toggle . (sgf-game-property-get ,ov :allow-suicide-move)))
+                   (seperator-2 menu-item "--")
+                   (sgf-edit-move-number
+                    menu-item "Edit Move Number"
+                    sgf-edit-move-number)
+                   (sgf-edit-comment
+                    menu-item "Edit Comment"
+                    sgf-edit-comment)
+                   (seperator-3 menu-item "--")
+                   (sgf-export-image
+                    menu-item "Export Image"
+                    sgf-export-image)
+                   (sgf-mark-edit-mode
+                    menu-item "Mark Edit Mode"
+                    sgf-mark-edit-mode))))
+    (popup-menu menu-keymap)))
   "Enter mark edit mode.
 
 Mark edit mode allows the user to add and remove marks on the board."
