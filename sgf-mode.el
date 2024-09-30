@@ -260,23 +260,6 @@ Returns nil or (x . y) for KO position. "
         nil))))
 
 
-(defun sgf-valid-move-p (stone xy board-2d)
-  "Check if a move of STONE at XY on BOARD-2D is alive.
-
-1. Returns a list of captured positions if it captures opponent's stone;
-2. Returns t if it does not capture stones and it has liberty;
-3. Returns nil otherwise"
-  (sgf-board-2d-set xy stone board-2d)
-  (let ((prisoners (sgf-capture-stones xy board-2d)))
-    (if (null prisoners)
-        (let ((alive (car (sgf-check-liberty xy board-2d))))
-          (if alive t ; case 2
-            (progn (message "Illegal move of %S at position %S" stone xy)
-                   (sgf-board-2d-set xy 'E board-2d)
-                   nil))) ; case 3
-      prisoners))) ; case 1
-
-
 ;; Alternative implementation
 ;; (defun sgf-process-move (node)
 ;;   "Process a play node.
@@ -334,8 +317,7 @@ If neither 'B nor 'W is present, return nil."
 
 
 (defun sgf-update-display (ov &optional svg hot-areas)
-  "Update the overlay with new SVG and GAME-STATE.
-Optionally update HOT-AREAS as well."
+  "Update the SVG display with HOT-AREAS."
   (if svg
       (overlay-put ov 'svg svg)
     (setq svg (overlay-get ov 'svg)))
@@ -479,10 +461,13 @@ Optionally update HOT-AREAS as well."
          (svg  (overlay-get ov 'svg))
          group)
     (cond ((equal layer 'mvnum)
+           (sgf-game-property-toggle ov :show-move-number)
            (setq group (sgf-svg-group-mvnums svg)))
-          ((equal layer 'marks)
+          ((equal layer 'mark)
+           (sgf-game-property-toggle ov :show-mark)
            (setq group (sgf-svg-group-marks svg)))
           ((equal layer 'next)
+           (sgf-game-property-toggle ov :show-next-hint)
            (setq group (sgf-svg-group-next svg))))
     (if (dom-attr group 'visibility)
         ;; show the numbers
@@ -829,7 +814,10 @@ The move number will be incremented."
          (board-2d   (aref game-state 1))
          (h (length board-2d))
          (w (length (aref board-2d 0)))
-         (svg-hot-areas (sgf-svg-init w h))
+         (svg-hot-areas (sgf-svg-init w h
+                                      sgf-show-move-number
+                                      sgf-show-next-hint
+                                      sgf-show-mark))
          (svg (car svg-hot-areas))
          (hot-areas (cdr svg-hot-areas)))
 

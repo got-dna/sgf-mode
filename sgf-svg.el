@@ -99,8 +99,7 @@ attributes(cx, cy, fx, fy, r, etc...)"
 ;;   (svg-print svg))
 
 
-;; <rect width=\"34\" height=\"4\" x=\"0\" y=\"30\" id=\"status-turn\" fill=\"#f00\"></rect>
-(defun sgf-svg-init (w h)
+(defun sgf-svg-init (w h &optional show-move-number show-next-hint show-mark)
   (let* ((grid-w (* sgf-svg-interval (1- w)))
          (grid-h (* sgf-svg-interval (1- h)))
          (board-w (+ sgf-svg-margin grid-w sgf-svg-margin))
@@ -191,9 +190,15 @@ attributes(cx, cy, fx, fy, r, etc...)"
 
     ;; Layers: different types of information on board
     (svg-node grid 'g :id sgf-svg--node-id-stones)
-    (svg-node grid 'g :id sgf-svg--node-id-mvnums)
-    (svg-node grid 'g :id sgf-svg--node-id-nexts)
-    (svg-node grid 'g :id sgf-svg--node-id-marks)
+    (if show-move-number
+        (svg-node grid 'g :id sgf-svg--node-id-mvnums)
+      (svg-node grid 'g :id sgf-svg--node-id-mvnums :visibility "hidden"))
+    (if show-next-hint
+        (svg-node grid 'g :id sgf-svg--node-id-nexts)
+      (svg-node grid 'g :id sgf-svg--node-id-nexts :visibility "hidden"))
+    (if show-mark
+        (svg-node grid 'g :id sgf-svg--node-id-marks)
+      (svg-node grid 'g :id sgf-svg--node-id-marks :visibility "hidden"))
 
     ;; Menu Bar at bottom
     (setq menu-bar (svg-node svg 'g :id "menu-bar" :fill "gray"
@@ -470,7 +475,7 @@ property, not include setup node."
                    (MA . sgf-svg-add-cross)))
          (adder (cdr (assoc type adders))))
     (funcall adder svg-group x y
-             :fill "none" :stroke color :stroke-width 2)))
+             :fill "none" :stroke color :stroke-width 1)))
 
 
 (provide 'sgf-svg)
