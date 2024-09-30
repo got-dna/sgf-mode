@@ -643,24 +643,35 @@ Cases:
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (xy (sgf-mouse-event-to-xy last-input-event))
-         (clicked-lnode (sgf-find-and-goto-node xy game-state))
-         (menu  `(keymap
+         (clicked-lnode (sgf-find-node xy game-state))
+         (menu  `(
                   "Move Action"
-                  (sgf-goto-this-node
+                  (edit-comment         ; arbitrary unique symbol for each menu item
+                   menu-item "Edit Comment of This Move"
+                   ,(lambda () (interactive) (sgf-edit-comment clicked-lnode))
+                   :help "Edit the comment")
+                  (edit-mvnum
+                   menu-item "Edit Move Number of This Move"
+                   ,(lambda () (interactive) (sgf-edit-move-number clicked-lnode))
+                   :help "Edit the number"
+                   :enable ,(not (sgf-root-lnode-p clicked-lnode)))
+                  (goto-node
                    menu-item "Back to This Move"
-                   sgf-goto-this-node
+                   ,(lambda () (interactive) (sgf-goto-node clicked-lnode))
+                   :help "Move game state to this move"
                    :enable ,(not (equal curr-lnode clicked-lnode)))
-                  (sgf-delete-this-node
+                  (del-node
                    menu-item "Delete This Move and After"
-                   sgf-delete-this-node
-                   :enable ,(aref clicked-lnode 0)) ; not root node
-                  (sgf-root-this-node
+                   (lambda () (interactive)
+                     (sgf-goto-node clicked-lnode)
+                     (sgf-delete-current-node))
+                   :enable ,(not (sgf-root-lnode-p clicked-lnode))) ; not root node
+                  (root-node
                    menu-item "Make This Move the Root"
                    sgf-root-this-node
-                   :enable ,(aref clicked-lnode 0))))
-         (events (x-popup-menu last-input-event menu)))
-  (if (functionp (car events))
-      (funcall (car events) clicked-lnode))))
+                   :enable ,(not (sgf-root-lnode-p clicked-lnode)))))
+         )
+    (popup-menu menu)))
 
 
 (defun sgf-find-and-goto-node (xy game-state)
@@ -970,6 +981,14 @@ The move number will be incremented."
          (events (x-popup-menu last-input-event menu)))
     (if (functionp (car events))
         (funcall (car events)))))
+
+(defun sgf-mark-edit-mode ()
+  "Enter mark edit mode.
+
+Mark edit mode allows the user to add and remove marks on the board."
+  (interactive)
+  (let* ((ov (sgf-get-overlay)))
+  )
 
 
 (defvar sgf-mode-graphical-map
