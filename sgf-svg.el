@@ -104,7 +104,6 @@ attributes(cx, cy, fx, fy, r, etc...)"
          (grid-h (* sgf-svg-interval (1- h)))
          (board-w (+ sgf-svg-margin grid-w sgf-svg-margin))
          (board-h (+ sgf-svg-margin grid-h sgf-svg-margin))
-         (menu-bar-y (+ sgf-svg-bar board-h))
          (line-width 0.5)
          (star-radius 3)
          (hot-grid-u-l (cons sgf-svg-margin (+ sgf-svg-bar sgf-svg-margin)))
@@ -117,37 +116,16 @@ attributes(cx, cy, fx, fy, r, etc...)"
     ;; Note that the order of svg elements matters
     (setq svg (svg-create board-w (+ sgf-svg-bar board-h sgf-svg-bar)
                           :font-family sgf-svg-font-family))
+
     ;; Stones' Gradient
     (sgf-svg-stone-gradient svg "B" '((0 . "#606060") (100 . "#000000")))
     (sgf-svg-stone-gradient svg "W" '((0 . "#ffffff") (100 . "#b0b0b0")))
-    ;; Status Bar
-    (setq status-bar (svg-node svg 'g :id "status-bar"))
-    (svg-rectangle status-bar 0 0 board-w sgf-svg-bar :fill "gray")
-    (svg-circle status-bar (/ sgf-svg-interval 2)
-                (/ sgf-svg-interval 2) (/ sgf-svg-interval 3) :gradient "B")
-    (svg-circle status-bar (- board-w (/ sgf-svg-interval 2))
-                (/ sgf-svg-interval 2) (/ sgf-svg-interval 3) :gradient "W")
-    ;; show what play turn it is
-    (svg-rectangle status-bar 0 (- sgf-svg-bar sgf-svg-padding)
-                   sgf-svg-interval sgf-svg-padding
-                   :id "status-b" :fill "gray")
-    (svg-rectangle status-bar (- board-w sgf-svg-interval) (- sgf-svg-bar sgf-svg-padding)
-                   sgf-svg-interval sgf-svg-padding
-                   :id "status-w" :fill "gray")
-    ;; show move number
-    (svg-text status-bar "0" :x (/ board-w 2) :y sgf-svg-bar
-              :id "status-n" :fill "white"
-              :font-family sgf-svg-font-family :font-weight "bold"
-              :text-anchor "middle" :dy "-0.5em")
-    ;; show prisoner number
-    (svg-text status-bar "0" :x (* sgf-svg-interval 2) :y sgf-svg-bar
-              :id "status-pb" :fill "white"
-              :font-weight "bold" :font-family sgf-svg-font-family
-              :text-anchor "middle" :dy "-0.5em")
-    (svg-text status-bar "0" :x (- board-w sgf-svg-interval sgf-svg-interval) :y sgf-svg-bar
-              :id "status-pw" :fill "white"
-              :font-weight "bold" :font-family sgf-svg-font-family
-              :text-anchor "middle" :dy "-0.5em")
+
+    ;; Menu Bar at top
+    (setq menu-bar (svg-node svg 'g :id "menu-bar" :fill "gray"))
+
+    ;; (svg-rectangle menu-bar 0 menu-bar-y board-w sgf-svg-bar :fill "gray")
+    (nconc hot-areas (sgf-svg-create-menu-buttons menu-bar))
 
     ;; Board Rect
     (setq board (svg-node svg 'g
@@ -186,7 +164,10 @@ attributes(cx, cy, fx, fy, r, etc...)"
 
     ;; Hoshi/Stars
     (dolist (hoshi (sgf-board-hoshi w h))
-      (svg-circle grid (* sgf-svg-interval (car hoshi)) (* sgf-svg-interval (cdr hoshi)) star-radius))
+      (svg-circle grid
+                  (* sgf-svg-interval (car hoshi))
+                  (* sgf-svg-interval (cdr hoshi))
+                  star-radius))
 
     ;; Layers: different types of information on board
     (svg-node grid 'g :id sgf-svg--node-id-stones)
@@ -199,21 +180,57 @@ attributes(cx, cy, fx, fy, r, etc...)"
     (if show-mark
         (svg-node grid 'g :id sgf-svg--node-id-marks)
       (svg-node grid 'g :id sgf-svg--node-id-marks :visibility "hidden"))
-
-    ;; Menu Bar at bottom
-    (setq menu-bar (svg-node svg 'g :id "menu-bar" :fill "gray"
-                             :transform (format "translate(%s, %s)" 0 menu-bar-y)))
-    ;; (svg-rectangle menu-bar 0 menu-bar-y board-w sgf-svg-bar :fill "gray")
-    (nconc hot-areas (sgf-svg-create-menu-buttons menu-bar menu-bar-y))
+    ;; Status Bar
+    (setq status-bar (svg-node svg 'g
+                               :id "status-bar"
+                               :transform
+                               (format "translate(%s, %s)" 0 (+ sgf-svg-bar board-h))))
+    (svg-rectangle status-bar 0 0 board-w sgf-svg-bar :fill "gray")
+    (svg-circle status-bar (/ sgf-svg-interval 2)
+                (/ sgf-svg-interval 2) (/ sgf-svg-interval 3) :gradient "B")
+    (svg-circle status-bar (- board-w (/ sgf-svg-interval 2))
+                (/ sgf-svg-interval 2) (/ sgf-svg-interval 3) :gradient "W")
+    ;; show what play turn it is
+    (svg-rectangle status-bar 0 (- sgf-svg-bar sgf-svg-padding)
+                   sgf-svg-interval sgf-svg-padding
+                   :id "status-b" :fill "gray")
+    (svg-rectangle status-bar (- board-w sgf-svg-interval) (- sgf-svg-bar sgf-svg-padding)
+                   sgf-svg-interval sgf-svg-padding
+                   :id "status-w" :fill "gray")
+    ;; show move number
+    (svg-text status-bar "0" :x (/ board-w 2) :y sgf-svg-bar
+              :id "status-n" :fill "white"
+              :font-family sgf-svg-font-family :font-weight "bold"
+              :text-anchor "middle" :dy "-0.5em")
+    ;; show prisoner number
+    (svg-text status-bar "0" :x (* sgf-svg-interval 2) :y sgf-svg-bar
+              :id "status-pb" :fill "white"
+              :font-weight "bold" :font-family sgf-svg-font-family
+              :text-anchor "middle" :dy "-0.5em")
+    (svg-text status-bar "0" :x (- board-w sgf-svg-interval sgf-svg-interval) :y sgf-svg-bar
+              :id "status-pw" :fill "white"
+              :font-weight "bold" :font-family sgf-svg-font-family
+              :text-anchor "middle" :dy "-0.5em")
 
     (cons svg hot-areas)))
 
 
-(defun sgf-svg-create-menu-buttons (menu-bar menu-bar-y)
-  "Create all the buttons and return the hot areas for the buttons.
+(defun sgf-svg-create-mark-edit-buttons (menu-bar)
+  "Create all the buttons and return the hot areas for the mark edit buttons."
+  (let ((btns '((hot-quit "Quit" "quit")
+                (hot-cr "󰧟" "Add circle (CR)") ; ◯
+                (hot-ma "󱎘" "Add cross (MA)"))
+                (hot-tr "󰔶" "Add triangle (TR)") ; △
+                (hot-sq "󰨕" "Add square (SQ)") ; ▢
+                (hot-lb "󰁥" "Add text label (LB)")
+                (hot-del "Del" "Delete the mark")))
+    (x sgf-svg-padding) (y sgf-svg-padding)))
 
-MENU-BAR is a svg node;
-MENU-BAR-Y is the starting y coordinate for menu bar."
+
+(defun sgf-svg-create-menu-buttons (menu-bar)
+  "Create all the buttons to the svg node MENU-BAR and return the hot areas for the buttons.
+
+SGF-SVG-BAR is the starting y coordinate for menu bar."
   (let ((btns '((hot-menu "Menu" "menu")
                 (hot-first "|<" "Move to the beginning of the game")
                 (hot-backward "<" "Move backward")
@@ -235,10 +252,9 @@ MENU-BAR-Y is the starting y coordinate for menu bar."
                           :x (+ x (/ width 2)) :y height
                           :text-anchor "middle" :fill "#000")
                 (setq hot-area (list (cons 'rect
-                                           (cons (cons x
-                                                       menu-bar-y)
+                                           (cons (cons x 0)
                                                  (cons (+ x width)
-                                                       (+ sgf-svg-bar menu-bar-y))))
+                                                       sgf-svg-bar )))
                                      hot-area-id (list 'pointer 'hand
                                                        'help-echo tooltip)))
                 (setq x (+ x width sgf-svg-padding))
