@@ -734,152 +734,158 @@ The move number will be incremented."
     (sgf-update-display ov)))
 
 
-(defun sgf--add-setup-stone (stone)
-  "Temporarily set up a keymap to add STONE setup stones with mouse clicks."
-  (let* ((ov (sgf-get-overlay))
+(defun sgf--handle-mouse-input (action-fn message-text)
+  "Generalized handler for mouse input, calling ACTION-FN for specific actions."
+  ;; Define a transient keymap that captures mouse clicks on the hot grid
+  (let ((transient-map (make-sparse-keymap)))
+    ;; Handle mouse clicks
+    (define-key transient-map [hot-grid mouse-1] action-fn)
+    ;; Use transient map and exit on any key press or mouse event outside [hot-grid mouse-1]
+    (set-transient-map transient-map t)
+    (message message-text)))
+
+
+(defun sgf--action-add-setup-stone (event stone)
+  (let* ((xy (sgf-mouse-event-to-xy event))
+         (ov (sgf-get-overlay))
          (svg (overlay-get ov 'svg))
          (game-state (overlay-get ov 'game-state))
+         (board-2d (aref game-state 1))
          (curr-lnode (aref game-state 0))
          (curr-node (aref curr-lnode 1)))
-    (when (or (sgf-root-lnode-p curr-lnode)
-              (and (y-or-n-p "Cannot add setup stones to a non-root node. Move to the beginning of the gqme?")
-                   (sgf-first-move)))
-      (let ;; Define a transient keymap that captures mouse clicks on the hot grid
-          ((transient-map (make-sparse-keymap))
-           (board-2d (aref game-state 1)))
-        ;; Handle mouse clicks to add setup stones
-        (define-key transient-map [hot-grid mouse-1]
-          (lambda (event)
-            (interactive "e")
-            (let ((xy (sgf-mouse-event-to-xy event)))
-              (when (sgf-xy-is-empty-p xy board-2d)
-                (if (eq stone 'B)
-                    (nconc curr-node (list (cons 'AB (list xy))))
-                  (nconc curr-node (list (cons 'AW (list xy)))))
-                (sgf-board-2d-set xy stone board-2d)
-                (sgf-update-svg game-state svg)
-                (sgf-update-display ov)
-                (message "Added %s stone at %s" stone xy)))))
-            ;; Use transient map and exit on any key press or mouse
-            ;; event outside [hot-grid mouse-1]
-        (set-transient-map transient-map t)
-        (message "Click on the board to add %s stones. Press any other key to exit." stone)))))
+    (when (sgf-xy-is-empty-p xy board-2d)
+      (if (null (sgf-root-lnode-p curr-lnode))
+          (message "Cannot add setup stones to a non-root node. Move to the beginning of the game with `sgf-first-move'")
+        (if (eq stone 'B)
+            (nconc curr-node (list (cons 'AB (list xy))))
+          (nconc curr-node (list (cons 'AW (list xy)))))
+        (sgf-board-2d-set xy stone board-2d)
+        (sgf-update-svg game-state svg)
+        (sgf-update-display ov)
+        (message "Added %s stone at %s" stone xy)))))
 
 
-(defun sgf-add-black-stone ()
+(defun sgf-add-setup-black-stone ()
   (interactive)
-  (sgf--add-setup-stone 'B))
+  (sgf--handle-mouse-input
+   ;; Create a closure that captures the value of `stone`
+   (lambda (event) (interactive "e") (sgf--action-add-setup-stone event 'B))
+   "Click on the board to add black stones. Press any other key to exit."))
 
-(defun sgf-add-white-stone ()
+
+(defun sgf-add-setup-white-stone ()
   (interactive)
-  (sgf--add-setup-stone 'W))
+  (sgf--handle-mouse-input
+     ;; Create a closure that captures the value of `stone`
+   (lambda (event) (interactive "e") (sgf--action-add-setup-stone event 'W))
+   "Click on the board to add white stones. Press any other key to exit."))
 
 
-(defun sgf--add-mark (shape)
+(defun sgf--action-add-mark (event shape)
   "Temporarily set up a keymap to add SHAPE marks with mouse clicks."
-  (let* ((ov (sgf-get-overlay))
+  (let* ((xy (sgf-mouse-event-to-xy event))
+         (ov (sgf-get-overlay))
          (svg (overlay-get ov 'svg))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (curr-node (aref curr-lnode 1))
-         ;; Define a transient keymap that captures mouse clicks on the hot grid
-         (transient-map (make-sparse-keymap)))
-    ;; Handle mouse clicks to add marks
-    (define-key transient-map [hot-grid mouse-1]
-      (lambda (event)
-        (interactive "e")
-        (let ((xy (sgf-mouse-event-to-xy event))
-              (curr-mark (assoc shape curr-node)))
-          (if curr-mark
-              (if (member xy (cdr curr-mark))
-                  (message "Mark already exists at %s" xy)
-                (message "Added mark at %s" xy)
-                (setcdr curr-mark (nconc (cdr curr-mark) (list xy))))
-            (message "Added mark at %s" xy)
-            (nconc curr-node (list (cons shape (list xy)))))
-          ;; Update the display
-          (sgf-update-svg game-state svg)
-          (sgf-update-display ov))))
-    ;; Use transient map and exit on any key press or mouse event outside [hot-grid mouse-1]
-    (set-transient-map transient-map t)
-    (message "Click on the board to add marks. Press any other key to exit.")))
+         (curr-mark (assoc shape curr-node)))
+    (if curr-mark
+        (if (member xy (cdr curr-mark))
+            (message "Mark already exists at %s" xy)
+          (message "Added mark at %s" xy)
+          (setcdr curr-mark (nconc (cdr curr-mark) (list xy))))
+      (message "Added mark at %s" xy)
+      (nconc curr-node (list (cons shape (list xy)))))
+    ;; Update the display
+    (sgf-update-svg game-state svg)
+    (sgf-update-display ov)))
 
 
 (defun sgf-add-mark-square ()
   "Add a square mark on the board of current game state."
   (interactive)
-  (sgf--add-mark 'SQ))
+  (sgf--handle-mouse-input
+     ;; Create a closure that captures the value of `stone`
+   (lambda (event) (interactive "e") (sgf--action-add-mark event 'SQ))
+   "Click on the board to add square mark. Press any other key to exit."))
 
 (defun sgf-add-mark-triangle ()
   "Add a triangle mark on the board of current game state."
   (interactive)
-  (sgf--add-mark 'TR))
+  (sgf--handle-mouse-input
+     ;; Create a closure that captures the value of `stone`
+   (lambda (event) (interactive "e") (sgf--action-add-mark event 'TR))
+   "Click on the board to add triangle mark. Press any other key to exit."))
 
 (defun sgf-add-mark-circle ()
   "Add a circle mark on the board of current game state."
   (interactive)
-  (sgf--add-mark 'CR))
+  (sgf--handle-mouse-input
+     ;; Create a closure that captures the value of `stone`
+   (lambda (event) (interactive "e") (sgf--action-add-mark event 'CR))
+   "Click on the board to add circle mark. Press any other key to exit."))
 
 (defun sgf-add-mark-cross ()
   "Add a cross mark on the board of current game state."
   (interactive)
-  (sgf--add-mark 'MA))
+  (sgf--handle-mouse-input
+     ;; Create a closure that captures the value of `stone`
+   (lambda (event) (interactive "e") (sgf--action-add-mark event 'MA))
+   "Click on the board to add cross mark. Press any other key to exit."))
 
-(defun sgf-add-mark-label ()
+(defun sgf--action-add-mark-label (event)
   "Add a label mark on the board of current game state."
-  (interactive)
-  (let* ((ov (sgf-get-overlay))
+  (interactive "e")
+  (let* ((xy (sgf-mouse-event-to-xy event))
+         (ov (sgf-get-overlay))
          (svg (overlay-get ov 'svg))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (curr-node (aref curr-lnode 1))
-         ;; Define a transient keymap that captures mouse clicks on the hot grid
-         (transient-map (make-sparse-keymap)))
-    ;; Handle mouse clicks to add marks
-    (define-key transient-map [hot-grid mouse-1]
-      (lambda (event)
-        (interactive "e")
-        (let ((xy (sgf-mouse-event-to-xy event))
-              (curr-mark (assoc 'LB curr-node)))
-          (if curr-mark
-              (if (member xy (cdr curr-mark))
-                  (message "Mark already exists at %s" xy)
-                (message "Added mark at %s" xy)
-                (setcdr curr-mark (nconc (cdr curr-mark) (list xy))))
-            (message "Added mark at %s" xy)
-            (nconc curr-node (list (cons shape (list xy)))))
-          ;; Update the display
-          (sgf-update-svg game-state svg)
-          (sgf-update-display ov))))
-    ;; Use transient map and exit on any key press or mouse event outside [hot-grid mouse-1]
-    (set-transient-map transient-map t)
-    (message "Click on the board to add labels. Press any other key to exit.")))
+         (curr-mark (assoc 'LB curr-node)))
+    (if curr-mark
+        (if (member xy (cdr curr-mark))
+            (message "Mark already exists at %s" xy)
+          (message "Added mark at %s" xy)
+          (setcdr curr-mark (nconc (cdr curr-mark) (list xy))))
+      (message "Added mark at %s" xy)
+      (nconc curr-node (list (cons shape (list xy)))))
+    ;; Update the display
+    (sgf-update-svg game-state svg)
+    (sgf-update-display ov)))
 
+(defun sgf-add-mark-label ()
+  "Add a label mark on the board of current game state."
+  (interactive)
+  (sgf--handle-mouse-input
+   'sgf--action-add-mark-label
+   "Click on the board to add labels. Press any other key to exit."))
+
+
+(defun sgf--action-delete-mark (event)
+  "Delete a mark from the current node."
+  (interactive "e")
+  (let* ((xy (sgf-mouse-event-to-xy event))
+         (ov  (sgf-get-overlay))
+         (svg (overlay-get ov 'svg))
+         (game-state (overlay-get ov 'game-state))
+         (curr-lnode (aref game-state 0))
+         (curr-node  (aref curr-lnode 1)))
+    (dolist (shape '(SQ TR CR MA))
+      (let ((curr-mark (assoc shape curr-node)))
+        (when (and curr-mark (member xy curr-mark))
+          (message "Delete mark at %s" xy)
+          (delete xy curr-mark)
+          (sgf-update-svg game-state svg)
+          (sgf-update-display ov))))))
 
 (defun sgf-delete-mark ()
   "Delete a mark from the current node."
   (interactive)
-  (let* ((ov  (sgf-get-overlay))
-         (svg (overlay-get ov 'svg))
-         (game-state (overlay-get ov 'game-state))
-         (curr-lnode (aref game-state 0))
-         (curr-node  (aref curr-lnode 1))
-         (transient-map (make-sparse-keymap)))
-     ;; Handle mouse clicks to add marks
-      (define-key transient-map [hot-grid mouse-1]
-        (lambda (event)
-          (interactive "e")
-          (let ((xy (sgf-mouse-event-to-xy event)))
-            (dolist (shape '(SQ TR CR MA))
-              (let ((curr-mark (assoc shape curr-node)))
-                (when (and curr-mark (member xy curr-mark))
-                  (message "Delete mark at %s" xy)
-                  (delete xy curr-mark)
-                  (sgf-update-svg game-state svg)
-                  (sgf-update-display ov)))))))
-      ;; Use transient map and exit on any key press or mouse event outside [hot-grid mouse-1]
-      (set-transient-map transient-map t)
-      (message "Click on the board to delete marks. Press any other key to exit.")))
+  (sgf--handle-mouse-input
+   'sgf--action-delete-mark
+   "Click on the board to delete marks. Press any other key to exit."))
 
 
 ;; (defun sgf-track-dragging ()
@@ -1102,6 +1108,12 @@ The move number will be incremented."
                     menu-item "Edit Comment"
                     sgf-edit-comment)
                    (seperator-3 menu-item "--")
+                   (sgf-add-setup-black-stone
+                    menu-item "Add Black Setup Stones"
+                    sgf-add-setup-black-stone)
+                   (sgf-add-setup-white-stone
+                    menu-item "Add White Setup Stones"
+                    sgf-add-setup-white-stone)
                    (sgf-add-mark-cross
                     menu-item "Add Cross Mark"
                     sgf-add-mark-cross)
