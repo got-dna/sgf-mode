@@ -367,6 +367,7 @@ If neither 'B nor 'W is present, return nil."
         (setq branch (sgf-branch-selection n branch))
         (setq next-lnode (nth branch next-lnodes))
         (setq next-node  (aref next-lnode 1))
+        (sgf-show-comment next-node)
         (sgf-apply-node next-node game-state)
         (aset game-state 0 next-lnode)
         (sgf-update-svg game-state svg)
@@ -378,12 +379,14 @@ If neither 'B nor 'W is present, return nil."
   (let* ((ov         (sgf-get-overlay))
          (svg        (overlay-get ov 'svg))
          (game-state  (overlay-get ov 'game-state))
-         (curr-lnode  (aref game-state 0)))
+         (curr-lnode  (aref game-state 0))
+         (prev-lnode  (aref curr-lnode 0)))
     (if (sgf-root-lnode-p curr-lnode)
         (progn (message "No more previous play.") nil)
       (progn
+        (sgf-show-comment (aref prev-lnode 1))
         (sgf-revert-undo (sgf-pop-undo game-state) game-state)
-        (aset game-state 0 (aref curr-lnode 0))
+        (aset game-state 0 prev-lnode)
         (sgf-update-svg game-state svg)
         (sgf-update-display ov)))))
 
@@ -437,13 +440,17 @@ If neither 'B nor 'W is present, return nil."
 (defun sgf-first-move ()
   "Move to the first node in the game tree."
   (interactive)
-  (while (sgf-backward-move)))
+  (while (sgf-backward-move))
+  ;; make sure to return t if successful
+  t)
 
 
 (defun sgf-last-move ()
   "Move to the last node in the game tree."
   (interactive)
-  (while (sgf-forward-move)))
+  (while (sgf-forward-move))
+  ;; make sure to return t if successful
+  t)
 
 
 (defun sgf-goto-move (n)
@@ -495,7 +502,7 @@ If neither 'B nor 'W is present, return nil."
 
 (defun sgf-export-image (&optional filename)
   "Export the board to an SVG file or display it in a buffer."
-  (interactive "FExport file name: ")
+  (interactive "FExport svg to file: ")
   (let* ((ov (sgf-get-overlay))
          (svg (overlay-get ov 'svg)))
     ;; todo clone svg and delete menu bar
@@ -512,14 +519,15 @@ If neither 'B nor 'W is present, return nil."
           (svg-print svg))))))
 
 
-(defun sgf-edit-move-number ()
-  "Edit the move number of the current node."
+(defun sgf-edit-move-number (&optional lnode)
+  "Edit the move number of the given node or current node."
   (interactive)
   (let* ((ov (sgf-get-overlay))
+         (svg (overlay-get ov 'svg))
          (game-state (overlay-get ov 'game-state))
-         (curr-lnode (aref game-state 0))
-         (curr-node  (aref curr-lnode 1))
-         (old-mvnum  (car (alist-get 'MN curr-node)))
+         (lnode (or lnode (aref game-state 0)))
+         (node  (aref lnode 1))
+         (old-mvnum  (car (alist-get 'MN node)))
          new-mvnum valid)
     (while (not valid)
       (setq new-mvnum (read-number "Move number: " old-mvnum))
@@ -527,56 +535,45 @@ If neither 'B nor 'W is present, return nil."
           (message "Invalid move number. Please enter an integer.")
         (setq valid t)))
     (unless (equal old-mvnum new-mvnum)
-      (aset curr-lnode 1
-            (nconc (assq-delete-all 'MN curr-node)
+      (aset lnode 1
+            (nconc (assq-delete-all 'MN node)
                    (list (list 'MN new-mvnum))))
-      (sgf-update-buffer-from-game curr-lnode (overlay-buffer ov))
-      (sgf-update-display ov))))
+      (sgf-update-svg game-state svg)
+      (sgf-update-display ov)
+      (sgf-update-buffer-from-game lnode (overlay-buffer ov)))))
 
 
-(defun sgf-edit-comment ()
-  "Edit the comment of the current node."
+(defun sgf-edit-comment (&optional lnode)
+  "Edit the comment of the given node or current node."
   (interactive)
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
-         (curr-lnode (aref game-state 0))
-         (curr-node (aref curr-lnode 1))
+         (lnode (or lnode (aref game-state 0)))
+         (node (aref lnode 1))
          ;; C[foo][spam] -> "foo spam"
-         (old-comment (mapconcat 'identity (alist-get 'C curr-node) " "))
+         (old-comment (mapconcat 'identity (alist-get 'C node) " "))
          (new-comment (read-string "Comment: " old-comment)))
     ;; only update if the comment is changed
     (unless (string= old-comment new-comment)
       ;; Update or remove the 'C' property based on new-comment
-      (aset curr-lnode 1
+      (aset lnode 1
             (if (string-empty-p new-comment)
                 ;; delete the comment property if the new comment is empty
-                (assq-delete-all 'C curr-node)
-              (nconc (assq-delete-all 'C curr-node)
+                (assq-delete-all 'C node)
+              (nconc (assq-delete-all 'C node)
                      (list (list 'C new-comment)))))
-      (sgf-update-buffer-from-game curr-lnode (overlay-buffer ov))
-      (sgf-update-display ov))))
+      (sgf-update-buffer-from-game lnode (overlay-buffer ov)))))
 
 
 ;; igo-editor-move-mode-make-move-root
-(defun sgf-make-current-node-root ()
+(defun sgf-root-current-node ()
   "Make the current node the root node.
-1. move all the nodes in between to the root node.
+1. move all the nodes in between to the root node of setup.
 2. change B, W to AB, AW"
-  (interactive))
-
-
-;; Modification Functions
-(defun sgf-delete-this-node (lnode)
-  "Delete the current node and all its children."
   (interactive)
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
-         (prev-lnode (aref lnode 0))
-         (lnodes (aref prev-lnode 2))
-         (lnodes-del (remove lnode lnodes)))
-    (aset prev-lnode 2 lnodes-del)
-    (sgf-backward-move)
-    (sgf-update-buffer-from-game prev-lnode (overlay-buffer ov))))
+         (curr-lnode (aref game-state 0)))))
 
 
 (defun sgf-prune ()
@@ -629,6 +626,7 @@ Cases:
 2.2 otherwise, create a new branch of game tree.
 3. other illegal positions"
   (interactive)
+  ;; mouse-1 event for the left click
   (let* ((xy (sgf-mouse-event-to-xy last-input-event))
          (ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
@@ -736,49 +734,152 @@ The move number will be incremented."
     (sgf-update-display ov)))
 
 
-(defmacro sgf--add-mark (shape add-mark-func)
-  "Add a mark to the current node."
-  `(let* ((ov (sgf-get-overlay))
-          (svg  (overlay-get ov 'svg))
-          (game-state (overlay-get ov 'game-state))
-          (board-2d (aref game-state 1))
-          (curr-lnode (aref game-state 0))
-          (curr-node (aref curr-lnode 1))
-          (xy (sgf-mouse-event-to-xy last-input-event))
-          (x (car xy)) (y (cdr xy))
-          (xy-state (aref (aref board-2d y) x)))
-     (push curr-node (list shape xy))
-     (apply add-mark-func svg x y xy-state)))
+(defun sgf--add-setup-stone (stone)
+  "Temporarily set up a keymap to add STONE setup stones with mouse clicks."
+  (let* ((ov (sgf-get-overlay))
+         (svg (overlay-get ov 'svg))
+         (game-state (overlay-get ov 'game-state))
+         (curr-lnode (aref game-state 0))
+         (curr-node (aref curr-lnode 1)))
+    (when (or (sgf-root-lnode-p curr-lnode)
+              (and (y-or-n-p "Cannot add setup stones to a non-root node. Move to the beginning of the gqme?")
+                   (sgf-first-move)))
+      (let ;; Define a transient keymap that captures mouse clicks on the hot grid
+          ((transient-map (make-sparse-keymap))
+           (board-2d (aref game-state 1)))
+        ;; Handle mouse clicks to add setup stones
+        (define-key transient-map [hot-grid mouse-1]
+          (lambda (event)
+            (interactive "e")
+            (let ((xy (sgf-mouse-event-to-xy event)))
+              (when (sgf-xy-is-empty-p xy board-2d)
+                (if (eq stone 'B)
+                    (nconc curr-node (list (cons 'AB (list xy))))
+                  (nconc curr-node (list (cons 'AW (list xy)))))
+                (sgf-board-2d-set xy stone board-2d)
+                (sgf-update-svg game-state svg)
+                (sgf-update-display ov)
+                (message "Added %s stone at %s" stone xy)))))
+            ;; Use transient map and exit on any key press or mouse
+            ;; event outside [hot-grid mouse-1]
+        (set-transient-map transient-map t)
+        (message "Click on the board to add %s stones. Press any other key to exit." stone)))))
+
+
+(defun sgf-add-black-stone ()
+  (interactive)
+  (sgf--add-setup-stone 'B))
+
+(defun sgf-add-white-stone ()
+  (interactive)
+  (sgf--add-setup-stone 'W))
+
+
+(defun sgf--add-mark (shape)
+  "Temporarily set up a keymap to add SHAPE marks with mouse clicks."
+  (let* ((ov (sgf-get-overlay))
+         (svg (overlay-get ov 'svg))
+         (game-state (overlay-get ov 'game-state))
+         (curr-lnode (aref game-state 0))
+         (curr-node (aref curr-lnode 1))
+         ;; Define a transient keymap that captures mouse clicks on the hot grid
+         (transient-map (make-sparse-keymap)))
+    ;; Handle mouse clicks to add marks
+    (define-key transient-map [hot-grid mouse-1]
+      (lambda (event)
+        (interactive "e")
+        (let ((xy (sgf-mouse-event-to-xy event))
+              (curr-mark (assoc shape curr-node)))
+          (if curr-mark
+              (if (member xy (cdr curr-mark))
+                  (message "Mark already exists at %s" xy)
+                (message "Added mark at %s" xy)
+                (setcdr curr-mark (nconc (cdr curr-mark) (list xy))))
+            (message "Added mark at %s" xy)
+            (nconc curr-node (list (cons shape (list xy)))))
+          ;; Update the display
+          (sgf-update-svg game-state svg)
+          (sgf-update-display ov))))
+    ;; Use transient map and exit on any key press or mouse event outside [hot-grid mouse-1]
+    (set-transient-map transient-map t)
+    (message "Click on the board to add marks. Press any other key to exit.")))
 
 
 (defun sgf-add-mark-square ()
   "Add a square mark on the board of current game state."
   (interactive)
-  (sgf--add-mark 'SQ 'sgf-svg-add-square)
-  (message "Add square mark."))
+  (sgf--add-mark 'SQ))
 
 (defun sgf-add-mark-triangle ()
   "Add a triangle mark on the board of current game state."
   (interactive)
-  (sgf--add-mark 'TR 'sgf-svg-add-triangle))
+  (sgf--add-mark 'TR))
 
 (defun sgf-add-mark-circle ()
   "Add a circle mark on the board of current game state."
   (interactive)
-  (sgf--add-mark 'CR 'sgf-svg-add-circle))
+  (sgf--add-mark 'CR))
 
 (defun sgf-add-mark-cross ()
   "Add a cross mark on the board of current game state."
   (interactive)
-  (sgf--add-mark 'MA 'sgf-svg-add-cross))
+  (sgf--add-mark 'MA))
 
 (defun sgf-add-mark-label ()
   "Add a label mark on the board of current game state."
-  (interactive))
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (svg (overlay-get ov 'svg))
+         (game-state (overlay-get ov 'game-state))
+         (curr-lnode (aref game-state 0))
+         (curr-node (aref curr-lnode 1))
+         ;; Define a transient keymap that captures mouse clicks on the hot grid
+         (transient-map (make-sparse-keymap)))
+    ;; Handle mouse clicks to add marks
+    (define-key transient-map [hot-grid mouse-1]
+      (lambda (event)
+        (interactive "e")
+        (let ((xy (sgf-mouse-event-to-xy event))
+              (curr-mark (assoc 'LB curr-node)))
+          (if curr-mark
+              (if (member xy (cdr curr-mark))
+                  (message "Mark already exists at %s" xy)
+                (message "Added mark at %s" xy)
+                (setcdr curr-mark (nconc (cdr curr-mark) (list xy))))
+            (message "Added mark at %s" xy)
+            (nconc curr-node (list (cons shape (list xy)))))
+          ;; Update the display
+          (sgf-update-svg game-state svg)
+          (sgf-update-display ov))))
+    ;; Use transient map and exit on any key press or mouse event outside [hot-grid mouse-1]
+    (set-transient-map transient-map t)
+    (message "Click on the board to add labels. Press any other key to exit.")))
 
-(defun sgf-del-mark ()
+
+(defun sgf-delete-mark ()
   "Delete a mark from the current node."
-  (interactive))
+  (interactive)
+  (let* ((ov  (sgf-get-overlay))
+         (svg (overlay-get ov 'svg))
+         (game-state (overlay-get ov 'game-state))
+         (curr-lnode (aref game-state 0))
+         (curr-node  (aref curr-lnode 1))
+         (transient-map (make-sparse-keymap)))
+     ;; Handle mouse clicks to add marks
+      (define-key transient-map [hot-grid mouse-1]
+        (lambda (event)
+          (interactive "e")
+          (let ((xy (sgf-mouse-event-to-xy event)))
+            (dolist (shape '(SQ TR CR MA))
+              (let ((curr-mark (assoc shape curr-node)))
+                (when (and curr-mark (member xy curr-mark))
+                  (message "Delete mark at %s" xy)
+                  (delete xy curr-mark)
+                  (sgf-update-svg game-state svg)
+                  (sgf-update-display ov)))))))
+      ;; Use transient map and exit on any key press or mouse event outside [hot-grid mouse-1]
+      (set-transient-map transient-map t)
+      (message "Click on the board to delete marks. Press any other key to exit.")))
 
 
 ;; (defun sgf-track-dragging ()
@@ -969,6 +1070,9 @@ The move number will be incremented."
          (menu-keymap
           ;; https://www.gnu.org/software/emacs/manual/html_node/elisp/Menu-Example.html
           `(keymap "Main Menu"
+                   (sgf-toggle-svg-display
+                    menu-item "Diable SVG Display"
+                    sgf-toggle-svg-display)
                    (sgf-toggle-move-number ; key symbol
                     menu-item "Show Move Number"
                     sgf-toggle-move-number
@@ -998,6 +1102,25 @@ The move number will be incremented."
                     menu-item "Edit Comment"
                     sgf-edit-comment)
                    (seperator-3 menu-item "--")
+                   (sgf-add-mark-cross
+                    menu-item "Add Cross Mark"
+                    sgf-add-mark-cross)
+                   (sgf-add-mark-square
+                    menu-item "Add Square Mark"
+                    sgf-add-mark-square)
+                   (sgf-add-mark-triangle
+                    menu-item "Add Triangle Mark"
+                    sgf-add-mark-triangle)
+                   (sgf-add-mark-circle
+                    menu-item "Add Circle Mark"
+                    sgf-add-mark-circle)
+                   (sgf-add-mark-label
+                    menu-item "Add Label"
+                    sgf-add-mark-label)
+                   (sgf-delete-mark
+                    menu-item "Delete Mark"
+                    sgf-delete-mark)
+                   (seperator-4 menu-item "--")
                    (sgf-export-image
                     menu-item "Export Image"
                     sgf-export-image)
@@ -1005,16 +1128,11 @@ The move number will be incremented."
                     menu-item "Mark Edit Mode"
                     sgf-mark-edit-mode))))
     (popup-menu menu-keymap)))
-  "Enter mark edit mode.
-
-Mark edit mode allows the user to add and remove marks on the board."
-  (interactive)
-  (let* ((ov (sgf-get-overlay)))
-  )
 
 
 (defvar sgf-mode-graphical-map
   (let ((map (make-sparse-keymap)))
+    ;; navigation functions
     (define-key map "f" 'sgf-forward-move)
     (define-key map [hot-forward mouse-1] 'sgf-forward-move)
     (define-key map "b" 'sgf-backward-move)
@@ -1024,23 +1142,29 @@ Mark edit mode allows the user to add and remove marks on the board."
     (define-key map "e" 'sgf-last-move)
     (define-key map [hot-last mouse-1] 'sgf-last-move)
     (define-key map "g" 'sgf-goto-move)
-    (define-key map "n" 'sgf-toggle-move-number)
-    (define-key map "m" 'sgf-toggle-marks)
-    (define-key map "h" 'sgf-toggle-next-hint)
-    (define-key map "v" 'sgf-view-next)
-    (define-key map "k" 'sgf-prune-inclusive) ; kill node
-    (define-key map "s" 'sgf-export-svg)
-    (define-key map "c" 'sgf-edit-comment)
-    (define-key map "i" 'sgf-edit-game-info)
+    ;; display/show functions
+    (define-key map (kbd "s n") 'sgf-toggle-move-number)
+    (define-key map (kbd "s m") 'sgf-toggle-marks)
+    (define-key map (kbd "s h") 'sgf-toggle-next-hint)
+    ;; modify functions
+    (define-key map (kbd "m k") 'sgf-prune-inclusive) ; kill node
+    (define-key map (kbd "m K") 'sgf-prune)
+    (define-key map (kbd "m c") 'sgf-edit-comment)
+    (define-key map (kbd "m n") 'sgf-edit-move-number)
+    (define-key map (kbd "m a") 'sgf-add-mark-triangle)
+    (define-key map (kbd "m d") 'sgf-add-mark-square)
+    (define-key map (kbd "m o") 'sgf-add-mark-circle)
+    (define-key map (kbd "m x") 'sgf-add-mark-cross)
+    (define-key map (kbd "m l") 'sgf-add-mark-label)
+    (define-key map (kbd "m -") 'sgf-delete-mark)
+    (define-key map (kbd "m b") 'sgf-add-setup-black-stone)
+    (define-key map (kbd "m w") 'sgf-add-setup-white-stone)
+    (define-key map (kbd "m i") 'sgf-edit-game-info)
+    (define-key map "z" 'sgf-export-image)
     (define-key map [hot-grid mouse-1] #'sgf-board-click-left)
     (define-key map [hot-grid mouse-3] #'sgf-board-click-right)
     (define-key map [hot-menu mouse-1] #'sgf-menu) ; todo
     (define-key map "p" 'sgf-pass)
-    ;; (define-key map (kbd "m s")  'sgf-add-mark-square)
-    ;; (define-key map 'sgf-add-mark-triangle)
-    ;; (define-key map 'sgf-add-mark-circle)
-    ;; (define-key map 'sgf-add-mark-cross)
-    ;; (define-key map 'sgf-add-mark-label)
     map)
   "Keymap set for the overlay svg display. It is only activated when the overlay is displayed.")
 
