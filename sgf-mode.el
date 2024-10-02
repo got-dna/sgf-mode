@@ -111,12 +111,18 @@
        ))))
 
 
-(defun sgf-create-board-2d (w h &optional default)
+(defun sgf-board-2d-create (w h &optional default)
   "Create a empty 2D board of size WxH with DEFAULT value."
   (let ((board-2d (make-vector h nil)))
     (dotimes (i h) ;; for each row
       (aset board-2d i (make-vector w default)))
     board-2d))
+
+
+(defun sgf-board-2d-clear (board-2d)
+  (dotimes (i (length board-2d))       ;; Loop over rows
+      (dotimes (j (length (aref board-2d i)))  ;; Loop over columns in each row
+        (sgf-board-2d-set (cons i j) 'E board-2d))))  ;; Set each cell to 'E'
 
 
 (defun sgf-board-2d-get (xy board-2d)
@@ -745,44 +751,54 @@ The move number will be incremented."
     (message message-text)))
 
 
-(defun sgf--action-add-setup-stone (event stone)
+(defun sgf--action-setup-stone (event stone)
+  "Add or delete setup stones."
   (let* ((xy (sgf-mouse-event-to-xy event))
          (ov (sgf-get-overlay))
          (svg (overlay-get ov 'svg))
          (game-state (overlay-get ov 'game-state))
          (board-2d (aref game-state 1))
          (curr-lnode (aref game-state 0))
-         (curr-node (aref curr-lnode 1)))
-    (when (sgf-xy-is-empty-p xy board-2d)
-      (if (null (sgf-root-lnode-p curr-lnode))
-          (message "Cannot add setup stones to a non-root node. Move to the beginning of the game with `sgf-first-move'")
-        (if (eq stone 'B)
-            (nconc curr-node (list (cons 'AB (list xy))))
-          (nconc curr-node (list (cons 'AW (list xy)))))
-        (sgf-board-2d-set xy stone board-2d)
-        (sgf-update-svg game-state svg)
-        (sgf-update-display ov)
-        (message "Added %s stone at %s" stone xy)))))
+         (curr-node (aref curr-lnode 1))
+         (prop-key (if (eq stone 'B) 'AB 'AW))   ;; 'AB for black stones, 'AW for white stones
+         (prop (assoc prop-key curr-node))
+         (xys (cdr prop)))
+    (if (sgf-root-lnode-p curr-lnode)
+        (let ((xys (if (member xy xys)
+                       (progn (sgf-board-2d-set xy 'E board-2d)
+                              (delete xy xys))  ;; Remove stone from the list
+                     (progn (sgf-board-2d-set xy stone board-2d)
+                            (nconc xys (list xy))))))
+                (if xys
+                    (if prop
+                        (setcdr prop xys)  ; Update existing entry
+                      (nconc curr-node (list (list prop-key xys)))) ; Add new property entry
+                  ;; If the xy list is empty, remove the property entirely
+                  (setq curr-node (assq-delete-all prop-key curr-node)))
+
+                (sgf-update-svg game-state svg)
+                (sgf-update-display ov)
+                (message "Edited %s stone at %s" stone xy))
+      (message "Cannot edit setup stones on a non-root node. Move to the beginning of the game with `sgf-first-move'"))))
 
 
-(defun sgf-add-setup-black-stone ()
+(defun sgf-edit-setup-black-stone ()
   (interactive)
   (sgf--handle-mouse-input
    ;; Create a closure that captures the value of `stone`
-   (lambda (event) (interactive "e") (sgf--action-add-setup-stone event 'B))
+   (lambda (event) (interactive "e") (sgf--action-setup-stone event 'B))
    "Click on the board to add black stones. Press any other key to exit."))
 
 
-(defun sgf-add-setup-white-stone ()
+(defun sgf-edit-setup-white-stone ()
   (interactive)
   (sgf--handle-mouse-input
      ;; Create a closure that captures the value of `stone`
-   (lambda (event) (interactive "e") (sgf--action-add-setup-stone event 'W))
+   (lambda (event) (interactive "e") (sgf--action-setup-stone event 'W))
    "Click on the board to add white stones. Press any other key to exit."))
 
 
-(defun sgf--action-add-mark (event shape)
-  "Temporarily set up a keymap to add SHAPE marks with mouse clicks."
+(defun sgf--action-mark (event shape)
   (let* ((xy (sgf-mouse-event-to-xy event))
          (ov (sgf-get-overlay))
          (svg (overlay-get ov 'svg))
@@ -791,10 +807,19 @@ The move number will be incremented."
          (curr-node (aref curr-lnode 1))
          (curr-mark (assoc shape curr-node)))
     (if curr-mark
+        ;; If the shape exists, check if the coordinate already exists in the mark list
         (if (member xy (cdr curr-mark))
-            (message "Mark already exists at %s" xy)
+            ;; If the coordinate exists, delete it
+            (progn
+              (setcdr curr-mark (delete xy (cdr curr-mark)))
+              (message "Deleted mark at %s" xy)
+              ;; If no coordinates are left for this mark, remove the mark entirely
+              (unless (cdr curr-mark)
+                (setq curr-node (assq-delete-all shape curr-node))))
+          ;; Otherwise, add the coordinate
           (message "Added mark at %s" xy)
           (setcdr curr-mark (nconc (cdr curr-mark) (list xy))))
+      ;; If the mark doesn't exist, add it
       (message "Added mark at %s" xy)
       (nconc curr-node (list (cons shape (list xy)))))
     ;; Update the display
@@ -802,40 +827,39 @@ The move number will be incremented."
     (sgf-update-display ov)))
 
 
-(defun sgf-add-mark-square ()
-  "Add a square mark on the board of current game state."
+(defun sgf-edit-mark-square ()
+  "Add/delete a square mark on the board of current game state."
   (interactive)
   (sgf--handle-mouse-input
      ;; Create a closure that captures the value of `stone`
-   (lambda (event) (interactive "e") (sgf--action-add-mark event 'SQ))
+   (lambda (event) (interactive "e") (sgf--action-mark event 'SQ))
    "Click on the board to add square mark. Press any other key to exit."))
 
-(defun sgf-add-mark-triangle ()
-  "Add a triangle mark on the board of current game state."
+(defun sgf-edit-mark-triangle ()
+  "Add/delete a triangle mark on the board of current game state."
   (interactive)
   (sgf--handle-mouse-input
      ;; Create a closure that captures the value of `stone`
-   (lambda (event) (interactive "e") (sgf--action-add-mark event 'TR))
+   (lambda (event) (interactive "e") (sgf--action-mark event 'TR))
    "Click on the board to add triangle mark. Press any other key to exit."))
 
-(defun sgf-add-mark-circle ()
-  "Add a circle mark on the board of current game state."
+(defun sgf-edit-mark-circle ()
+  "Add/delete a circle mark on the board of current game state."
   (interactive)
   (sgf--handle-mouse-input
      ;; Create a closure that captures the value of `stone`
-   (lambda (event) (interactive "e") (sgf--action-add-mark event 'CR))
+   (lambda (event) (interactive "e") (sgf--action-mark event 'CR))
    "Click on the board to add circle mark. Press any other key to exit."))
 
-(defun sgf-add-mark-cross ()
-  "Add a cross mark on the board of current game state."
+(defun sgf-edit-mark-cross ()
+  "Add/delete a cross mark on the board of current game state."
   (interactive)
   (sgf--handle-mouse-input
      ;; Create a closure that captures the value of `stone`
-   (lambda (event) (interactive "e") (sgf--action-add-mark event 'MA))
+   (lambda (event) (interactive "e") (sgf--action-mark event 'MA))
    "Click on the board to add cross mark. Press any other key to exit."))
 
-(defun sgf--action-add-mark-label (event)
-  "Add a label mark on the board of current game state."
+(defun sgf--action-mark-label (event)
   (interactive "e")
   (let* ((xy (sgf-mouse-event-to-xy event))
          (ov (sgf-get-overlay))
@@ -855,11 +879,50 @@ The move number will be incremented."
     (sgf-update-svg game-state svg)
     (sgf-update-display ov)))
 
-(defun sgf-add-mark-label ()
-  "Add a label mark on the board of current game state."
+
+(defun sgf--action-mark-label (event)
+  "Add, edit, or delete a label mark on the board of current game state."
+  (interactive "e")
+  (let* ((xy (sgf-mouse-event-to-xy event))
+         (ov (sgf-get-overlay))
+         (svg (overlay-get ov 'svg))
+         (game-state (overlay-get ov 'game-state))
+         (curr-lnode (aref game-state 0))
+         (curr-node (aref curr-lnode 1))
+         (curr-mark (assoc 'LB curr-node))   ;; Check if 'LB (label) mark already exists
+         (xy-label (assoc xy (cdr curr-mark))) ;; Check for existing label at xy
+         (old-txt (if xy-label (cdr xy-label) "")) ;; Old label if exists
+         (new-txt (read-string "Label: " old-txt))) ;; Prompt user for input
+    ;; Only update if the label is changed
+    (unless (string= old-txt new-txt)
+      (if (string-empty-p new-txt)
+          ;; If the new label is empty, delete the label at xy
+          (progn
+            (when xy-label
+              (setcdr curr-mark (delete xy-label (cdr curr-mark)))
+              (message "Deleted label at %s" xy)
+              ;; If no labels remain, remove the 'LB' mark entirely
+              (when (null (cdr curr-mark))
+                (setq curr-node (assq-delete-all 'LB curr-node)))))
+        ;; Otherwise, add or update the label
+        (if xy-label
+            ;; Update the existing label
+            (setcdr xy-label new-txt)
+          ;; Add a new label
+          (if curr-mark
+              (setcdr curr-mark (nconc (cdr curr-mark) (list (cons xy new-txt))))
+            (nconc curr-node (list (cons 'LB (list (cons xy new-txt)))))))
+        (message "Updated label at %s with text '%s'" xy new-txt)))
+    ;; Update the display
+    (sgf-update-svg game-state svg)
+    (sgf-update-display ov)))
+
+
+(defun sgf-edit-mark-label ()
+  "edit a label mark on the board of current game state."
   (interactive)
   (sgf--handle-mouse-input
-   'sgf--action-add-mark-label
+   'sgf--action-mark-label
    "Click on the board to add labels. Press any other key to exit."))
 
 
@@ -875,13 +938,13 @@ The move number will be incremented."
     (dolist (shape '(SQ TR CR MA))
       (let ((curr-mark (assoc shape curr-node)))
         (when (and curr-mark (member xy curr-mark))
-          (message "Delete mark at %s" xy)
           (delete xy curr-mark)
+          (message "Deleted mark at %s" xy)
           (sgf-update-svg game-state svg)
           (sgf-update-display ov))))))
 
 (defun sgf-delete-mark ()
-  "Delete a mark from the current node."
+  "Delete a mark of any shape from the current node."
   (interactive)
   (sgf--handle-mouse-input
    'sgf--action-delete-mark
@@ -922,6 +985,18 @@ The move number will be incremented."
                (sgf--hide-svg ov))))))
 
 
+(defun sgf-process-root (root board-2d &optional clear)
+  ;; process root node to add setup stones
+  (if clear (sgf-board-2d-clear board-2d))
+  (dolist (prop root)
+    (let* ((prop-key (car prop))
+           (prop-vals (cdr prop))
+           (setup-stone (cond ((eq prop-key 'AB) 'B)
+                              ((eq prop-key 'AW) 'W))))
+      (if setup-stone
+          (dolist (xy prop-vals)
+            (sgf-board-2d-set xy setup-stone board-2d))))))
+
 (defun sgf-game-state-from-buffer ()
   "Create game-state (stay at the root) and return."
   (let* ((game-tree (sgf-str-to-game-tree (buffer-string)))
@@ -930,19 +1005,10 @@ The move number will be incremented."
          (w-h (car (alist-get 'SZ root)))
          (w (car w-h)) (h (cdr w-h))
          (turn (car (alist-get 'PL root)))
-         (board-2d (sgf-create-board-2d w h 'E)))
+         (board-2d (sgf-board-2d-create w h 'E)))
     ;; root state
     (sgf-linkup-nodes-in-game-tree (cdr game-tree) root-lnode)
-
-    ;; process root node to add setup stones
-    (dolist (prop root)
-      (let* ((prop-key (car prop))
-             (prop-vals (cdr prop))
-             setup-stone)
-        (cond ((member prop-key '(AB AW))
-               (setq setup-stone (intern (substring (symbol-name prop-key) 1)))
-               (dolist (xy prop-vals)
-                 (sgf-board-2d-set xy setup-stone board-2d))))))
+    (sgf-process-root root board-2d)
     ;; return game-state
     (sgf-game-state root-lnode board-2d nil turn)))
 
@@ -1076,69 +1142,38 @@ The move number will be incremented."
          (menu-keymap
           ;; https://www.gnu.org/software/emacs/manual/html_node/elisp/Menu-Example.html
           `(keymap "Main Menu"
-                   (sgf-toggle-svg-display
-                    menu-item "Diable SVG Display"
-                    sgf-toggle-svg-display)
-                   (sgf-toggle-move-number ; key symbol
-                    menu-item "Show Move Number"
-                    sgf-toggle-move-number
-                    :button
-                    (:toggle . (sgf-game-property-get ,ov :show-move-number)))
-                   (sgf-toggle-next-hint
-                    menu-item "Show Next Hint"
-                    sgf-toggle-next-hint
-                    :button
-                    (:toggle . (sgf-game-property-get ,ov :show-next-hint)))
-                   (sgf-toggle-marks
-                    menu-item "Show Marks"
-                    sgf-toggle-marks
-                    :button
-                    (:toggle . (sgf-game-property-get ,ov :show-mark)))
-                   (seperator-1 menu-item "--")
+                   (sgf-toggle-svg-display menu-item "Diable SVG Display" sgf-toggle-svg-display)
                    (sgf-toggle-allow-suicide-move
                     menu-item "Allow Illegal Move"
                     sgf-toggle-allow-suicide-move
-                    :button
-                    (:toggle . (sgf-game-property-get ,ov :allow-suicide-move)))
+                    :button (:toggle . (sgf-game-property-get ,ov :allow-suicide-move)))
+                    (sgf-toggle-move-number ; key symbol
+                    menu-item "Show Move Number"
+                    sgf-toggle-move-number
+                    :button (:toggle . (sgf-game-property-get ,ov :show-move-number)))
+                   (sgf-toggle-next-hint
+                    menu-item "Show Next Hint"
+                    sgf-toggle-next-hint
+                    :button (:toggle . (sgf-game-property-get ,ov :show-next-hint)))
+                   (sgf-toggle-marks
+                    menu-item "Show Marks"
+                    sgf-toggle-marks
+                    :button (:toggle . (sgf-game-property-get ,ov :show-mark)))
+                   (seperator-1 menu-item "--")
                    (seperator-2 menu-item "--")
-                   (sgf-edit-move-number
-                    menu-item "Edit Move Number"
-                    sgf-edit-move-number)
-                   (sgf-edit-comment
-                    menu-item "Edit Comment"
-                    sgf-edit-comment)
+                   (sgf-edit-move-number menu-item "Edit Move Number" sgf-edit-move-number)
+                   (sgf-edit-comment menu-item "Edit Comment" sgf-edit-comment)
                    (seperator-3 menu-item "--")
-                   (sgf-add-setup-black-stone
-                    menu-item "Add Black Setup Stones"
-                    sgf-add-setup-black-stone)
-                   (sgf-add-setup-white-stone
-                    menu-item "Add White Setup Stones"
-                    sgf-add-setup-white-stone)
-                   (sgf-add-mark-cross
-                    menu-item "Add Cross Mark"
-                    sgf-add-mark-cross)
-                   (sgf-add-mark-square
-                    menu-item "Add Square Mark"
-                    sgf-add-mark-square)
-                   (sgf-add-mark-triangle
-                    menu-item "Add Triangle Mark"
-                    sgf-add-mark-triangle)
-                   (sgf-add-mark-circle
-                    menu-item "Add Circle Mark"
-                    sgf-add-mark-circle)
-                   (sgf-add-mark-label
-                    menu-item "Add Label"
-                    sgf-add-mark-label)
-                   (sgf-delete-mark
-                    menu-item "Delete Mark"
-                    sgf-delete-mark)
+                   (sgf-edit-setup-black-stone menu-item "Edit Setup Stone (black)" sgf-edit-setup-black-stone)
+                   (sgf-edit-setup-white-stone menu-item "Edit Setup Stone (white)" sgf-edit-setup-white-stone)
+                   (sgf-edit-mark-cross menu-item "Edit Cross Mark" sgf-edit-mark-cross)
+                   (sgf-edit-mark-square menu-item "Edit Square Mark" sgf-edit-mark-square)
+                   (sgf-edit-mark-triangle menu-item "Edit Triangle Mark" sgf-edit-mark-triangle)
+                   (sgf-edit-mark-circle menu-item "Edit Circle Mark" sgf-edit-mark-circle)
+                   (sgf-edit-mark-label menu-item "Edit Label" sgf-edit-mark-label)
+                   (sgf-delete-mark menu-item "Delete Mark" sgf-delete-mark)
                    (seperator-4 menu-item "--")
-                   (sgf-export-image
-                    menu-item "Export Image"
-                    sgf-export-image)
-                   (sgf-mark-edit-mode
-                    menu-item "Mark Edit Mode"
-                    sgf-mark-edit-mode))))
+                   (sgf-export-image menu-item "Export Image" sgf-export-image))))
     (popup-menu menu-keymap)))
 
 
@@ -1163,14 +1198,14 @@ The move number will be incremented."
     (define-key map (kbd "m K") 'sgf-prune)
     (define-key map (kbd "m c") 'sgf-edit-comment)
     (define-key map (kbd "m n") 'sgf-edit-move-number)
-    (define-key map (kbd "m a") 'sgf-add-mark-triangle)
-    (define-key map (kbd "m d") 'sgf-add-mark-square)
-    (define-key map (kbd "m o") 'sgf-add-mark-circle)
-    (define-key map (kbd "m x") 'sgf-add-mark-cross)
-    (define-key map (kbd "m l") 'sgf-add-mark-label)
+    (define-key map (kbd "m a") 'sgf-edit-mark-triangle)
+    (define-key map (kbd "m d") 'sgf-edit-mark-square)
+    (define-key map (kbd "m o") 'sgf-edit-mark-circle)
+    (define-key map (kbd "m x") 'sgf-edit-mark-cross)
+    (define-key map (kbd "m l") 'sgf-edit-mark-label)
     (define-key map (kbd "m -") 'sgf-delete-mark)
-    (define-key map (kbd "m b") 'sgf-add-setup-black-stone)
-    (define-key map (kbd "m w") 'sgf-add-setup-white-stone)
+    (define-key map (kbd "m b") 'sgf-edit-setup-black-stone)
+    (define-key map (kbd "m w") 'sgf-edit-setup-white-stone)
     (define-key map (kbd "m i") 'sgf-edit-game-info)
     (define-key map "z" 'sgf-export-image)
     (define-key map [hot-grid mouse-1] #'sgf-board-click-left)
