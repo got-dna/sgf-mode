@@ -593,7 +593,7 @@ If neither 'B nor 'W is present, return nil."
 
 
 (defun sgf-prune-inclusive ()
-  "Delete all its children of the current node including the current node."
+  "Delete the current node and all its children."
   (interactive)
   (sgf-backward-move)
   (sgf-prune))
@@ -743,12 +743,17 @@ The move number will be incremented."
 (defun sgf--handle-mouse-input (action-fn message-text)
   "Generalized handler for mouse input, calling ACTION-FN for specific actions."
   ;; Define a transient keymap that captures mouse clicks on the hot grid
-  (let ((transient-map (make-sparse-keymap)))
+  (let ((map (make-sparse-keymap)))
     ;; Handle mouse clicks
-    (define-key transient-map [hot-grid mouse-1] action-fn)
+    (define-key map [hot-grid mouse-1] action-fn)
     ;; Use transient map and exit on any key press or mouse event outside [hot-grid mouse-1]
-    (set-transient-map transient-map t)
-    (message message-text)))
+    (set-transient-map
+     map
+     ;; type C-g to exit map
+     (lambda () (not (equal last-input-event ?\C-g)))
+     ;; show exit message
+     (lambda () (message "Exited edit mode."))
+      (concat message-text "Type C-g to exit."))))
 
 
 (defun sgf--action-setup-stone (event stone)
@@ -778,8 +783,8 @@ The move number will be incremented."
 
                 (sgf-update-svg game-state svg)
                 (sgf-update-display ov)
-                (message "Edited %s stone at %s" stone xy))
-      (message "Cannot edit setup stones on a non-root node. Move to the beginning of the game with `sgf-first-move'"))))
+                (format "Edited %s stone at %s" stone xy))
+      (error "Cannot edit setup stones on a non-root node. Move to the beginning of the game with `sgf-first-move'"))))
 
 
 (defun sgf-edit-setup-black-stone ()
@@ -787,7 +792,7 @@ The move number will be incremented."
   (sgf--handle-mouse-input
    ;; Create a closure that captures the value of `stone`
    (lambda (event) (interactive "e") (sgf--action-setup-stone event 'B))
-   "Click on the board to add black stones. Press any other key to exit."))
+   "Click on the board to edit black stones. "))
 
 
 (defun sgf-edit-setup-white-stone ()
@@ -795,7 +800,7 @@ The move number will be incremented."
   (sgf--handle-mouse-input
      ;; Create a closure that captures the value of `stone`
    (lambda (event) (interactive "e") (sgf--action-setup-stone event 'W))
-   "Click on the board to add white stones. Press any other key to exit."))
+   "Click on the board to edit white stones. "))
 
 
 (defun sgf--action-mark (event shape)
@@ -833,7 +838,7 @@ The move number will be incremented."
   (sgf--handle-mouse-input
      ;; Create a closure that captures the value of `stone`
    (lambda (event) (interactive "e") (sgf--action-mark event 'SQ))
-   "Click on the board to add square mark. Press any other key to exit."))
+   "Click on the board to edit square mark. "))
 
 (defun sgf-edit-mark-triangle ()
   "Add/delete a triangle mark on the board of current game state."
@@ -841,7 +846,7 @@ The move number will be incremented."
   (sgf--handle-mouse-input
      ;; Create a closure that captures the value of `stone`
    (lambda (event) (interactive "e") (sgf--action-mark event 'TR))
-   "Click on the board to add triangle mark. Press any other key to exit."))
+   "Click on the board to edit triangle mark. "))
 
 (defun sgf-edit-mark-circle ()
   "Add/delete a circle mark on the board of current game state."
@@ -849,7 +854,7 @@ The move number will be incremented."
   (sgf--handle-mouse-input
      ;; Create a closure that captures the value of `stone`
    (lambda (event) (interactive "e") (sgf--action-mark event 'CR))
-   "Click on the board to add circle mark. Press any other key to exit."))
+   "Click on the board to edit circle mark. "))
 
 (defun sgf-edit-mark-cross ()
   "Add/delete a cross mark on the board of current game state."
@@ -857,27 +862,7 @@ The move number will be incremented."
   (sgf--handle-mouse-input
      ;; Create a closure that captures the value of `stone`
    (lambda (event) (interactive "e") (sgf--action-mark event 'MA))
-   "Click on the board to add cross mark. Press any other key to exit."))
-
-(defun sgf--action-mark-label (event)
-  (interactive "e")
-  (let* ((xy (sgf-mouse-event-to-xy event))
-         (ov (sgf-get-overlay))
-         (svg (overlay-get ov 'svg))
-         (game-state (overlay-get ov 'game-state))
-         (curr-lnode (aref game-state 0))
-         (curr-node (aref curr-lnode 1))
-         (curr-mark (assoc 'LB curr-node)))
-    (if curr-mark
-        (if (member xy (cdr curr-mark))
-            (message "Mark already exists at %s" xy)
-          (message "Added mark at %s" xy)
-          (setcdr curr-mark (nconc (cdr curr-mark) (list xy))))
-      (message "Added mark at %s" xy)
-      (nconc curr-node (list (cons shape (list xy)))))
-    ;; Update the display
-    (sgf-update-svg game-state svg)
-    (sgf-update-display ov)))
+   "Click on the board to edit cross mark. "))
 
 
 (defun sgf--action-mark-label (event)
@@ -923,7 +908,7 @@ The move number will be incremented."
   (interactive)
   (sgf--handle-mouse-input
    'sgf--action-mark-label
-   "Click on the board to add labels. Press any other key to exit."))
+   "Click on the board to edit label. "))
 
 
 (defun sgf--action-delete-mark (event)
@@ -948,7 +933,7 @@ The move number will be incremented."
   (interactive)
   (sgf--handle-mouse-input
    'sgf--action-delete-mark
-   "Click on the board to delete marks. Press any other key to exit."))
+   "Click on the board to delete marks. "))
 
 
 ;; (defun sgf-track-dragging ()
