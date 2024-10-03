@@ -10,7 +10,7 @@
 
 ;;; Code:
 
-(require 'sgf-io)
+(require 'sgf-game)
 (require 'sgf-svg)
 
 
@@ -25,34 +25,6 @@
 
 (defvar sgf-show-mark t
   "Show marks on the board.")
-
-;; Linked Node Object
-(defun sgf-linked-node (prev-node &optional current-node next-nodes)
-  "Define node object. It is doubly linked list."
-  (vector prev-node current-node next-nodes))
-
-;; Game State
-(defun sgf-game-state (linked-node
-                       board-2d
-                       &optional
-                         ko
-                         turn
-                         prisoners
-                         undos)
-  "Define game state object. The move number, board-2d, ko, prisoners are re-computed every time when traversing the moves."
-  (vector linked-node                 ; 0 current node
-          board-2d                    ; 1
-          ko                          ; 3 ko position
-          (or turn 'B)                        ; 2 move turn
-          ;; 4. accumulated number of prisoners (b . w)
-          (or prisoners (cons 0 0))
-          ;; 5. stack of changes. each change contains:
-          ;; - a list of cons cells: xy positions for black stones
-          ;; - a list of cons cells: xy positions for white stones
-          ;; - a list of cons cells: xy positions for empty
-          ;; - ko position (cons cell)
-          ;; - turn
-          undos))
 
 
 (defun sgf-revert-undo (change game-state)
@@ -292,34 +264,6 @@ If neither 'B nor 'W is present, return nil."
   "Show the comment of the move/node."
   ;; if 'C' does not exist, it shows an empty str.
   (message (mapconcat 'identity (alist-get 'C node) " ")))
-
-
-;; todo: rename
-(defun nested-level-of-first (lst)
-  "Return the nesting level of the first element in the list LST.
-(nested-level-of-first '(a b (c d))) => 0
-(nested-level-of-first '((a b) c d)) => 1"
-  (if (listp (car lst))
-      (1+ (nested-level-of-first (car lst)))  ;; If the first element is a list, go deeper.
-    0))
-
-
-(defun sgf-linkup-nodes-in-game-tree (game-tree head-lnode)
-  "Link up nodes in a branch of the game tree."
-  (let* ((prev-lnode head-lnode)
-         curr-lnode nested-level)
-    (dolist (i game-tree)
-      (setq nested-level (nested-level-of-first i))
-      (cond ((= nested-level 2) ;; this is a fork
-             (sgf-linkup-nodes-in-game-tree i prev-lnode))
-            ((= nested-level 1) ;; this is a node
-             ;; create new node
-             (setq curr-lnode (sgf-linked-node prev-lnode i))
-             ;; link prev-node to the new node
-             (aset prev-lnode 2 (append (aref prev-lnode 2) (list curr-lnode)))
-             ;; this line reversed the order of branches
-             ;; (aset prev-lnode 2 (cons curr-lnode (aref prev-lnode 2)))
-             (setq prev-lnode curr-lnode))))))
 
 
 (defun sgf-update-display (ov &optional svg hot-areas)
@@ -648,7 +592,7 @@ Cases:
       ;; Case 2: Clicked on an empty position not equal to ko
       ((sgf-valid-move-p xy turn game-state sgf-allow-suicide-move)
        (let ((n (length next-lnodes))
-             (new-lnode (sgf-linked-node curr-lnode `((,turn ,xy)))))
+             (new-lnode (sgf-game-linked-node curr-lnode `((,turn ,xy)))))
          ;; add the new node as the last branch
          (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
          (sgf-forward-move n) ; if n=0, case 2.1; otherwise, case 2.2
@@ -735,7 +679,7 @@ The move number will be incremented."
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (next-lnodes (aref curr-lnode 2))
-         (new-lnode (sgf-linked-node curr-lnode '((W)))))
+         (new-lnode (sgf-game-linked-node curr-lnode '((W)))))
     (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
     (sgf-update-display ov)))
 
@@ -957,10 +901,12 @@ The move number will be incremented."
 ;;           (overlay-put ov 'display (svg-image svg :map hot-areas))
 ;;           (overlay-put ov 'svg svg)))))
 
-(defun sgf-toggle-svg-display (&optional choice)
+(defun sgf-toggle-svg-display (&optional beg end choice)
   "Toggle graphical. Keep the overlay."
   (interactive)
-  (let ((ov (or (sgf-get-overlay) (sgf-setup-overlay))))
+  (let* ((beg (or beg (point-min)))
+        (end (or end (point-max)))
+        (ov (or (sgf-get-overlay) (sgf-setup-overlay beg end))))
     (cond ((equal choice 'hide)
            (sgf--hide-svg ov))
           ((equal choice 'show)
@@ -970,41 +916,13 @@ The move number will be incremented."
                (sgf--hide-svg ov))))))
 
 
-(defun sgf-process-root (root board-2d &optional clear)
-  ;; process root node to add setup stones
-  (if clear (sgf-board-2d-clear board-2d))
-  (dolist (prop root)
-    (let* ((prop-key (car prop))
-           (prop-vals (cdr prop))
-           (setup-stone (cond ((eq prop-key 'AB) 'B)
-                              ((eq prop-key 'AW) 'W))))
-      (if setup-stone
-          (dolist (xy prop-vals)
-            (sgf-board-2d-set xy setup-stone board-2d))))))
-
-(defun sgf-game-state-from-buffer ()
-  "Create game-state (stay at the root) and return."
-  (let* ((game-tree (sgf-str-to-game-tree (buffer-string)))
-         (root (car game-tree))
-         (root-lnode (sgf-linked-node nil root nil))
-         (w-h (car (alist-get 'SZ root)))
-         (w (car w-h)) (h (cdr w-h))
-         (turn (car (alist-get 'PL root)))
-         (board-2d (sgf-board-2d-create w h 'E)))
-    ;; root state
-    (sgf-linkup-nodes-in-game-tree (cdr game-tree) root-lnode)
-    (sgf-process-root root board-2d)
-    ;; return game-state
-    (sgf-game-state root-lnode board-2d nil turn)))
-
-
-(defun sgf-setup-overlay ()
+(defun sgf-setup-overlay (beg end)
   "Create overlay and setup overlay properties."
   ;; set front- and rear-advance parameters to allow
   ;; the overlay cover the whole buffer even if it is
   ;; updated from game playing.
-  (let* ((ov (make-overlay (point-min) (point-max) nil nil t))
-         (game-state (sgf-game-state-from-buffer))
+  (let* ((ov (make-overlay beg end nil nil t))
+         (game-state (sgf-game-from-buffer beg end))
          (board-2d   (aref game-state 1))
          (h (length board-2d))
          (w (length (aref board-2d 0)))
@@ -1098,19 +1016,6 @@ The move number will be incremented."
 ;;   (let ((new-ov (make-overlay (point-min) (point-max) (current-buffer) nil t)))
 ;;     (sgf-setup-overlay new-ov)
 ;;     new-ov))
-
-;; todo. match only one regexp and highlight different groups
-(defvar sgf-mode-font-lock-keywords
-  `((,sgf-property-re
-     ;; property key
-     (1 font-lock-keyword-face))        ; match the 1st group
-    (,sgf-property-value-re
-     ;; property value
-     (0 font-lock-comment-face))        ; match whole regexp
-    (,sgf-node-re
-     (0 font-lock-builtin-face)))       ; match ;
-  "a list of font-lock keywords for SGF mode.")
-
 
 
 (defvar sgf-mode-map
@@ -1213,7 +1118,8 @@ The following commands are available:
 
 \\{sgf-mode-map}"
   :keymap sgf-mode-map
-  (setq font-lock-defaults '(sgf-mode-font-lock-keywords)))
+
+  )
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.sgf\\'" . sgf-mode))
