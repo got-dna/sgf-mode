@@ -882,19 +882,20 @@ The move number will be incremented."
 ;;           (overlay-put ov 'display (svg-image svg :map hot-areas))
 ;;           (overlay-put ov 'svg svg)))))
 
-(defun sgf-toggle-svg-display (&optional beg end choice)
-  "Toggle graphical. Keep the overlay."
-  (interactive)
-  (let* ((beg (or beg (point-min)))
-         (end (or end (point-max)))
-         (ov (or (sgf-get-overlay) (sgf-setup-overlay beg end))))
-    (cond ((equal choice 'hide)
-           (sgf--hide-svg ov))
-          ((equal choice 'show)
-           (sgf--display-svg ov))
-          (t (if (null (overlay-get ov 'display))
-                 (sgf--display-svg ov)
-               (sgf--hide-svg ov))))))
+(defun sgf-toggle-svg-display (keep &optional beg end)
+  "Toggle graphical display.
+
+If BEG and END are nil, parse the whole buffer as SGF content. If KEEP
+is non-nil, just hide display and do not remove the old overlay;
+otherwise, delete and create new overlay."
+  (interactive "P")
+  (let* ((ov (sgf-get-overlay)))
+    (if (and keep ov)
+        (if (overlay-get ov 'display)
+            (sgf--hide-svg ov)
+          (sgf--display-svg ov))
+      (sgf-setup-overlay (or beg (point-min))
+                         (or end (point-max))))))
 
 
 (defun sgf-setup-overlay (beg end)
@@ -902,6 +903,7 @@ The move number will be incremented."
   ;; set front- and rear-advance parameters to allow
   ;; the overlay cover the whole buffer even if it is
   ;; updated from game playing.
+  (remove-overlays beg end)
   (let* ((ov (make-overlay beg end nil nil t))
          (game-state (sgf-game-from-buffer beg end))
          (board-2d   (aref game-state 1))
@@ -925,7 +927,7 @@ The move number will be incremented."
                        :editable t))
     (overlay-put ov 'svg svg)
     (overlay-put ov 'hot-areas hot-areas)
-
+    (overlay-put ov 'keymap sgf-mode-graphical-map)
     (sgf-update-display ov)
     ov))
 
@@ -958,6 +960,11 @@ The move number will be incremented."
     (sgf-get-overlay-at)))
 
 
+(defun sgf--hide-svg (ov)
+  (overlay-put ov 'display nil)
+  (overlay-put ov 'keymap nil))
+
+
 (defun sgf--display-svg (ov)
   "Display SVG in the overlay (as well as setting up keyboard)."
   (let ((svg (overlay-get ov 'svg))
@@ -966,11 +973,6 @@ The move number will be incremented."
       (error "Overlay %S does not have 'svg' or 'hot-areas' properties" ov))
     (overlay-put ov 'keymap sgf-mode-graphical-map)
     (overlay-put ov 'display (svg-image svg :map hot-areas))))
-
-
-(defun sgf--hide-svg (ov)
-  (overlay-put ov 'display nil)
-  (overlay-put ov 'keymap nil))
 
 
 ;; (defun sgf-redo-overlay ()
