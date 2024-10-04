@@ -179,7 +179,7 @@
                    [W E E]]))
     (should (sgf-suicide-p '(0 . 0) 'W board-2d))
     ;; make sure board-2d is not changed
-    (should (equal (sgf-board-2d-get '(0 . 0) board-2d) 'E))
+    (should (equal (sgf-game-board-get '(0 . 0) board-2d) 'E))
     (should (sgf-suicide-p '(0 . 0) 'B board-2d))
     (should-not (sgf-suicide-p '(2 . 2) 'B board-2d))
     (should-not (sgf-suicide-p '(2 . 1) 'B board-2d))

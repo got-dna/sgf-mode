@@ -9,6 +9,7 @@
 ;;; Code:
 
 (defcustom sgf-svg-interval 25
+(require 'sgf-game)
   "Default pixels for the size of grid cells.
 It is a reference for all other element sizes."
   :type '(integer)
@@ -163,7 +164,7 @@ attributes(cx, cy, fx, fy, r, etc...)"
                 :stroke "black" :stroke-width line-width))
 
     ;; Hoshi/Stars
-    (dolist (hoshi (sgf-board-hoshi w h))
+    (dolist (hoshi (sgf-game-board-hoshi w h))
       (svg-circle grid
                   (* sgf-svg-interval (car hoshi))
                   (* sgf-svg-interval (cdr hoshi))
@@ -323,7 +324,7 @@ It removes the old marks and adds the new marks."
           (dolist (xy (cdr prop))
             (let ((x (car xy))
                   (y (cdr xy))
-                  (xy-state (sgf-board-2d-get xy board-2d)))
+                  (xy-state (sgf-game-board-get xy board-2d)))
               (sgf-svg-add-mark type marks-group x y xy-state))))
       (if (equal type 'LB)
           (dolist (prop-val (cdr prop))
@@ -331,7 +332,7 @@ It removes the old marks and adds the new marks."
                   (xy (car prop-val))
                   (x (car xy))
                   (y (cdr xy))
-                  (xy-state (sgf-board-2d-get xy board-2d)))
+                  (xy-state (sgf-game-board-get xy board-2d)))
               (sgf-svg-add-text marks-group x y label xy-state)))))))
 
 
@@ -383,7 +384,7 @@ It removes the old marks and adds the new marks."
     (sgf-svg-clear-node-content svg-group)
     (dotimes (y (length board-2d))
       (dotimes (x (length (aref board-2d y)))
-        (let ((state (sgf-board-2d-get (cons x y) board-2d)))
+        (let ((state (sgf-game-board-get (cons x y) board-2d)))
           (unless (equal state 'E) (sgf-svg-add-stone svg-group x y state)))))))
 
 
@@ -403,7 +404,7 @@ It removes the old marks and adds the new marks."
 It computes the depth of LNODE from the root node or previous MN
 property, not include setup node."
   (let ((num 0) mn-prop)
-    (while (and (not (sgf-root-lnode-p lnode))
+    (while (and (not (sgf-root-p lnode))
                 (not (setq mn-prop (car (alist-get 'MN (aref lnode 1)))))
       (setq num (1+ num)))
       (setq lnode (aref lnode 0)))
@@ -420,14 +421,14 @@ property, not include setup node."
          mvnum)
     (sgf-svg-update-status-mvnum svg curr-mvnum)
     (sgf-svg-clear-node-content svg-group)
-    (while (not (sgf-root-lnode-p curr-lnode))
+    (while (not (sgf-root-p curr-lnode))
       (let* ((node (aref curr-lnode 1))
              (move (sgf-process-move node))
              (xy (cdr move)))
         (unless (gethash xy numbered-xys)
           ;; add move number only if it does not already have a number.
           (let* ((stone (car move))
-                 (xy-state (sgf-board-2d-get xy board-2d))
+                 (xy-state (sgf-game-board-get xy board-2d))
                  (color (if (eq xy-state 'E)
                             (sgf-svg-set-color (sgf-enemy-stone stone))
                           (sgf-svg-set-color xy-state))))

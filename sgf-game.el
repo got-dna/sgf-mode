@@ -39,7 +39,7 @@ the SGF content of FILE."
   (let* ((root-node (aref root-lnode 1))
          (size (car (alist-get 'SZ root-node)))
          (w (car size)) (h (cdr size))
-         (board-2d (sgf-board-2d-create w h 'E))
+         (board-2d (sgf-game-board-create w h 'E))
          (turn (car (alist-get 'PL root-node))))
     (sgf-game-setup-board root-node board-2d)
     (sgf-game-state root-lnode board-2d nil turn)))
@@ -54,7 +54,7 @@ the SGF content of FILE."
                               ((eq prop-key 'AW) 'W))))
       (if setup-stone
           (dolist (xy prop-vals)
-            (sgf-board-2d-set xy setup-stone board-2d))))))
+            (sgf-game-board-set xy setup-stone board-2d))))))
 
 
 (defun sgf-game-linkup-nodes (head-lnode sgf-tree)
@@ -231,6 +231,52 @@ the SGF content of FILE."
   ;; Convert Spaces
   (setq txt (replace-regexp-in-string "\t\\|\v\\|\n\r?\\|\r\n?" " " txt))
   txt)
+
+
+(defun sgf-game-board-create (w h &optional default)
+  "Create a empty 2D board of size WxH with DEFAULT value."
+  (let ((board-2d (make-vector h nil)))
+    (dotimes (i h) ;; for each row
+      (aset board-2d i (make-vector w default)))
+    board-2d))
+
+
+(defun sgf-game-board-clear (board-2d)
+  "Clear 2D board"
+  (dotimes (i (length board-2d))       ;; Loop over rows
+      (dotimes (j (length (aref board-2d i)))  ;; Loop over columns in each row
+        (sgf-game-board-set (cons i j) 'E board-2d))))  ;; Set each cell to 'E'
+
+
+(defun sgf-game-board-get (xy board-2d)
+  (if (consp xy)
+      (aref (aref board-2d (cdr xy)) (car xy))))
+
+
+(defun sgf-game-board-set (xy v board-2d)
+  "Do nothing if xy is nil"
+  (if (consp xy)
+      (aset (aref board-2d (cdr xy)) (car xy) v)))
+
+
+(defun sgf-game-board-hoshi (w h)
+  "Return a list of hoshi positions on a board of size WxH."
+  (append
+   ;; center position
+   (if (and (= (logand w 1) 1) (= (logand h 1) 1)) (list (cons (/ (1- w) 2)  (/ (1- h) 2))))
+   ;; 4 corners
+   (if (and (> w 12) (> h 12))
+       (list (cons 3       3)
+             (cons (- w 4) 3)
+             (cons 3       (- h 4))
+             (cons (- w 4) (- h 4))))
+   ;; 4 sides
+   (if (and (> w 18) (> h 18) (= (logand h 1) 1))
+       (list (cons 3       (/ (1- h) 2))
+             (cons (- w 4) (/ (1- h) 2))))
+   (if (and (> w 18) (> h 18) (= (logand w 1) 1))
+       (list (cons (/ (1- w) 2) 3)
+             (cons (/ (1- w) 2) (- h 4))))))
 
 
 (provide 'sgf-game)
