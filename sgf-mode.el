@@ -12,6 +12,7 @@
 
 (require 'sgf-game)
 (require 'sgf-svg)
+(require 'sgf-write)
 
 
 (defvar sgf-allow-suicide-move nil
@@ -445,7 +446,7 @@ If neither 'B nor 'W is present, return nil."
                    (list (list 'MN new-mvnum))))
       (sgf-update-svg game-state svg)
       (sgf-update-display ov)
-      (sgf-update-buffer-from-game lnode (overlay-buffer ov)))))
+      (sgf-write-game-to-buffer lnode (overlay-buffer ov)))))
 
 
 (defun sgf-edit-comment (&optional lnode)
@@ -489,7 +490,7 @@ If neither 'B nor 'W is present, return nil."
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0)))
     (aset curr-lnode 2 nil)
-    (sgf-update-buffer-from-game curr-lnode (overlay-buffer ov))))
+    (sgf-write-game-to-buffer curr-lnode (overlay-buffer ov))))
 
 
 (defun sgf-prune-inclusive ()
@@ -552,7 +553,7 @@ Cases:
          ;; add the new node as the last branch
          (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
          (sgf-forward-move n) ; if n=0, case 2.1; otherwise, case 2.2
-         (sgf-update-buffer-from-game curr-lnode (overlay-buffer ov))))
+         (sgf-write-game-to-buffer curr-lnode (overlay-buffer ov))))
       ;; Case 3.
       (t (message "Illegal move!")))))
 
