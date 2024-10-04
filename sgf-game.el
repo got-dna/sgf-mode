@@ -149,7 +149,7 @@ the SGF content of FILE."
 
 (defun sgf-game-prop-SZ (val &optional beg end)
   "Process the SZ property from an SGF file and return a cons cell of board width and height."
-  (let* ((nums (split-string val ":"))
+  (let* ((nums (string-split val ":" t))
          (width (car nums))
          (height (or (cadr nums) width))
          (w (string-to-number width))
@@ -186,7 +186,7 @@ the SGF content of FILE."
 (defun sgf-game-prop-position (val &optional beg end)
   "https://www.red-bean.com/sgf/sgf4.html#3.5.1
   Convert a multi-position string in 'aa:ac' format into a list of numeric pairs."
-  (let* ((positions (split-string val ":"))
+  (let* ((positions (string-split val ":" t))
          (count (length positions)))
     (cond ((= count 1)
            (list (sgf-game-prop-single-position val beg end)))
