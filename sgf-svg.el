@@ -2,20 +2,29 @@
 
 ;; Author: Zech Xu
 ;; Version: version
-;; Package-Requires: dependencies
+;; Package-Requires: ((svg "0.5.1") (emacs "29.4"))
 ;; Homepage: homepage
 ;; Keywords: svg, go, game
 
+;;; Commentary:
+;; SVG rendering of Go board and game moves.
+
 ;;; Code:
 
-(defcustom sgf-svg-interval 25
+(require 'svg)
 (require 'sgf-game)
+
+(defgroup sgf-svg nil
+  "SVG visualization of a game of go."
+  :group 'games)
+
+(defcustom sgf-svg-interval 27
   "Default pixels for the size of grid cells.
 It is a reference for all other element sizes."
   :type '(integer)
   :group 'sgf-svg)
 
-(defcustom sgf-svg-margin 30
+(defcustom sgf-svg-margin 27
   "Default pixels for the margin of the board."
   :type '(integer)
   :group 'sgf-svg)
@@ -31,7 +40,7 @@ It is a reference for all other element sizes."
   :group 'sgf-svg)
 
 
-(defcustom sgf-svg-font-size  (/ sgf-svg-interval 2)
+(defcustom sgf-svg-font-size  (* sgf-svg-interval 0.5)
   "Default font family for the board."
   :type '(integer)
   :group 'sgf-svg)
@@ -216,16 +225,17 @@ attributes(cx, cy, fx, fy, r, etc...)"
     (cons svg hot-areas)))
 
 
+;; todo: not used
 (defun sgf-svg-create-mark-edit-buttons (menu-bar)
   "Create all the buttons and return the hot areas for the mark edit buttons."
   (let ((btns '((hot-quit "Quit" "quit")
                 (hot-cr "󰧟" "Add circle (CR)") ; ◯
-                (hot-ma "󱎘" "Add cross (MA)"))
+                (hot-ma "󱎘" "Add cross (MA)")
                 (hot-tr "󰔶" "Add triangle (TR)") ; △
                 (hot-sq "󰨕" "Add square (SQ)") ; ▢
                 (hot-lb "󰁥" "Add text label (LB)")
                 (hot-del "Del" "Delete the mark")))
-    (x sgf-svg-padding) (y sgf-svg-padding)))
+        (x sgf-svg-padding) (y sgf-svg-padding))))
 
 
 (defun sgf-svg-create-menu-buttons (menu-bar)
@@ -329,10 +339,10 @@ It removes the old marks and adds the new marks."
       (if (equal type 'LB)
           (dolist (prop-val (cdr prop))
             (let* ((label (cdr prop-val))
-                  (xy (car prop-val))
-                  (x (car xy))
-                  (y (cdr xy))
-                  (xy-state (sgf-game-board-get xy board-2d)))
+                   (xy (car prop-val))
+                   (x (car xy))
+                   (y (cdr xy))
+                   (xy-state (sgf-game-board-get xy board-2d)))
               (sgf-svg-add-text marks-group x y label xy-state)))))))
 
 
@@ -365,6 +375,7 @@ It removes the old marks and adds the new marks."
          ;; librsvg issue: https://github.com/lovell/sharp/issues/1996
          ;; :alignment-baseline "central"
          :font-family sgf-svg-font-family
+         :font-size sgf-svg-font-size
          :font-weight "bold"
          attributes))
 
@@ -406,7 +417,7 @@ property, not include setup node."
   (let ((num 0) mn-prop)
     (while (and (not (sgf-root-p lnode))
                 (not (setq mn-prop (car (alist-get 'MN (aref lnode 1)))))
-      (setq num (1+ num)))
+                (setq num (1+ num)))
       (setq lnode (aref lnode 0)))
     (+ (or mn-prop 0) num)))
 

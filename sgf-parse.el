@@ -165,7 +165,7 @@
 
     ;; PropValue+
     (while (progn (sgf-parse-skip-ws) (equal (char-after) ?\[))
-        (push (sgf-parse-prop-value) values))
+      (push (sgf-parse-prop-value) values))
     (setq values (nreverse values))
     (if (null values)
         (error "%d: Property requires one or more PropValues" (point)))
@@ -263,13 +263,13 @@ output to and pop up a buffer named NAME. the result of PROCESS-FN."
          (with-temp-buffer
            (insert-file-contents-literally file)
            (funcall process-fn (point-min) (point-max))))) ;; Process the buffer
-      (if name
-          (let ((buffer (generate-new-buffer name)))
-            (with-current-buffer buffer
-              (insert (pp-to-string result))
-              (emacs-lisp-mode))  ;; Enable emacs-lisp-mode for syntax highlighting
-            (pop-to-buffer buffer)))
-      result))
+    (if name
+        (let ((buffer (generate-new-buffer name)))
+          (with-current-buffer buffer
+            (insert (pp-to-string result))
+            (emacs-lisp-mode))  ;; Enable emacs-lisp-mode for syntax highlighting
+          (pop-to-buffer buffer)))
+    result))
 
 
 (defun sgf-parse-file-pop (file name)

@@ -108,19 +108,19 @@ liberty is found.
 If xy is nil (for a move of pass), it returns (t . nil)."
   (let ((curr-color (sgf-game-board-get xy board-2d)))
     (cond
-     ((null xy) (cons t nil))
-     ((equal curr-color 'E) (cons t visited))
-     ((member xy visited) (cons nil visited))
-     ((or (null last-color) (equal last-color curr-color))
-      (setq visited (cons xy visited))
-      (let ((liberty-found nil))
-        (dolist (neighbor (sgf-neighbors-xy xy board-2d) (cons liberty-found visited))
-          (when neighbor
-            (let ((result (sgf-check-liberty neighbor board-2d curr-color visited)))
-              (if (car result)
-                  (setq liberty-found t)
-                (setq visited (cdr result))))))))
-     (t (cons nil visited)))))
+      ((null xy) (cons t nil))
+      ((equal curr-color 'E) (cons t visited))
+      ((member xy visited) (cons nil visited))
+      ((or (null last-color) (equal last-color curr-color))
+       (setq visited (cons xy visited))
+       (let ((liberty-found nil))
+         (dolist (neighbor (sgf-neighbors-xy xy board-2d) (cons liberty-found visited))
+           (when neighbor
+             (let ((result (sgf-check-liberty neighbor board-2d curr-color visited)))
+               (if (car result)
+                   (setq liberty-found t)
+                 (setq visited (cdr result))))))))
+      (t (cons nil visited)))))
 
 
 (defun sgf-capture-stones (xy board-2d)
@@ -642,21 +642,21 @@ the same position during the whole game; this function finds the closest
 one to the current game state.
 
 Returns linked node found or nil if not. The game-state remains unchanged."
-(let* ((board-2d  (aref game-state 1))  ;; Extract the current board
-       (stone (sgf-game-board-get xy board-2d))  ;; Get the stone at the XY position
-       (curr-lnode (aref game-state 0))
-       found-lnode)
-  (while (not found-lnode)  ;; Loop until node is found or root is reached
-    (let* ((curr-node (aref curr-lnode 1))  ;; Extract the SGF node data
-           (play (sgf-process-move curr-node))  ;; Process the current move
-           (stone-i (car play))  ;; Stone placed in this node
-           (xy-i (cdr play)))  ;; Coordinates of the move
-      (if (and (equal stone-i stone) (equal xy-i xy))  ;; Check if it's the node we're looking for
-          (setq found-lnode curr-lnode)  ;; Node found
-        (if (null (aref curr-lnode 0))  ;; If we reach the root node, stop the loop
-            (error "No move is found at position %S." xy)
-          (setq curr-lnode (aref curr-lnode 0))))))  ;; Move to the previous node
-  found-lnode))  ;; Return the found node, or nil if not found
+  (let* ((board-2d  (aref game-state 1))  ;; Extract the current board
+         (stone (sgf-game-board-get xy board-2d))  ;; Get the stone at the XY position
+         (curr-lnode (aref game-state 0))
+         found-lnode)
+    (while (not found-lnode)  ;; Loop until node is found or root is reached
+      (let* ((curr-node (aref curr-lnode 1))  ;; Extract the SGF node data
+             (play (sgf-process-move curr-node))  ;; Process the current move
+             (stone-i (car play))  ;; Stone placed in this node
+             (xy-i (cdr play)))  ;; Coordinates of the move
+        (if (and (equal stone-i stone) (equal xy-i xy))  ;; Check if it's the node we're looking for
+            (setq found-lnode curr-lnode)  ;; Node found
+          (if (null (aref curr-lnode 0))  ;; If we reach the root node, stop the loop
+              (error "No move is found at position %S." xy)
+            (setq curr-lnode (aref curr-lnode 0))))))  ;; Move to the previous node
+    found-lnode))  ;; Return the found node, or nil if not found
 
 ;; todo: to finish
 (defun sgf-pass ()
@@ -686,7 +686,7 @@ The move number will be incremented."
      (lambda () (not (equal last-input-event ?\C-g)))
      ;; show exit message
      (lambda () (message "Exited edit mode."))
-      (concat message-text "Type C-g to exit."))))
+     (concat message-text "Type C-g to exit."))))
 
 
 (defun sgf--action-setup-stone (event stone)
@@ -706,15 +706,15 @@ The move number will be incremented."
                               (delete xy xys))  ;; Remove stone from the list
                      (progn (sgf-game-board-set xy stone board-2d)
                             (nconc xys (list xy))))))
-                (if xys
-                    (if prop
-                        (setcdr prop xys)  ; Update existing entry
-                      (nconc curr-node (list (list prop-key xys)))) ; Add new property entry
-                  ;; If the xy list is empty, remove the property entirely
-                  (setq curr-node (assq-delete-all prop-key curr-node)))
+          (if xys
+              (if prop
+                  (setcdr prop xys)  ; Update existing entry
+                (nconc curr-node (list (list prop-key xys)))) ; Add new property entry
+            ;; If the xy list is empty, remove the property entirely
+            (setq curr-node (assq-delete-all prop-key curr-node)))
 
-                (sgf-update-display ov)
-                (format "Edited %s stone at %s" stone xy))
+          (sgf-update-display ov)
+          (format "Edited %s stone at %s" stone xy))
       (error "Cannot edit setup stones on a non-root node. Move to the beginning of the game with `sgf-first-move'"))))
 
 
@@ -729,7 +729,7 @@ The move number will be incremented."
 (defun sgf-edit-setup-white-stone ()
   (interactive)
   (sgf--handle-mouse-input
-     ;; Create a closure that captures the value of `stone`
+   ;; Create a closure that captures the value of `stone`
    (lambda (event) (interactive "e") (sgf--action-setup-stone event 'W))
    "Click on the board to edit white stones. "))
 
@@ -765,7 +765,7 @@ The move number will be incremented."
   "Add/delete a square mark on the board of current game state."
   (interactive)
   (sgf--handle-mouse-input
-     ;; Create a closure that captures the value of `stone`
+   ;; Create a closure that captures the value of `stone`
    (lambda (event) (interactive "e") (sgf--action-mark event 'SQ))
    "Click on the board to edit square mark. "))
 
@@ -773,7 +773,7 @@ The move number will be incremented."
   "Add/delete a triangle mark on the board of current game state."
   (interactive)
   (sgf--handle-mouse-input
-     ;; Create a closure that captures the value of `stone`
+   ;; Create a closure that captures the value of `stone`
    (lambda (event) (interactive "e") (sgf--action-mark event 'TR))
    "Click on the board to edit triangle mark. "))
 
@@ -781,7 +781,7 @@ The move number will be incremented."
   "Add/delete a circle mark on the board of current game state."
   (interactive)
   (sgf--handle-mouse-input
-     ;; Create a closure that captures the value of `stone`
+   ;; Create a closure that captures the value of `stone`
    (lambda (event) (interactive "e") (sgf--action-mark event 'CR))
    "Click on the board to edit circle mark. "))
 
@@ -789,7 +789,7 @@ The move number will be incremented."
   "Add/delete a cross mark on the board of current game state."
   (interactive)
   (sgf--handle-mouse-input
-     ;; Create a closure that captures the value of `stone`
+   ;; Create a closure that captures the value of `stone`
    (lambda (event) (interactive "e") (sgf--action-mark event 'MA))
    "Click on the board to edit cross mark. "))
 
@@ -1012,7 +1012,7 @@ otherwise, delete and create new overlay."
                     menu-item "Allow Suicide Move"
                     sgf-toggle-allow-suicide-move
                     :button (:toggle . (sgf-game-plist-get ,ov :allow-suicide-move)))
-                    (sgf-toggle-move-number ; key symbol
+                   (sgf-toggle-move-number ; key symbol
                     menu-item "Show Move Number"
                     sgf-toggle-move-number
                     :button (:toggle . (sgf-game-plist-get ,ov :show-move-number)))
@@ -1095,15 +1095,11 @@ otherwise, delete and create new overlay."
 ;; sgf-mode-hook), and this hook will be run every time the mode is
 ;; enabled.
 ;;;###autoload
-(define-derived-mode sgf-mode text-mode "SGF"
-  "Major mode for editing SGF files.
-
-The following commands are available:
-
+(define-derived-mode sgf-mode
+    text-mode "SGF"
+    "Major mode for editing SGF files. The following commands are available:
 \\{sgf-mode-map}"
-  :keymap sgf-mode-map
-
-  )
+    :keymap sgf-mode-map)
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.sgf\\'" . sgf-mode))
