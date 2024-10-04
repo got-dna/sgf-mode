@@ -198,7 +198,7 @@ If neither 'B nor 'W is present, return nil."
 (defun sgf-show-comment (node)
   "Show the comment of the move/node."
   ;; if 'C' does not exist, it shows an empty str.
-  (message "comment: %s" (mapconcat 'identity (alist-get 'C node) " ")))
+  (message (mapconcat 'identity (alist-get 'C node) " ")))
 
 
 (defun sgf-update-display (ov &optional svg hot-areas)
@@ -280,7 +280,7 @@ If neither 'B nor 'W is present, return nil."
          (n           (length next-lnodes))
          next-lnode next-node)
     (if (= n 0)
-        (progn (message "No more next play.") nil)
+        (progn (message "No more next move.") nil)
       (progn
         (setq branch (sgf-branch-selection n branch))
         (setq next-lnode (nth branch next-lnodes))
@@ -290,6 +290,22 @@ If neither 'B nor 'W is present, return nil."
         (aset game-state 0 next-lnode)
         (sgf-update-svg game-state svg)
         (sgf-update-display ov)))))
+
+
+(defun sgf-forward-fork ()
+  "Move to the step before the next fork."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (continue t))
+    (while continue
+      (let* ((curr-lnode (aref game-state 0))
+             (lnodes (aref curr-lnode 2))
+             (n (length lnodes)))
+        (if (= n 1)
+            (sgf-forward-move)
+          (setq continue nil))))))
+
 
 (defun sgf-backward-move ()
   "Move to the previous move in the game tree and update board."
@@ -307,6 +323,23 @@ If neither 'B nor 'W is present, return nil."
         (aset game-state 0 prev-lnode)
         (sgf-update-svg game-state svg)
         (sgf-update-display ov)))))
+
+
+(defun sgf-backward-fork ()
+  "Move to the step before the previous fork."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (continue t))
+    (while continue
+      (let* ((curr-lnode (aref game-state 0))
+             (prev-lnode (aref curr-lnode 0))
+             sibling-lnodes)
+        (if prev-lnode
+            (setq sibling-lnodes (aref prev-lnode 2)))
+        (sgf-backward-move)
+        (if (/= (length sibling-lnodes) 1)
+            (setq continue nil))))))
 
 
 (defun sgf-apply-node (node game-state)
@@ -1028,8 +1061,10 @@ The move number will be incremented."
     ;; navigation functions
     (define-key map "f" 'sgf-forward-move)
     (define-key map [hot-forward mouse-1] 'sgf-forward-move)
+    (define-key map (kbd "M-f") 'sgf-forward-fork)
     (define-key map "b" 'sgf-backward-move)
     (define-key map [hot-backward mouse-1] 'sgf-backward-move)
+    (define-key map (kbd "M-b") 'sgf-backward-fork)
     (define-key map "a" 'sgf-first-move)
     (define-key map [hot-first mouse-1] 'sgf-first-move)
     (define-key map "e" 'sgf-last-move)
