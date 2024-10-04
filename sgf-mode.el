@@ -201,19 +201,12 @@ If neither 'B nor 'W is present, return nil."
   (message (mapconcat 'identity (alist-get 'C node) " ")))
 
 
-(defun sgf-update-display (ov &optional svg hot-areas)
-  "Update the SVG display with HOT-AREAS."
-  (if svg
-      (overlay-put ov 'svg svg)
-    (setq svg (overlay-get ov 'svg)))
-  (if hot-areas
-      (overlay-put ov 'hot-areas hot-areas)
-    (setq hot-areas (overlay-get ov 'hot-areas)))
-  (overlay-put ov 'display (svg-image svg :map hot-areas)))
-
-(defun sgf-update-svg (game-state svg)
+(defun sgf-update-display (ov)
   "Update the svg object of the game state."
-  (let* ((board-2d   (aref game-state 1))
+  (let* ((game-state (overlay-get ov 'game-state))
+         (svg (overlay-get ov 'svg))
+         (hot-areas (overlay-get ov 'hot-areas))
+         (board-2d   (aref game-state 1))
          (turn       (aref game-state 3))
          (pcounts    (aref game-state 4))
          (curr-lnode (aref game-state 0))
@@ -224,7 +217,8 @@ If neither 'B nor 'W is present, return nil."
     (sgf-svg-update-status-prisoners svg pcounts)
     (sgf-svg-update-status-turn svg turn)
     (sgf-svg-update-next svg curr-lnode)
-    (sgf-svg-update-marks svg curr-node board-2d)))
+    (sgf-svg-update-marks svg curr-node board-2d)
+    (overlay-put ov 'display (svg-image svg :map hot-areas))))
 
 
 (defun sgf-push-undo (change game-state)
@@ -269,9 +263,8 @@ If neither 'B nor 'W is present, return nil."
         branch
       (error "Invalid branch selection: %c" (+ branch ?a)))))
 
-(defun sgf-forward-move (&optional branch)
+(defun sgf-forward-move-no-display (&optional branch)
   "Move to the next move in the game tree and update board."
-  (interactive)
   (let* ((ov         (sgf-get-overlay))
          (svg        (overlay-get ov 'svg))
          (game-state  (overlay-get ov 'game-state))
@@ -287,9 +280,14 @@ If neither 'B nor 'W is present, return nil."
         (setq next-node  (aref next-lnode 1))
         (sgf-show-comment next-node)
         (sgf-apply-node next-node game-state)
-        (aset game-state 0 next-lnode)
-        (sgf-update-svg game-state svg)
-        (sgf-update-display ov)))))
+        (aset game-state 0 next-lnode)))))
+
+
+(defun sgf-forward-move (&optional branch)
+  "Move to the next move in the game tree and update board."
+  (interactive)
+  (sgf-forward-move-no-display branch)
+  (sgf-update-display (sgf-get-overlay)))
 
 
 (defun sgf-forward-fork ()
@@ -303,15 +301,14 @@ If neither 'B nor 'W is present, return nil."
              (lnodes (aref curr-lnode 2))
              (n (length lnodes)))
         (if (= n 1)
-            (sgf-forward-move)
-          (setq continue nil))))))
+            (sgf-forward-move-no-display)
+          (setq continue nil))))
+    (sgf-update-display ov)))
 
 
-(defun sgf-backward-move ()
+(defun sgf-backward-move-no-display ()
   "Move to the previous move in the game tree and update board."
-  (interactive)
   (let* ((ov         (sgf-get-overlay))
-         (svg        (overlay-get ov 'svg))
          (game-state  (overlay-get ov 'game-state))
          (curr-lnode  (aref game-state 0))
          (prev-lnode  (aref curr-lnode 0)))
@@ -320,9 +317,14 @@ If neither 'B nor 'W is present, return nil."
       (progn
         (sgf-show-comment (aref prev-lnode 1))
         (sgf-revert-undo (sgf-pop-undo game-state) game-state)
-        (aset game-state 0 prev-lnode)
-        (sgf-update-svg game-state svg)
-        (sgf-update-display ov)))))
+        (aset game-state 0 prev-lnode)))))
+
+
+(defun sgf-backward-move ()
+  "Move to the previous move in the game tree and update board."
+  (interactive)
+  (sgf-backward-move-no-display)
+  (sgf-update-display (sgf-get-overlay)))
 
 
 (defun sgf-backward-fork ()
@@ -337,9 +339,10 @@ If neither 'B nor 'W is present, return nil."
              sibling-lnodes)
         (if prev-lnode
             (setq sibling-lnodes (aref prev-lnode 2)))
-        (sgf-backward-move)
+        (sgf-backward-move-no-display)
         (if (/= (length sibling-lnodes) 1)
-            (setq continue nil))))))
+            (setq continue nil))))
+    (sgf-update-display ov)))
 
 
 (defun sgf-apply-node (node game-state)
@@ -379,7 +382,8 @@ If neither 'B nor 'W is present, return nil."
 (defun sgf-first-move ()
   "Move to the first node in the game tree."
   (interactive)
-  (while (sgf-backward-move))
+  (while (sgf-backward-move-no-display))
+  (sgf-update-display (sgf-get-overlay))
   ;; make sure to return t if successful
   t)
 
@@ -462,7 +466,6 @@ If neither 'B nor 'W is present, return nil."
   "Edit the move number of the given node or current node."
   (interactive)
   (let* ((ov (sgf-get-overlay))
-         (svg (overlay-get ov 'svg))
          (game-state (overlay-get ov 'game-state))
          (lnode (or lnode (aref game-state 0)))
          (node  (aref lnode 1))
@@ -477,7 +480,6 @@ If neither 'B nor 'W is present, return nil."
       (aset lnode 1
             (nconc (assq-delete-all 'MN node)
                    (list (list 'MN new-mvnum))))
-      (sgf-update-svg game-state svg)
       (sgf-update-display ov)
       (sgf-write-game-to-buffer lnode (overlay-buffer ov)))))
 
@@ -621,7 +623,6 @@ Cases:
 (defun sgf-goto-node (lnode)
   "Move game state to the given LNODE and update svg board."
   (let* ((ov  (sgf-get-overlay))
-         (svg (overlay-get ov 'svg))
          (game-state  (overlay-get ov 'game-state))
          found)
     (while (not found)
@@ -632,7 +633,6 @@ Cases:
           (progn
             (sgf-revert-undo (sgf-pop-undo game-state) game-state)
             (aset game-state 0 prev-lnode)))))
-    (sgf-update-svg game-state svg)
     (sgf-update-display ov)))
 
 (defun sgf-find-node (xy game-state)
@@ -693,7 +693,6 @@ The move number will be incremented."
   "Add or delete setup stones."
   (let* ((xy (sgf-mouse-event-to-xy event))
          (ov (sgf-get-overlay))
-         (svg (overlay-get ov 'svg))
          (game-state (overlay-get ov 'game-state))
          (board-2d (aref game-state 1))
          (curr-lnode (aref game-state 0))
@@ -714,7 +713,6 @@ The move number will be incremented."
                   ;; If the xy list is empty, remove the property entirely
                   (setq curr-node (assq-delete-all prop-key curr-node)))
 
-                (sgf-update-svg game-state svg)
                 (sgf-update-display ov)
                 (format "Edited %s stone at %s" stone xy))
       (error "Cannot edit setup stones on a non-root node. Move to the beginning of the game with `sgf-first-move'"))))
@@ -739,7 +737,6 @@ The move number will be incremented."
 (defun sgf--action-mark (event shape)
   (let* ((xy (sgf-mouse-event-to-xy event))
          (ov (sgf-get-overlay))
-         (svg (overlay-get ov 'svg))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (curr-node (aref curr-lnode 1))
@@ -761,7 +758,6 @@ The move number will be incremented."
       (message "Added mark at %s" xy)
       (nconc curr-node (list (cons shape (list xy)))))
     ;; Update the display
-    (sgf-update-svg game-state svg)
     (sgf-update-display ov)))
 
 
@@ -803,7 +799,6 @@ The move number will be incremented."
   (interactive "e")
   (let* ((xy (sgf-mouse-event-to-xy event))
          (ov (sgf-get-overlay))
-         (svg (overlay-get ov 'svg))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (curr-node (aref curr-lnode 1))
@@ -832,7 +827,6 @@ The move number will be incremented."
             (nconc curr-node (list (cons 'LB (list (cons xy new-txt)))))))
         (message "Updated label at %s with text '%s'" xy new-txt)))
     ;; Update the display
-    (sgf-update-svg game-state svg)
     (sgf-update-display ov)))
 
 
@@ -849,7 +843,6 @@ The move number will be incremented."
   (interactive "e")
   (let* ((xy (sgf-mouse-event-to-xy event))
          (ov  (sgf-get-overlay))
-         (svg (overlay-get ov 'svg))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (curr-node  (aref curr-lnode 1)))
@@ -858,7 +851,6 @@ The move number will be incremented."
         (when (and curr-mark (member xy curr-mark))
           (delete xy curr-mark)
           (message "Deleted mark at %s" xy)
-          (sgf-update-svg game-state svg)
           (sgf-update-display ov))))))
 
 (defun sgf-delete-mark ()
@@ -894,8 +886,8 @@ The move number will be incremented."
   "Toggle graphical. Keep the overlay."
   (interactive)
   (let* ((beg (or beg (point-min)))
-        (end (or end (point-max)))
-        (ov (or (sgf-get-overlay) (sgf-setup-overlay beg end))))
+         (end (or end (point-max)))
+         (ov (or (sgf-get-overlay) (sgf-setup-overlay beg end))))
     (cond ((equal choice 'hide)
            (sgf--hide-svg ov))
           ((equal choice 'show)
@@ -922,10 +914,6 @@ The move number will be incremented."
          (svg (car svg-hot-areas))
          (hot-areas (cdr svg-hot-areas)))
 
-    (sgf-update-svg game-state svg)
-
-    ;; label this overlay to distinguish from others
-    (overlay-put ov 'sgf-overlay t)
     ;; game state
     (overlay-put ov 'game-state game-state)
     ;; game properties
@@ -937,6 +925,8 @@ The move number will be incremented."
                        :editable t))
     (overlay-put ov 'svg svg)
     (overlay-put ov 'hot-areas hot-areas)
+
+    (sgf-update-display ov)
     ov))
 
 
@@ -948,7 +938,8 @@ The move number will be incremented."
          sgf-ov)
     (while (and ovs (not sgf-ov))
       (let ((ov (pop ovs)))
-        (if (overlay-get ov 'sgf-overlay)
+        ;; make sure get the right overlay
+        (if (overlay-get ov 'game-state)
             (setq sgf-ov ov))))
     sgf-ov))
 
@@ -965,23 +956,6 @@ The move number will be incremented."
         (with-current-buffer buffer
           (sgf-get-overlay-at pos)))
     (sgf-get-overlay-at)))
-
-
-(defun sgf-game-plist-get (ov key)
-  "Return game property of KEY"
-  (let ((game-plist (overlay-get ov 'game-plist)))
-    (plist-get game-plist key)))
-
-
-(defun sgf-game-plist-set (ov key value)
-  (let ((game-plist (overlay-get ov 'game-plist)))
-    (plist-put game-plist key value)))
-
-
-(defun sgf-game-plist-toggle (ov key)
-  "Toggle the game property of KEY."
-  (let ((game-plist (overlay-get ov 'game-plist)))
-    (sgf-game-plist-set ov key (not (plist-get game-plist key)))))
 
 
 (defun sgf--display-svg (ov)
@@ -1007,11 +981,21 @@ The move number will be incremented."
 ;;     new-ov))
 
 
-(defvar sgf-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-c") 'sgf-toggle-svg-display)
-    map)
-  "Keymap for SGF major mode.")
+(defun sgf-game-plist-get (ov key)
+  "Return game property of KEY"
+  (let ((game-plist (overlay-get ov 'game-plist)))
+    (plist-get game-plist key)))
+
+
+(defun sgf-game-plist-set (ov key value)
+  (let ((game-plist (overlay-get ov 'game-plist)))
+    (plist-put game-plist key value)))
+
+
+(defun sgf-game-plist-toggle (ov key)
+  "Toggle the game property of KEY."
+  (let ((game-plist (overlay-get ov 'game-plist)))
+    (sgf-game-plist-set ov key (not (plist-get game-plist key)))))
 
 
 (defun sgf-menu ()
@@ -1054,6 +1038,13 @@ The move number will be incremented."
                    (seperator-4 menu-item "--")
                    (sgf-export-image menu-item "Export Image" sgf-export-image))))
     (popup-menu menu-keymap)))
+
+
+(defvar sgf-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-c") 'sgf-toggle-svg-display)
+    map)
+  "Keymap for SGF major mode.")
 
 
 (defvar sgf-mode-graphical-map
