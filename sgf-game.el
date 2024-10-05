@@ -135,7 +135,8 @@ the SGF content of FILE."
                     ((eq key 'SZ)
                      (list (sgf-game-prop-SZ val-str beg-pos end-pos)))
                     ((eq key 'GM)
-                     (unless (string= val-str "1")
+                     (if (string= val-str "1")
+                         (list val-str)
                        (error "%sGame type is not Go (GM[1])."
                               (sgf-game--format-location beg-pos end-pos) val-str)))
                     ((eq key 'MN)

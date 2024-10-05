@@ -486,6 +486,21 @@ LNODE from the root."
     depth))
 
 
+(defun sgf-lnode-move-number (lnode)
+  "Return the move number for the LNODE.
+
+It computes the depth of LNODE from the root node or previous MN
+property, not include setup node.
+
+See also `sgf-lnode-depth'."
+  (let ((num 0) mn-prop)
+    (while (and (not (sgf-root-p lnode))
+                (not (setq mn-prop (car (alist-get 'MN (aref lnode 1)))))
+                (setq num (1+ num)))
+      (setq lnode (aref lnode 0)))
+    (+ (or mn-prop 0) num)))
+
+
 (defun sgf--toggle-layer(layer)
   "Toggle the display of a give layer."
   (let* ((ov (sgf-get-overlay))
@@ -682,7 +697,7 @@ Cases:
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (xy (sgf-mouse-event-to-xy last-input-event))
-         (clicked-lnode (sgf-find-node xy game-state))
+         (clicked-lnode (sgf-find-back-lnode xy game-state))
          (menu `("ACTION ON THIS MOVE"
                  ["Edit Comment"
                   ,(lambda () (interactive) (sgf-edit-comment clicked-lnode))]
@@ -690,11 +705,11 @@ Cases:
                   ,(lambda () (interactive) (sgf-edit-move-number clicked-lnode))
                   :enable ,(not (sgf-root-p clicked-lnode))]
                  ["Back to This Move"
-                  ,(lambda () (interactive) (sgf-goto-node clicked-lnode))
+                  ,(lambda () (interactive) (sgf-goto-back-lnode clicked-lnode))
                   :help "Move game state to this move"
                   :enable ,(not (equal curr-lnode clicked-lnode))]
                  ["Prune to This Move"
-                  ,(lambda () (interactive) (sgf-goto-node clicked-lnode) (sgf-prune))
+                  ,(lambda () (interactive) (sgf-goto-back-lnode clicked-lnode) (sgf-prune))
                   :enable ,(not (sgf-root-p clicked-lnode))] ; not root node
                  ["Put as Setup"
                   ,(lambda () (interactive) (sgf-root-node))
@@ -702,8 +717,8 @@ Cases:
     (popup-menu menu)))
 
 
-(defun sgf-goto-node (lnode)
-  "Move game state to the given LNODE and update svg board."
+(defun sgf-goto-back-lnode (lnode)
+  "Move game state backwards to the given LNODE and update svg board."
   (let* ((ov  (sgf-get-overlay))
          (game-state  (overlay-get ov 'game-state))
          found)
@@ -712,12 +727,11 @@ Cases:
              (prev-lnode  (aref curr-lnode 0)))
         (if (equal curr-lnode lnode)
             (setq found t)
-          (progn
-            (sgf-revert-undo (sgf-pop-undo game-state) game-state)
-            (aset game-state 0 prev-lnode)))))
+          (sgf-revert-undo (sgf-pop-undo game-state) game-state)
+          (aset game-state 0 prev-lnode))))
     (sgf-update-display ov)))
 
-(defun sgf-find-node (xy game-state)
+(defun sgf-find-back-lnode (xy game-state)
   "Search backward from the current game state to find the node that put
 the corresponding stone at XY on board. There could be multiple nodes at
 the same position during the whole game; this function finds the closest

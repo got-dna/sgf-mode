@@ -271,7 +271,7 @@ output to and pop up a buffer named NAME. the result of PROCESS-FN."
           (pop-to-buffer buffer)))
     result))
 
-
+;;;###autoload
 (defun sgf-parse-file-pop (file name)
   "Display in a popup buffer the pretty printed Emacs Lisp object of syntax tree converted from
 the SGF content of FILE."

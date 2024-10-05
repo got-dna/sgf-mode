@@ -409,19 +409,6 @@ It removes the old marks and adds the new marks."
                 :gradient stone)))
 
 
-(defun sgf-lnode-move-number (lnode)
-  "Return the move number for the LNODE.
-
-It computes the depth of LNODE from the root node or previous MN
-property, not include setup node."
-  (let ((num 0) mn-prop)
-    (while (and (not (sgf-root-p lnode))
-                (not (setq mn-prop (car (alist-get 'MN (aref lnode 1)))))
-                (setq num (1+ num)))
-      (setq lnode (aref lnode 0)))
-    (+ (or mn-prop 0) num)))
-
-
 (defun sgf-svg-add-mvnums (svg game-state)
   "Add move numbers to the board."
   (let* ((svg-group (sgf-svg-group-mvnums svg))
@@ -444,7 +431,9 @@ property, not include setup node."
                             (sgf-svg-set-color (sgf-enemy-stone stone))
                           (sgf-svg-set-color xy-state))))
             (setq mvnum
-                  (cond ((null mvnum) (setq color "red") curr-mvnum)
+                  (cond ((null mvnum) (setq color "red") curr-mvnum) ; the last move
+                        ;; reset move number to the specified move
+                        ;; number in the closest node backwards
                         ((alist-get 'MN node) (sgf-lnode-move-number curr-lnode))
                         (t (1- mvnum))))
             (sgf-svg-add-mvnum svg-group (car xy) (cdr xy) mvnum color)
