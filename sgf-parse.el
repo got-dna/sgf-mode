@@ -275,7 +275,7 @@ output to and pop up a buffer named NAME. the result of PROCESS-FN."
 (defun sgf-parse-file-pop (file name)
   "Display in a popup buffer the pretty printed Emacs Lisp object of syntax tree converted from
 the SGF content of FILE."
-  (interactive "fRead SGF file: \nsOutput to buffer name: ")
+  (interactive "fRead SGF file: \nBOutput to buffer name: ")
   (sgf-parse-file file 'sgf-parse-buffer name))  ;; Call the helper with the parsing function
 
 

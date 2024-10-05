@@ -215,8 +215,10 @@ If neither 'B nor 'W is present, return nil."
   (message (mapconcat 'identity (alist-get 'C node) " ")))
 
 
-(defun sgf-update-display (ov)
-  "Update the svg object of the game state."
+(defun sgf-update-display (&optional ov)
+  "Update the svg object and display according to the current game state."
+  (interactive)
+  (if (null ov) (setq ov (sgf-get-overlay)))
   (let* ((game-state (overlay-get ov 'game-state))
          (svg (overlay-get ov 'svg))
          (hot-areas (overlay-get ov 'hot-areas))
@@ -269,7 +271,10 @@ If neither 'B nor 'W is present, return nil."
 
 
 (defun sgf-branch-selection (n &optional branch)
-  "Prompt the user to select a branch by choosing a character."
+  "Prompt the user to select a branch by choosing a character.
+
+N is total number of branches. BRANCH is zero-based integer smaller than
+N, indicating your branch choice. If it is nil, it will prompt."
   (let ((prompt (format "Select a branch (a-%c): " (+ ?a (1- n)))))
     (if (null branch)
         (setq branch (if (= n 1) 0 (- (read-char prompt) ?a))))
@@ -326,14 +331,16 @@ See also `sgf-branch-selection'."
 
 
 (defun sgf-backward-move (&optional interactive-call)
-  "Move to the previous move in the game tree and update board."
+  "Move to the previous move in the game tree and update board.
+
+See also `sgf-forward-move'."
   (interactive "p")
   (let* ((ov         (sgf-get-overlay))
          (game-state  (overlay-get ov 'game-state))
          (curr-lnode  (aref game-state 0))
          (prev-lnode  (aref curr-lnode 0)))
     (if (sgf-root-p curr-lnode)
-        (progn (message "No more previous play.") nil)
+        (progn (message "No more previous move.") nil)
       (sgf-show-comment (aref prev-lnode 1))
       (sgf-revert-undo (sgf-pop-undo game-state) game-state)
       (aset game-state 0 prev-lnode)
@@ -957,28 +964,34 @@ The move number will be incremented."
 ;;           (overlay-put ov 'display (svg-image svg :map hot-areas))
 ;;           (overlay-put ov 'svg svg)))))
 
-(defun sgf-toggle-svg-display (keep &optional beg end)
-  "Toggle graphical display.
+(defun sgf-toggle-svg-display (&optional beg end)
+  "Toggle graphical display. Overlay keeps unchanged.
 
-If BEG and END are nil, parse the whole buffer as SGF content. If KEEP
-is non-nil, just hide display and do not remove the old overlay;
-otherwise, delete and create new overlay."
-  (interactive "P")
+If BEG and END are nil, parse the whole buffer as SGF content."
+  (interactive)
   (let* ((ov (sgf-get-overlay)))
-    (if (and keep ov)
+    (if ov
         (if (overlay-get ov 'display)
             (sgf--hide-svg ov)
           (sgf--display-svg ov))
-      (sgf-setup-overlay (or beg (point-min))
-                         (or end (point-max))))))
+      (sgf-create-overlay (or beg (point-min))
+                          (or end (point-max))))))
 
 
-(defun sgf-setup-overlay (beg end)
-  "Create overlay and setup overlay properties."
+(defun sgf-create-overlay (&optional beg end)
+  "Create a fresh overlay and setup overlay properties.
+
+It removes old overlays if there is any."
+
+  (interactive)
+  (setq beg (or beg (point-min))
+        end (or end (point-max)))
+  ;; remove old ones; otherwise, it accumulates repetitive overlays
+  ;; over calls
+  (remove-overlays beg end)
   ;; set front- and rear-advance parameters to allow
   ;; the overlay cover the whole buffer even if it is
   ;; updated from game playing.
-  (remove-overlays beg end)
   (let* ((ov (make-overlay beg end nil nil t))
          (game-state (sgf-game-from-buffer beg end))
          (board-2d   (aref game-state 1))
@@ -1057,7 +1070,7 @@ otherwise, delete and create new overlay."
 ;;   "Delete old overlay and create and return a new one."
 ;;   ;(remove-overlays) ; remove all the overlays in the buffer
 ;;   (let ((new-ov (make-overlay (point-min) (point-max) (current-buffer) nil t)))
-;;     (sgf-setup-overlay new-ov)
+;;     (sgf-create-overlay new-ov)
 ;;     new-ov))
 
 
@@ -1122,7 +1135,8 @@ otherwise, delete and create new overlay."
 
 (defvar sgf-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-c") 'sgf-toggle-svg-display)
+    (define-key map (kbd "C-c C-c") 'sgf-create-overlay)
+    (define-key map (kbd "C-c C-t") 'sgf-toggle-svg-display)
     map)
   "Keymap for SGF major mode.")
 
