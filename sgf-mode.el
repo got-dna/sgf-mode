@@ -27,6 +27,20 @@
 (defvar sgf-show-mark t
   "Show marks on the board.")
 
+(defvar sgf-traverse-path nil
+  "Default path to traverse thru when initiate game and display.
+
+Examples:
+1. `nil' or `0'. do nothing and stay at the beginning of the game.
+2. `t'. move to the end of the game. choose the first branch when come across a fork.
+3. `-1'. similar to Example 2 except stay at the move next to the last.
+4. `3'. similar to Example 2 except stay at the 3rd move from the beginning.
+5. `(34 ?a ?b ?a)'. move forward 34 steps in total by selecting branch a, b and then a respectively
+6. `(B (1 . 2))'. move to the first move put B stone at the position x=1 and y=2.
+
+See also `sgf-traverse'. It uses `read-from-string' or `read' to convert the text value of this
+variable to elisp object.")
+
 
 (defun sgf-root-p (lnode)
   "Check if LNODE is the root node."
@@ -335,11 +349,11 @@ See also `sgf-branch-selection'."
     (while continue
       (let* ((curr-lnode (aref game-state 0))
              (prev-lnode (aref curr-lnode 0))
-             sibling-lnodes)
+             siblings)
         (if prev-lnode
-            (setq sibling-lnodes (aref prev-lnode 2)))
+            (setq siblings (aref prev-lnode 2)))
         (sgf-backward-move)
-        (if (/= (length sibling-lnodes) 1)
+        (if (/= (length siblings) 1)
             (setq continue nil))))
     (if interactive-call (sgf-update-display ov))))
 
@@ -406,6 +420,63 @@ See also `sgf-forward-move'."
   (if interactive-call (sgf-update-display (sgf-get-overlay))))
 
 
+(defun sgf-traverse (path &optional interactive-call)
+  "Traverse the game tree from current node according to the PATH.
+
+For example, (sgf-traverse '(9 ?b ?a)) will move forward 9 steps and
+pick branch b and a in the 1st and 2nd forks (if come across forks),
+ respectively."
+  (interactive "xTraverse path: \np")
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state)))
+    (cond ((null path) nil) ; do nothing
+          ((eq path t) (sgf-last-move 0)) ; pick the first branch at all forks
+          ((integerp path)
+           (cond ((> path 0) (sgf-jump-moves path 0))
+                 ;; if it is negative, jump to end and move back PATH steps.
+                 ((< path 0) (sgf-last-move 0) (sgf-jump-moves path))
+                 ((= path 0) nil)))
+          ((listp path) ; eg (9 ?b ?a)
+           (let ((steps (car path)) (branches (cdr path))
+                 (diff 0))
+             (dolist (branch branches)
+               (sgf-forward-fork)
+               (sgf-forward-move (- branch ?a)))
+             (setq diff (- steps (sgf-lnode-depth (aref game-state 0))))
+             ;; if come across additional forks, pick the 1st branches
+             (sgf-jump-moves diff 0))))
+    (if interactive-call (sgf-update-display ov))))
+
+
+(defun sgf-lnode-path (&optional lnode)
+  "Return the path in the form of '(steps branch-1 branch-2 ...) to reach
+LNODE from the root."
+  (interactive)
+  (unless lnode
+    (let* ((ov (sgf-get-overlay))
+           (game-state (overlay-get ov 'game-state)))
+      (setq lnode (aref game-state 0))))
+
+  (let ((depth 0) (path '()))
+    (while (not (sgf-root-p lnode))
+      (let* ((prev-lnode (aref lnode 0))
+             (siblings (aref prev-lnode 2)))
+        (if (> (length siblings) 1)
+            ;; Find the index of the current lnode in sibling nodes and
+            ;; append to the end of path
+            (push (+ ?a (seq-position siblings lnode)) path))
+        (setq lnode prev-lnode
+              depth (1+ depth))))
+    (cons depth (nreverse path))))
+
+
+(defun sgf-lnode-depth (lnode)
+  "Return the depth of the LNODE from the root node."
+  (let ((depth 0))
+    (while (not (sgf-root-p lnode))
+      (setq lnode (aref lnode 0)
+            depth (1+ depth)))
+    depth))
 
 
 (defun sgf--toggle-layer(layer)
@@ -928,10 +999,13 @@ otherwise, delete and create new overlay."
                        :show-move-number sgf-show-move-number
                        :show-mark sgf-show-mark
                        :allow-suicide-move sgf-allow-suicide-move
+                       :traverse-path sgf-traverse-path
                        :editable t))
     (overlay-put ov 'svg svg)
     (overlay-put ov 'hot-areas hot-areas)
     (overlay-put ov 'keymap sgf-mode-graphical-map)
+    ;; traverse to the specified game state
+    (sgf-traverse sgf-traverse-path)
     (sgf-update-display ov)
     ov))
 
@@ -1067,6 +1141,7 @@ otherwise, delete and create new overlay."
     (define-key map "e" 'sgf-last-move)
     (define-key map [hot-last mouse-1] 'sgf-last-move)
     (define-key map "j" 'sgf-jump-moves)
+    (define-key map "t" 'sgf-traverse)
     ;; display/show functions
     (define-key map (kbd "s n") 'sgf-toggle-move-number)
     (define-key map (kbd "s m") 'sgf-toggle-marks)
