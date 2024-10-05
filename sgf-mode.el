@@ -263,8 +263,18 @@ If neither 'B nor 'W is present, return nil."
         branch
       (error "Invalid branch selection: %c" (+ branch ?a)))))
 
-(defun sgf-forward-move-no-display (&optional branch)
-  "Move to the next move in the game tree and update board."
+(defun sgf-forward-move (&optional branch interactive-call)
+  "Move to the next move in the game tree and update board.
+
+See also `sgf-branch-selection'."
+  ;; Since branch is only used when called non-interactively, use
+  ;; code`i' to skip assignment for variable branch when called
+  ;; interactively (ie, branch value will be nil).
+
+  ;; Use code `p' to check if the function is call interactively. When
+  ;; called non-interactively, interactive-call will be nil; otherwise
+  ;; it is 1
+  (interactive "i\np")
   (let* ((ov         (sgf-get-overlay))
          (svg        (overlay-get ov 'svg))
          (game-state  (overlay-get ov 'game-state))
@@ -274,25 +284,20 @@ If neither 'B nor 'W is present, return nil."
          next-lnode next-node)
     (if (= n 0)
         (progn (message "No more next move.") nil)
-      (progn
-        (setq branch (sgf-branch-selection n branch))
-        (setq next-lnode (nth branch next-lnodes))
-        (setq next-node  (aref next-lnode 1))
-        (sgf-show-comment next-node)
-        (sgf-apply-node next-node game-state)
-        (aset game-state 0 next-lnode)))))
+      (setq branch (sgf-branch-selection n branch))
+      (setq next-lnode (nth branch next-lnodes))
+      (setq next-node  (aref next-lnode 1))
+      (sgf-show-comment next-node)
+      (sgf-apply-node next-node game-state)
+      (aset game-state 0 next-lnode)
+      ;; return t if it is a noninteractive call, to indicate a
+      ;; successful forward move.
+      (if interactive-call (sgf-update-display ov) t))))
 
 
-(defun sgf-forward-move (&optional branch)
-  "Move to the next move in the game tree and update board."
-  (interactive)
-  (sgf-forward-move-no-display branch)
-  (sgf-update-display (sgf-get-overlay)))
-
-
-(defun sgf-forward-fork ()
+(defun sgf-forward-fork (&optional interactive-call)
   "Move to the step before the next fork."
-  (interactive)
+  (interactive "p")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (continue t))
@@ -301,35 +306,29 @@ If neither 'B nor 'W is present, return nil."
              (lnodes (aref curr-lnode 2))
              (n (length lnodes)))
         (if (= n 1)
-            (sgf-forward-move-no-display)
+            (sgf-forward-move)
           (setq continue nil))))
-    (sgf-update-display ov)))
+    (if interactive-call (sgf-update-display ov))))
 
 
-(defun sgf-backward-move-no-display ()
+(defun sgf-backward-move (&optional interactive-call)
   "Move to the previous move in the game tree and update board."
+  (interactive "p")
   (let* ((ov         (sgf-get-overlay))
          (game-state  (overlay-get ov 'game-state))
          (curr-lnode  (aref game-state 0))
          (prev-lnode  (aref curr-lnode 0)))
     (if (sgf-root-p curr-lnode)
         (progn (message "No more previous play.") nil)
-      (progn
-        (sgf-show-comment (aref prev-lnode 1))
-        (sgf-revert-undo (sgf-pop-undo game-state) game-state)
-        (aset game-state 0 prev-lnode)))))
+      (sgf-show-comment (aref prev-lnode 1))
+      (sgf-revert-undo (sgf-pop-undo game-state) game-state)
+      (aset game-state 0 prev-lnode)
+      (if interactive-call (sgf-update-display ov) t))))
 
 
-(defun sgf-backward-move ()
-  "Move to the previous move in the game tree and update board."
-  (interactive)
-  (sgf-backward-move-no-display)
-  (sgf-update-display (sgf-get-overlay)))
-
-
-(defun sgf-backward-fork ()
+(defun sgf-backward-fork (&optional interactive-call)
   "Move to the step before the previous fork."
-  (interactive)
+  (interactive "p")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (continue t))
@@ -339,10 +338,10 @@ If neither 'B nor 'W is present, return nil."
              sibling-lnodes)
         (if prev-lnode
             (setq sibling-lnodes (aref prev-lnode 2)))
-        (sgf-backward-move-no-display)
+        (sgf-backward-move)
         (if (/= (length sibling-lnodes) 1)
             (setq continue nil))))
-    (sgf-update-display ov)))
+    (if interactive-call (sgf-update-display ov))))
 
 
 (defun sgf-apply-node (node game-state)
@@ -379,29 +378,34 @@ If neither 'B nor 'W is present, return nil."
                    game-state)))
 
 
-(defun sgf-first-move ()
+(defun sgf-first-move (&optional interactive-call)
   "Move to the first node in the game tree."
-  (interactive)
-  (while (sgf-backward-move-no-display))
-  (sgf-update-display (sgf-get-overlay))
-  ;; make sure to return t if successful
-  t)
+  (interactive "p")
+  (while (sgf-backward-move))
+  (if interactive-call (sgf-update-display (sgf-get-overlay))))
 
 
-(defun sgf-last-move ()
-  "Move to the last node in the game tree."
-  (interactive)
-  (while (sgf-forward-move))
-  ;; make sure to return t if successful
-  t)
+(defun sgf-last-move (&optional branch interactival-call)
+  "Move to the last node in the game tree.
+
+See also `sgf-forward-move'."
+  (interactive "i\np")
+  (while (sgf-forward-move branch))
+  (if interactival-call (sgf-update-display (sgf-get-overlay))))
 
 
-(defun sgf-jump-moves (n)
-  "Move forward or backward N nodes."
-  (interactive "nMove _ plays forward (pos number) or backward (neg number): ")
+(defun sgf-jump-moves (n &optional branch interactive-call)
+  "Move forward or backward N nodes.
+
+It pauses at fork and wait for user input to select a branch.
+See also `sgf-forward-move'."
+  (interactive "nMove _ plays forward (pos number) or backward (neg number): \ni\np")
   (if (> n 0)
-      (dotimes (i n) (sgf-forward-move))
-    (dotimes (i (- n)) (sgf-backward-move))))
+      (dotimes (i n) (sgf-forward-move branch))
+    (dotimes (i (- n)) (sgf-backward-move)))
+  (if interactive-call (sgf-update-display (sgf-get-overlay))))
+
+
 
 
 (defun sgf--toggle-layer(layer)
