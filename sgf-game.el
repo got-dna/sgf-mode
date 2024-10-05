@@ -206,14 +206,22 @@ the SGF content of FILE."
 
 
 
-(defun sgf-game--letter-to-number (ch)
+(defun sgf-game--letter-to-number (c)
   "Convert a letter to an integer.
 
 ?a-?z ?A-?Z to 0-25 26-51"
   (cond
-   ((and (>= ch ?a) (<= ch ?z)) (- ch ?a))
-   ((and (>= ch ?A) (<= ch ?Z)) (+ (- ch ?A) 26))
-   (t (error "Invalid position letter '%c'" ch))))
+   ((and (>= c ?a) (<= c ?z)) (- c ?a))
+   ((and (>= c ?A) (<= c ?Z)) (+ (- c ?A) 26))
+   (t (error "Invalid position letter '%c'." c))))
+
+
+(defun sgf-game--number-to-letter (n)
+  "See also `sgf-game--letter-to-number'."
+  (cond
+   ((and (>= n 0) (<= n 25)) (+ ?a n))
+   ((and (>= n 26) (<= n 51)) (+ ?A (- n 26)))
+   (t (error "Invalid position number '%d'." n))))
 
 
 (defun sgf-game--format-location (begin end)
