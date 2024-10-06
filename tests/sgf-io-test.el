@@ -1,4 +1,4 @@
-;;; sgf-parse-test.el --- tests -*- lexical-binding: t -*-
+;;; sgf-io-test.el --- tests -*- lexical-binding: t -*-
 
 ;; Author: Zech Xu
 ;; Version: version
@@ -8,8 +8,8 @@
 
 ;;; Code:
 
-(ert-deftest sgf-parse-test ()
-  (let ((obs (sgf-parse-file "test-13x15.sgf" 'sgf-parse-buffer))
+(ert-deftest sgf-io-parse-test ()
+  (let ((obs (sgf-io-parse-file "test-13x15.sgf" 'sgf-io-parse-buffer))
         (exp [1
               ([2
                 ([3 "FF" ([5 "4" 8]) 8] [8 "GM" ([10 "1" 13]) 13]

@@ -8,15 +8,16 @@
 ;; Homepage: homepage
 ;; Keywords: SGF, go, game
 
+
+;;; Commentary:
+;;
+
 ;;; Code:
 
-(require 'sgf-game)
+(require 'sgf-util)
 (require 'sgf-svg)
-(require 'sgf-write)
+(require 'sgf-io)
 
-
-(defvar sgf-allow-suicide-move nil
-  "Allow suicide or not. Some rule set allow suicide: https://senseis.xmp.net/?Suicide")
 
 (defvar sgf-show-next-hint t
   "Show the hint mark(s) for next move(s).")
@@ -27,188 +28,34 @@
 (defvar sgf-show-mark t
   "Show marks on the board.")
 
+(defvar sgf-allow-suicide-move nil
+  "Allow suicide or not. Some rule set allow suicide: https://senseis.xmp.net/?Suicide")
+
+(defvar sgf-editable t
+  "Allow edit of the SGF buffer from the game.")
+
 (defvar sgf-traverse-path nil
   "Default path to traverse thru when initiate game and display.
 
 Examples:
+
 1. `nil' or `0'. do nothing and stay at the beginning of the game.
+
 2. `t'. move to the end of the game. choose the first branch when come across a fork.
+
 3. `-1'. similar to Example 2 except stay at the move next to the last.
+
 4. `3'. similar to Example 2 except stay at the 3rd move from the beginning.
+
 5. `(34 ?a ?b ?a)'. move forward 34 steps in total by selecting branch a, b and then a respectively
+
 6. `(B (1 . 2))'. move to the first move put B stone at the position x=1 and y=2.
 
-See also `sgf-traverse'. It uses `read-from-string' or `read' to convert the text value of this
-variable to elisp object.")
+See also `sgf-traverse'. It uses `read-from-string' or `read' to convert
+the text value of this variable to elisp object.")
 
 
-(defun sgf-root-p (lnode)
-  "Check if LNODE is the root node."
-  (null (aref lnode 0)))
-
-
-(defun sgf-valid-stone-p (stone)
-  "Check if STONE is a valid color."
-  (or (equal stone 'B) (equal stone 'W)))
-
-
-(defun sgf-xy-on-board-p (xy board-2d)
-  "Check if XY is on the board."
-  (let ((x (car xy)) (y (cdr xy)))
-    (and (>= x 0) (< x (length (aref board-2d 0)))
-         (>= y 0) (< y (length board-2d)))))
-
-
-(defun sgf-xy-is-empty-p (xy board-2d)
-  "Check if XY is empty on the board."
-  (equal (sgf-game-board-get xy board-2d) 'E))
-
-
-(defun sgf-valid-move-p (xy stone game-state &optional allow-suicide)
-  "Check if the move of STONE at XY position on BOARD-2D is valid"
-  (let* ((board-2d (aref game-state 1))
-         (ko (aref game-state 2)))
-    (and
-     xy board-2d
-     (sgf-valid-stone-p stone)       ;; valid color
-     (sgf-xy-on-board-p xy board-2d) ;; position is on board
-     (sgf-xy-is-empty-p xy board-2d) ;; no stone at this position yet
-     (not (equal xy ko))             ;; pos is not ko
-     (if (not allow-suicide) (not (sgf-suicide-stones xy board-2d)) ;; not suicide move
-       ))))
-
-
-(defun sgf-enemy-stone (stone)
-  "Return the opponent stone of STONE."
-  (if (equal stone 'B) 'W 'B))
-
-
-(defun sgf-neighbors-xy (xy board-2d)
-  "Return a list of neighboring positions of XY on a board of size WxH.
-
-Return nil if xy is nil."
-  (if (consp xy)
-      (let* ((x (car xy)) (y (cdr xy))
-             (w (length (aref board-2d 0)))
-             (h (length board-2d))
-             (neighbors '(((-1 . 0) . left)
-                          ((1 . 0) . right)
-                          ((0 . -1) . above)
-                          ((0 . 1) . below))))
-        (mapcar (lambda (offset)
-                  (let ((dx (car (car offset)))
-                        (dy (cdr (car offset))))
-                    (when (and (>= (+ x dx) 0) (< (+ x dx) w)
-                               (>= (+ y dy) 0) (< (+ y dy) h))
-                      (cons (+ x dx) (+ y dy)))))
-                neighbors))))
-
-
-(defun sgf-neighbors (xy board-2d)
-  "Return a list of neighbors of XY on a board of size WxH."
-  (mapcar (lambda (pos)
-            (sgf-game-board-get pos board-2d))
-          (sgf-neighbors-xy xy board-2d)))
-
-
-(defun sgf-check-liberty (xy board-2d &optional last-color visited)
-  "Check if the stone on position XY of BOARD-2D is alive or suiciding.
-
-It returns a cons cell of the form (LIBERTY-FOUND . VISITED). Its car
-indicates if a liberty is found, and its cdr is a list of visited
-positions to avoid loops, which also stores all the dead positions if no
-liberty is found.
-
-If xy is nil (for a move of pass), it returns (t . nil)."
-  (let ((curr-color (sgf-game-board-get xy board-2d)))
-    (cond
-      ((null xy) (cons t nil))
-      ((equal curr-color 'E) (cons t visited))
-      ((member xy visited) (cons nil visited))
-      ((or (null last-color) (equal last-color curr-color))
-       (setq visited (cons xy visited))
-       (let ((liberty-found nil))
-         (dolist (neighbor (sgf-neighbors-xy xy board-2d) (cons liberty-found visited))
-           (when neighbor
-             (let ((result (sgf-check-liberty neighbor board-2d curr-color visited)))
-               (if (car result)
-                   (setq liberty-found t)
-                 (setq visited (cdr result))))))))
-      (t (cons nil visited)))))
-
-
-(defun sgf-capture-stones (xy board-2d)
-  "Compute the captured enemy stones after the play of position XY.
-Return the list of positions for the prisoners captured.
-If XY is nil (for a move of pass), it returns nil."
-  (let ((curr-color (sgf-game-board-get xy board-2d))
-        (prisoners nil))
-    (dolist (neighbor-xy (sgf-neighbors-xy xy board-2d))
-      (when (and neighbor-xy
-                 (not (member neighbor-xy prisoners))
-                 (not (equal curr-color (sgf-game-board-get neighbor-xy board-2d))))
-        (let* ((results (sgf-check-liberty neighbor-xy board-2d))
-               (alive-p (car results)))
-          (unless alive-p
-            (setq prisoners (nconc (cdr results) prisoners))))))
-    prisoners))
-
-
-(defun sgf-suicide-stones (xy board-2d)
-  "Compute the suiciding stones after the play of position XY.
-Return the list of positions for the suiciding stones.
-If XY is nil (for a move of pass), it returns nil."
-  (let ((results (sgf-check-liberty xy board-2d)))
-    (unless (car results)
-      (cdr results))))
-
-
-(defun sgf-get-ko (xy stone board-2d captured-xys)
-  "Check if any neighbor of XY is a KO position *after* putting STONE at XY
-on BOARD-2D and possibly captured enemy stones at positions
-CAPTURED-XYS (which is a list of cons cells indicating captured
-positions).
-
-Returns nil or (x . y) for KO position. "
-  (if (or (/= 1 (length captured-xys))
-          (equal stone 'E))
-      nil ; not a KO if more than 1 stones were captured in the XY move
-    (let ((empty-or-same-color-count 0)
-          empty-or-same-color-position
-          state-i)
-      (dolist (xy-i (sgf-neighbors-xy xy board-2d))
-        (when xy-i
-          (setq state-i (sgf-game-board-get xy-i board-2d))
-          (when (or (equal state-i stone) (equal state-i 'E))
-            (setq empty-or-same-color-count (1+ empty-or-same-color-count))
-            (setq empty-or-same-color-position xy-i))))
-      (if (= empty-or-same-color-count 1)
-          empty-or-same-color-position
-        nil))))
-
-
-;; Alternative implementation
-;; (defun sgf-process-move (node)
-;;   "Process a play node.
-;; If 'B is present in the node, return (B) or (B . xy) depending on the presence of value.
-;; If 'W is present in the node, return (W) or (W . xy) similarly.
-;; Returns nil if neither 'B nor 'W is present."
-;;   (cond
-;;    ((assoc 'B node) (cons 'B (car (alist-get 'B node))))
-;;    ((assoc 'W node) (cons 'W (car (alist-get 'W node))))
-;;    (t nil)))  ;; Return nil if neither 'B nor 'W is found
-
-(defun sgf-process-move (node)
-  "Process a play node.
-If 'B or 'W is present in the node, return (B x . y) or (W x . y).
-If 'B or 'W exists without coordinates, return (B) or (W).
-If neither 'B nor 'W is present, return nil."
-  (pcase (or (assoc 'B node) (assoc 'W node))
-    (`(,stone (,x . ,y)) (cons stone (cons x y)))    ;; Extract (B/W (x . y)) case
-    (`(,stone) (list stone))                  ;; Handle (B) or (W)
-    (_ nil)))                                 ;; If nothing found, return nil
-
-
+;; TODO check there is only one entity for every type of prop
 (defun sgf-show-comment (node)
   "Show the comment of the move/node."
   ;; if 'C' does not exist, it shows an empty str.
@@ -261,9 +108,9 @@ If neither 'B nor 'W is present, return nil."
         (turn (aref change 4))
         (board-2d (aref game-state 1))
         (pcounts  (aref game-state 4)))
-    (dolist (xy black-xys) (sgf-game-board-set xy 'B board-2d))
-    (dolist (xy white-xys) (sgf-game-board-set xy 'W board-2d))
-    (dolist (xy empty-xys) (sgf-game-board-set xy 'E board-2d))
+    (dolist (xy black-xys) (sgf-board-set xy 'B board-2d))
+    (dolist (xy white-xys) (sgf-board-set xy 'W board-2d))
+    (dolist (xy empty-xys) (sgf-board-set xy 'E board-2d))
     (aset game-state 3 turn)
     (aset game-state 2 ko)
     (setcar pcounts (- (car pcounts) (length black-xys)))
@@ -294,19 +141,20 @@ See also `sgf-branch-selection'."
   ;; called non-interactively, interactive-call will be nil; otherwise
   ;; it is 1
   (interactive "i\np")
-  (let* ((ov         (sgf-get-overlay))
-         (svg        (overlay-get ov 'svg))
+  (let* ((ov          (sgf-get-overlay))
+         (svg         (overlay-get ov 'svg))
          (game-state  (overlay-get ov 'game-state))
          (curr-lnode  (aref game-state 0))
          (next-lnodes (aref curr-lnode 2))
          (n           (length next-lnodes))
          next-lnode next-node)
     (if (= n 0)
+        ;; make sure to return nil if there is no next move.
         (progn (message "No more next move.") nil)
       (setq branch (sgf-branch-selection n branch))
       (setq next-lnode (nth branch next-lnodes))
       (setq next-node  (aref next-lnode 1))
-      (sgf-show-comment next-node)
+      (if interactive-call (sgf-show-comment next-node))
       (sgf-apply-node next-node game-state)
       (aset game-state 0 next-lnode)
       ;; return t if it is a noninteractive call, to indicate a
@@ -371,7 +219,7 @@ See also `sgf-forward-move'."
          (stone (car move))
          (xy (cdr move))
          (board-2d (aref game-state 1))
-         (xy-state-old (sgf-game-board-get xy board-2d))
+         (xy-state-old (sgf-board-get xy board-2d))
          (turn-old (aref game-state 3))
          (turn-new (sgf-enemy-stone turn-old))
          (ko-old (aref game-state 2))
@@ -380,20 +228,21 @@ See also `sgf-forward-move'."
     ;; check it is legal move before make any change to game state
     (unless (sgf-valid-move-p xy stone game-state sgf-allow-suicide-move)
       (error "Invalid move of %S at %S" stone xy))
-    (sgf-game-board-set xy stone board-2d)
+    (sgf-board-set xy stone board-2d)
     (setq prisoners (sgf-capture-stones xy board-2d))
     ;; Remove captured stones
-    (dolist (xy prisoners) (sgf-game-board-set xy 'E board-2d))
+    (dolist (xy prisoners) (sgf-board-set xy 'E board-2d))
     ;; Check for KO: this code needs to be put after prisoners are removed.
     (setq ko-new (sgf-get-ko xy stone board-2d prisoners))
     (aset game-state 3 turn-new)
     (aset game-state 2 ko-new)
-    (if (equal stone 'B)
-        (progn (setcdr pcounts (+ (length prisoners) (cdr pcounts)))
-               (setq white-xys prisoners))
-      (progn (setcar pcounts (+ (length prisoners) (car pcounts)))
-             (setq black-xys prisoners)))
-    (if (equal xy-state-old 'E)
+    (when (eq stone 'B)
+      (setcdr pcounts (+ (length prisoners) (cdr pcounts)))
+      (setq white-xys prisoners))
+    (when (eq stone 'W)
+      (setcar pcounts (+ (length prisoners) (car pcounts)))
+      (setq black-xys prisoners))
+    (if (eq xy-state-old 'E)
         (setq empty-xys (list xy)))
     (sgf-push-undo (vector black-xys white-xys empty-xys ko-old turn-old)
                    game-state)))
@@ -444,21 +293,23 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
                  ((< path 0) (sgf-last-move 0) (sgf-jump-moves path))
                  ((= path 0) nil)))
           ((listp path) ; eg (9 ?b ?a)
-           (let ((steps (car path)) (branches (cdr path))
+           (let ((steps (car path))
+                 (branches (cdr path))
                  (diff 0))
              (dolist (branch branches)
                (sgf-forward-fork)
                (sgf-forward-move (- branch ?a)))
              (setq diff (- steps (sgf-lnode-depth (aref game-state 0))))
-             ;; if come across additional forks, pick the 1st branches
+             ;; if come across additional forks, pick the 1st branch
              (sgf-jump-moves diff 0))))
     (if interactive-call (sgf-update-display ov))))
 
 
 (defun sgf-lnode-path (&optional lnode)
   "Return the path in the form of '(steps branch-1 branch-2 ...) to reach
-LNODE from the root."
-  (interactive)
+LNODE from the root.
+
+The return value can be passed to `sgf-traverse'."
   (unless lnode
     (let* ((ov (sgf-get-overlay))
            (game-state (overlay-get ov 'game-state)))
@@ -556,7 +407,8 @@ See also `sgf-lnode-depth'."
       (when (or (not (file-exists-p filename))
                 (y-or-n-p (format "The file '%s' already exists. Overwrite? " filename)))
         (with-temp-file filename
-          (svg-print svg))))))
+          (svg-print svg))
+        (message "SVG exported to %s" filename)))))
 
 
 (defun sgf-edit-move-number (&optional lnode)
@@ -567,18 +419,21 @@ See also `sgf-lnode-depth'."
          (lnode (or lnode (aref game-state 0)))
          (node  (aref lnode 1))
          (old-mvnum  (car (alist-get 'MN node)))
-         new-mvnum valid)
-    (while (not valid)
-      (setq new-mvnum (read-number "Move number: " old-mvnum))
-      (if (not (integerp new-mvnum))
-          (message "Invalid move number. Please enter an integer.")
-        (setq valid t)))
-    (unless (equal old-mvnum new-mvnum)
-      (aset lnode 1
-            (nconc (assq-delete-all 'MN node)
-                   (list (list 'MN new-mvnum))))
-      (sgf-update-display ov)
-      (sgf-write-game-to-buffer lnode (overlay-buffer ov)))))
+         new-mvnum)
+    (setq new-mvnum (read-number "Move number: " old-mvnum))
+    (if (integerp new-mvnum)
+        (unless (equal old-mvnum new-mvnum)
+          (aset lnode 1
+                ;; delete the old MN *whether* it exists or not
+                (nconc (assq-delete-all 'MN node)
+                       (list (list 'MN new-mvnum))))
+          (if (sgf-game-plist-get :show-number)
+              (sgf-update-display ov t nil t)
+            (message "Move number was not displayed. Enable its display.")
+            (sgf-toggle-numbers))
+
+          (sgf-serialize-game-to-buffer ov))
+      (message "Invalid move number %S. Please enter an integer." new-mvnum))))
 
 
 (defun sgf-edit-comment (&optional lnode)
@@ -593,14 +448,13 @@ See also `sgf-lnode-depth'."
          (new-comment (read-string "Edit comment: " old-comment)))
     ;; only update if the comment is changed
     (unless (string= old-comment new-comment)
-      ;; Update or remove the 'C' property based on new-comment
+      ;; delete the old comment property
+      (setq node (assq-delete-all 'C node))
       (aset lnode 1
             (if (string-empty-p new-comment)
-                ;; delete the comment property if the new comment is empty
-                (assq-delete-all 'C node)
-              (nconc (assq-delete-all 'C node)
-                     (list (list 'C new-comment)))))
-      (sgf-write-game-to-buffer lnode (overlay-buffer ov)))))
+                node
+              (nconc node (list (list 'C new-comment))))))
+    (sgf-serialize-game-to-buffer ov)))
 
 
 ;; igo-editor-move-mode-make-move-root
@@ -612,7 +466,8 @@ See also `sgf-lnode-depth'."
   (interactive)
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
-         (curr-lnode (aref game-state 0)))))
+         (curr-lnode (aref game-state 0)))
+    (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))))
 
 
 (defun sgf-prune ()
@@ -622,31 +477,25 @@ See also `sgf-lnode-depth'."
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0)))
     (aset curr-lnode 2 nil)
-    (sgf-write-game-to-buffer curr-lnode (overlay-buffer ov))))
+    (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))))
 
 
 (defun sgf-prune-inclusive ()
   "Delete the current node and all its children."
   (interactive)
-  (sgf-backward-move)
+  ;; update display
+  (sgf-backward-move t)
   (sgf-prune))
 
 ;; todo
 (defun sgf-edit-game-info ()
   "Edit the game information."
-  (interactive))
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (curr-lnode (aref game-state 0)))
+    (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))))
 
-
-;; For every move, do:
-;; 1. check if it is legal move: not KO, not suicide;
-;;    label current stone with red
-;; 2. update move number
-;; 3. capture opponent stone
-;; 4. update board
-;; 5. update svg
-;; 6. update linked node
-;; 7. push change to undo/redo stack
-;; 8. stringify the game and update SGF text
 
 (defun sgf-mouse-event-to-xy (event)
   "Convert a mouse click to a board position (X . Y)."
@@ -676,18 +525,19 @@ Cases:
          (next-xys (mapcar (lambda (node) (cdr (sgf-process-move (aref node 1)))) next-lnodes))
          (found (car (seq-positions next-xys xy))))
     (cond
-      ;; Case 1: Clicked on the next move position
-      (found (sgf-forward-move found))
-      ;; Case 2: Clicked on an empty position not equal to ko
-      ((sgf-valid-move-p xy turn game-state sgf-allow-suicide-move)
-       (let ((n (length next-lnodes))
-             (new-lnode (sgf-game-linked-node curr-lnode `((,turn ,xy)))))
-         ;; add the new node as the last branch
-         (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
-         (sgf-forward-move n) ; if n=0, case 2.1; otherwise, case 2.2
-         (sgf-write-game-to-buffer curr-lnode (overlay-buffer ov))))
-      ;; Case 3.
-      (t (message "Illegal move!")))))
+     ;; Case 1: Clicked on one of the next move position
+     (found (sgf-forward-move found))
+     ;; Case 2: Clicked on an empty position not equal to ko
+     ((sgf-valid-move-p xy turn game-state (sgf-game-plist-get :allow-suicide-move ov))
+      (let ((n (length next-lnodes))
+            (new-lnode (sgf-linked-node curr-lnode `((,turn ,xy)))))
+        ;; add the new node as the last branch
+        (aset curr-lnode 2 (nconc next-lnodes (list new-lnode)))
+        (sgf-forward-move n) ; if n=0, case 2.1; otherwise, case 2.2
+        (sgf-update-display ov)
+        (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))))
+     ;; Case 3.
+     (t (message "Illegal move!")))))
 
 
 (defun sgf-board-click-right ()
@@ -739,7 +589,7 @@ one to the current game state.
 
 Returns linked node found or nil if not. The game-state remains unchanged."
   (let* ((board-2d  (aref game-state 1))  ;; Extract the current board
-         (stone (sgf-game-board-get xy board-2d))  ;; Get the stone at the XY position
+         (stone (sgf-board-get xy board-2d))  ;; Get the stone at the XY position
          (curr-lnode (aref game-state 0))
          found-lnode)
     (while (not found-lnode)  ;; Loop until node is found or root is reached
@@ -747,7 +597,7 @@ Returns linked node found or nil if not. The game-state remains unchanged."
              (play (sgf-process-move curr-node))  ;; Process the current move
              (stone-i (car play))  ;; Stone placed in this node
              (xy-i (cdr play)))  ;; Coordinates of the move
-        (if (and (equal stone-i stone) (equal xy-i xy))  ;; Check if it's the node we're looking for
+        (if (and (eq stone-i stone) (equal xy-i xy))  ;; Check if it's the node we're looking for
             (setq found-lnode curr-lnode)  ;; Node found
           (if (null (aref curr-lnode 0))  ;; If we reach the root node, stop the loop
               (error "No move is found at position %S." xy)
@@ -764,8 +614,9 @@ The move number will be incremented."
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (next-lnodes (aref curr-lnode 2))
-         (new-lnode (sgf-game-linked-node curr-lnode '((W)))))
+         (new-lnode (sgf-linked-node curr-lnode '((W)))))
     (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
+    (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))
     (sgf-update-display ov)))
 
 
@@ -779,10 +630,12 @@ The move number will be incremented."
     (set-transient-map
      map
      ;; type C-g to exit map
+     ;;(lambda () (not (equal (key-description (this-command-keys)) "C-c C-g")))
      (lambda () (not (equal last-input-event ?\C-g)))
      ;; show exit message
      (lambda () (message "Exited edit mode."))
-     (concat message-text "Type C-g to exit."))))
+     (concat message-text "Type C-g to exit.")
+     30)))
 
 
 (defun sgf--action-setup-stone (event stone)
@@ -798,9 +651,9 @@ The move number will be incremented."
          (xys (cdr prop)))
     (if (sgf-root-p curr-lnode)
         (let ((xys (if (member xy xys)
-                       (progn (sgf-game-board-set xy 'E board-2d)
+                       (progn (sgf-board-set xy 'E board-2d)
                               (delete xy xys))  ;; Remove stone from the list
-                     (progn (sgf-game-board-set xy stone board-2d)
+                     (progn (sgf-board-set xy stone board-2d)
                             (nconc xys (list xy))))))
           (if xys
               (if prop
@@ -808,9 +661,9 @@ The move number will be incremented."
                 (nconc curr-node (list (list prop-key xys)))) ; Add new property entry
             ;; If the xy list is empty, remove the property entirely
             (setq curr-node (assq-delete-all prop-key curr-node)))
-
+          (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))
           (sgf-update-display ov)
-          (format "Edited %s stone at %s" stone xy))
+          (message "Edited %s stone at %s" stone xy))
       (error "Cannot edit setup stones on a non-root node. Move to the beginning of the game with `sgf-first-move'"))))
 
 
@@ -853,6 +706,7 @@ The move number will be incremented."
       ;; If the mark doesn't exist, add it
       (message "Added mark at %s" xy)
       (nconc curr-node (list (cons shape (list xy)))))
+    (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))
     ;; Update the display
     (sgf-update-display ov)))
 
@@ -922,6 +776,8 @@ The move number will be incremented."
               (setcdr curr-mark (nconc (cdr curr-mark) (list (cons xy new-txt))))
             (nconc curr-node (list (cons 'LB (list (cons xy new-txt)))))))
         (message "Updated label at %s with text '%s'" xy new-txt)))
+    ;; Serialize the game state to the buffer
+    (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))
     ;; Update the display
     (sgf-update-display ov)))
 
@@ -947,6 +803,7 @@ The move number will be incremented."
         (when (and curr-mark (member xy curr-mark))
           (delete xy curr-mark)
           (message "Deleted mark at %s" xy)
+          (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))
           (sgf-update-display ov))))))
 
 (defun sgf-delete-mark ()
@@ -1007,7 +864,7 @@ It removes old overlays if there is any."
   ;; the overlay cover the whole buffer even if it is
   ;; updated from game playing.
   (let* ((ov (make-overlay beg end nil nil t))
-         (game-state (sgf-game-from-buffer beg end))
+         (game-state (sgf-parse-buffer-to-game beg end))
          (board-2d   (aref game-state 1))
          (h (length board-2d))
          (w (length (aref board-2d 0)))
@@ -1027,7 +884,7 @@ It removes old overlays if there is any."
                        :show-mark sgf-show-mark
                        :allow-suicide-move sgf-allow-suicide-move
                        :traverse-path sgf-traverse-path
-                       :editable t))
+                       :editable sgf-editable))
     (overlay-put ov 'svg svg)
     (overlay-put ov 'hot-areas hot-areas)
     (overlay-put ov 'keymap sgf-mode-graphical-map)
@@ -1088,26 +945,29 @@ It removes old overlays if there is any."
 ;;     new-ov))
 
 
-(defun sgf-game-plist-get (ov key)
+(defun sgf-game-plist-get (key &optional ov)
   "Return game property of KEY"
-  (let ((game-plist (overlay-get ov 'game-plist)))
+  (let* ((ov (or (sgf-get-overlay)))
+         (game-plist (overlay-get ov 'game-plist)))
     (plist-get game-plist key)))
 
 
-(defun sgf-game-plist-set (ov key value)
-  (let ((game-plist (overlay-get ov 'game-plist)))
+(defun sgf-game-plist-set (key value &optional ov)
+  (let* ((ov (or (sgf-get-overlay)))
+         (game-plist (overlay-get ov 'game-plist)))
     (plist-put game-plist key value)))
 
 
-(defun sgf-game-plist-toggle (ov key)
+(defun sgf-game-plist-toggle (key &optional ov)
   "Toggle the game property of KEY."
-  (let ((game-plist (overlay-get ov 'game-plist)))
+  (let* ((ov (or (sgf-get-overlay)))
+         (game-plist (overlay-get ov 'game-plist)))
     (sgf-game-plist-set ov key (not (plist-get game-plist key)))))
 
 
 (defun sgf-menu ()
   "Show the main menu for the SGF mode."
-  (interactive)
+  (interactive "@")
   (let* ((ov (sgf-get-overlay))
          (menu-keymap
           ;; https://www.gnu.org/software/emacs/manual/html_node/elisp/Menu-Example.html
@@ -1116,19 +976,19 @@ It removes old overlays if there is any."
                    (sgf-toggle-allow-suicide-move
                     menu-item "Allow Suicide Move"
                     sgf-toggle-allow-suicide-move
-                    :button (:toggle . (sgf-game-plist-get ,ov :allow-suicide-move)))
+                    :button (:toggle . (sgf-game-plist-get :allow-suicide-move ,ov)))
                    (sgf-toggle-move-number ; key symbol
                     menu-item "Show Move Number"
                     sgf-toggle-move-number
-                    :button (:toggle . (sgf-game-plist-get ,ov :show-move-number)))
+                    :button (:toggle . (sgf-game-plist-get :show-move-number ,ov)))
                    (sgf-toggle-next-hint
                     menu-item "Show Next Hint"
                     sgf-toggle-next-hint
-                    :button (:toggle . (sgf-game-plist-get ,ov :show-next-hint)))
+                    :button (:toggle . (sgf-game-plist-get :show-next-hint ,ov)))
                    (sgf-toggle-marks
                     menu-item "Show Marks"
                     sgf-toggle-marks
-                    :button (:toggle . (sgf-game-plist-get ,ov :show-mark)))
+                    :button (:toggle . (sgf-game-plist-get :show-mark ,ov)))
                    (seperator-1 menu-item "--")
                    (seperator-2 menu-item "--")
                    (sgf-edit-move-number menu-item "Edit Move Number" sgf-edit-move-number)
@@ -1191,10 +1051,12 @@ It removes old overlays if there is any."
     (define-key map "z" 'sgf-export-image)
     (define-key map [hot-grid mouse-1] #'sgf-board-click-left)
     (define-key map [hot-grid mouse-3] #'sgf-board-click-right)
+    (define-key map [hot-del mouse-1] #'sgf-prune-inclusive)
     (define-key map [hot-menu mouse-1] #'sgf-menu)
     (define-key map "p" 'sgf-pass)
     map)
-  "Keymap set for the overlay svg display. It is only activated when the overlay is displayed.")
+  "Keymap set for the overlay svg display. It is set as overlay property
+and only activated when the overlay is displayed.")
 
 
 
@@ -1203,10 +1065,11 @@ It removes old overlays if there is any."
 ;; enabled.
 ;;;###autoload
 (define-derived-mode sgf-mode
-    text-mode "SGF"
-    "Major mode for editing SGF files. The following commands are available:
+  text-mode "SGF"
+  "Major mode for editing SGF files. The following commands are available:
 \\{sgf-mode-map}"
-    :keymap sgf-mode-map)
+  :keymap sgf-mode-map)
+;; TODO  font-lock, use imenu, use xref, use completion-at-point
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.sgf\\'" . sgf-mode))
@@ -1214,7 +1077,3 @@ It removes old overlays if there is any."
 
 (provide 'sgf-mode)
 ;;; sgf-mode.el ends here
-
-;;; Local Variables:
-;;; lisp-indent-function: common-lisp-indent-function
-;;; End:

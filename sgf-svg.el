@@ -12,7 +12,7 @@
 ;;; Code:
 
 (require 'svg)
-(require 'sgf-game)
+(require 'sgf-util)
 
 (defgroup sgf-svg nil
   "SVG visualization of a game of go."
@@ -21,28 +21,28 @@
 (defcustom sgf-svg-interval 27
   "Default pixels for the size of grid cells.
 It is a reference for all other element sizes."
-  :type '(integer)
+  :type '(number)
   :group 'sgf-svg)
 
 (defcustom sgf-svg-margin 27
   "Default pixels for the margin of the board."
-  :type '(integer)
+  :type '(number)
   :group 'sgf-svg)
 
 (defcustom sgf-svg-bar 27
   "Default pixels for the bar height of the board."
-  :type '(integer)
+  :type '(number)
   :group 'sgf-svg)
 
 (defcustom sgf-svg-padding 5
   "Default padding for the board. Used in buttons and other elements."
-  :type '(integer)
+  :type '(number)
   :group 'sgf-svg)
 
 
-(defcustom sgf-svg-font-size  (* sgf-svg-interval 0.5)
-  "Default font family for the board."
-  :type '(integer)
+(defcustom sgf-svg-font-size  (* sgf-svg-interval 0.6)
+  "Default font size for the board."
+  :type '(number)
   :group 'sgf-svg)
 
 (defcustom sgf-svg-font-family "Arial"
@@ -115,7 +115,7 @@ attributes(cx, cy, fx, fy, r, etc...)"
          (board-w (+ sgf-svg-margin grid-w sgf-svg-margin))
          (board-h (+ sgf-svg-margin grid-h sgf-svg-margin))
          (line-width 0.5)
-         (star-radius 3)
+         (star-radius 2)
          (hot-grid-u-l (cons sgf-svg-margin (+ sgf-svg-bar sgf-svg-margin)))
          (hot-grid-b-r (cons (+ sgf-svg-margin (* (1- w) sgf-svg-interval))
                              (+ sgf-svg-bar sgf-svg-margin (* (1- h) sgf-svg-interval))))
@@ -173,7 +173,7 @@ attributes(cx, cy, fx, fy, r, etc...)"
                 :stroke "black" :stroke-width line-width))
 
     ;; Hoshi/Stars
-    (dolist (hoshi (sgf-game-board-hoshi w h))
+    (dolist (hoshi (sgf-board-hoshi w h))
       (svg-circle grid
                   (* sgf-svg-interval (car hoshi))
                   (* sgf-svg-interval (cdr hoshi))
@@ -334,7 +334,7 @@ It removes the old marks and adds the new marks."
           (dolist (xy (cdr prop))
             (let ((x (car xy))
                   (y (cdr xy))
-                  (xy-state (sgf-game-board-get xy board-2d)))
+                  (xy-state (sgf-board-get xy board-2d)))
               (sgf-svg-add-mark type marks-group x y xy-state))))
       (if (equal type 'LB)
           (dolist (prop-val (cdr prop))
@@ -342,7 +342,7 @@ It removes the old marks and adds the new marks."
                    (xy (car prop-val))
                    (x (car xy))
                    (y (cdr xy))
-                   (xy-state (sgf-game-board-get xy board-2d)))
+                   (xy-state (sgf-board-get xy board-2d)))
               (sgf-svg-add-text marks-group x y label xy-state)))))))
 
 
@@ -395,7 +395,7 @@ It removes the old marks and adds the new marks."
     (sgf-svg-clear-node-content svg-group)
     (dotimes (y (length board-2d))
       (dotimes (x (length (aref board-2d y)))
-        (let ((state (sgf-game-board-get (cons x y) board-2d)))
+        (let ((state (sgf-board-get (cons x y) board-2d)))
           (unless (equal state 'E) (sgf-svg-add-stone svg-group x y state)))))))
 
 
@@ -426,7 +426,7 @@ It removes the old marks and adds the new marks."
         (unless (gethash xy numbered-xys)
           ;; add move number only if it does not already have a number.
           (let* ((stone (car move))
-                 (xy-state (sgf-game-board-get xy board-2d))
+                 (xy-state (sgf-board-get xy board-2d))
                  (color (if (eq xy-state 'E)
                             (sgf-svg-set-color (sgf-enemy-stone stone))
                           (sgf-svg-set-color xy-state))))
