@@ -188,8 +188,9 @@ See also `sgf-forward-move'."
          (curr-lnode  (aref game-state 0))
          (prev-lnode  (aref curr-lnode 0)))
     (if (sgf-root-p curr-lnode)
+        ;; make sure to return nil if it is the root node.
         (progn (message "No more previous move.") nil)
-      (sgf-show-comment (aref prev-lnode 1))
+      (if interactive-call (sgf-show-comment (aref prev-lnode 1)))
       (sgf-revert-undo (sgf-pop-undo game-state) game-state)
       (aset game-state 0 prev-lnode)
       (if interactive-call (sgf-update-display ov) t))))
@@ -226,7 +227,7 @@ See also `sgf-forward-move'."
          (pcounts (aref game-state 4))
          black-xys white-xys empty-xys)
     ;; check it is legal move before make any change to game state
-    (unless (sgf-valid-move-p xy stone game-state sgf-allow-suicide-move)
+    (unless (sgf-valid-move-p xy stone game-state (sgf-game-plist-get :allow-suicide-move))
       (error "Invalid move of %S at %S" stone xy))
     (sgf-board-set xy stone board-2d)
     (setq prisoners (sgf-capture-stones xy board-2d))
@@ -359,20 +360,20 @@ See also `sgf-lnode-depth'."
          (svg  (overlay-get ov 'svg))
          group)
     (cond ((equal layer 'mvnum)
-           (sgf-game-plist-toggle ov :show-move-number)
+           (sgf-game-plist-toggle :show-move-number ov)
            (setq group (sgf-svg-group-mvnums svg)))
           ((equal layer 'mark)
-           (sgf-game-plist-toggle ov :show-mark)
+           (sgf-game-plist-toggle :show-mark ov)
            (setq group (sgf-svg-group-marks svg)))
           ((equal layer 'next)
-           (sgf-game-plist-toggle ov :show-next-hint)
+           (sgf-game-plist-toggle :show-next-hint ov)
            (setq group (sgf-svg-group-next svg))))
     (if (dom-attr group 'visibility)
         ;; show the numbers
         (dom-remove-attribute group 'visibility)
       ;; add visibility attribute to hide svg move number group
       (dom-set-attribute group 'visibility "hidden"))
-    (sgf-update-display ov)))
+    (sgf--display-svg ov)))
 
 
 (defun sgf-toggle-move-number ()
@@ -505,7 +506,7 @@ See also `sgf-lnode-depth'."
              (y (/ (- (float (cdr xy)) sgf-svg-margin sgf-svg-bar) sgf-svg-interval)))
         (cons (round x) (round y)))))
 
-(defun sgf-board-click-left ()
+(defun sgf-board-click-left (event)
   "Add stone by mouse click on board.
 Cases:
 1. click on the next move position: the same as `sgf-forward-move';
@@ -513,9 +514,9 @@ Cases:
 2.1 if it is at the end of node, create a new node;
 2.2 otherwise, create a new branch of game tree.
 3. other illegal positions"
-  (interactive)
+  (interactive "@e")
   ;; mouse-1 event for the left click
-  (let* ((xy (sgf-mouse-event-to-xy last-input-event))
+  (let* ((xy (sgf-mouse-event-to-xy event))
          (ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
@@ -540,13 +541,13 @@ Cases:
      (t (message "Illegal move!")))))
 
 
-(defun sgf-board-click-right ()
-  "Right click on board."
-  (interactive)
+(defun sgf-board-click-right (event)
+  "Right click on board pop up a menu."
+  (interactive "@e")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
-         (xy (sgf-mouse-event-to-xy last-input-event))
+         (xy (sgf-mouse-event-to-xy event))
          (clicked-lnode (sgf-find-back-lnode xy game-state))
          (menu `("ACTION ON THIS MOVE"
                  ["Edit Comment"
