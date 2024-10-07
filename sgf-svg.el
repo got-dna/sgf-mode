@@ -457,7 +457,7 @@ It removes the old marks and adds the new marks."
                    (MA . sgf-svg-add-cross)))
          (adder (cdr (assoc type adders))))
     (funcall adder svg-group x y
-             :fill "none" :stroke color :stroke-width 1)))
+             :fill "none" :stroke color :stroke-width 2)))
 
 
 (provide 'sgf-svg)

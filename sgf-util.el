@@ -115,7 +115,7 @@ If neither 'B nor 'W is present, return nil."
   (let* ((board-2d (aref game-state 1))
          (ko (aref game-state 2)))
     (and
-     xy board-2d
+     board-2d
      (sgf-valid-stone-p stone)       ;; valid color
      (sgf-xy-on-board-p xy board-2d) ;; position is on board
      (sgf-xy-is-empty-p xy board-2d) ;; no stone at this position yet

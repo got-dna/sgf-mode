@@ -225,26 +225,29 @@ See also `sgf-forward-move'."
          (turn-new (sgf-enemy-stone turn-old))
          (ko-old (aref game-state 2))
          (pcounts (aref game-state 4))
+         ko-new prisoners
          black-xys white-xys empty-xys)
     ;; check it is legal move before make any change to game state
     (unless (sgf-valid-move-p xy stone game-state (sgf-game-plist-get :allow-suicide-move))
       (error "Invalid move of %S at %S" stone xy))
-    (sgf-board-set xy stone board-2d)
-    (setq prisoners (sgf-capture-stones xy board-2d))
-    ;; Remove captured stones
-    (dolist (xy prisoners) (sgf-board-set xy 'E board-2d))
-    ;; Check for KO: this code needs to be put after prisoners are removed.
-    (setq ko-new (sgf-get-ko xy stone board-2d prisoners))
+    (when xy
+      ;; node is not a pass
+      (sgf-board-set xy stone board-2d)
+      (setq prisoners (sgf-capture-stones xy board-2d))
+      ;; Remove captured stones
+      (dolist (xy prisoners) (sgf-board-set xy 'E board-2d))
+      ;; Check for KO: this code needs to be put after prisoners are removed.
+      (setq ko-new (sgf-get-ko xy stone board-2d prisoners))
+      (aset game-state 2 ko-new)
+      (when (eq stone 'B)
+        (setcdr pcounts (+ (length prisoners) (cdr pcounts)))
+        (setq white-xys prisoners))
+      (when (eq stone 'W)
+        (setcar pcounts (+ (length prisoners) (car pcounts)))
+        (setq black-xys prisoners))
+      (if (eq xy-state-old 'E)
+          (setq empty-xys (list xy))))
     (aset game-state 3 turn-new)
-    (aset game-state 2 ko-new)
-    (when (eq stone 'B)
-      (setcdr pcounts (+ (length prisoners) (cdr pcounts)))
-      (setq white-xys prisoners))
-    (when (eq stone 'W)
-      (setcar pcounts (+ (length prisoners) (car pcounts)))
-      (setq black-xys prisoners))
-    (if (eq xy-state-old 'E)
-        (setq empty-xys (list xy)))
     (sgf-push-undo (vector black-xys white-xys empty-xys ko-old turn-old)
                    game-state)))
 
@@ -636,6 +639,7 @@ The move number will be incremented."
      ;; show exit message
      (lambda () (message "Exited edit mode."))
      (concat message-text "Type C-g to exit.")
+     ;; automatic exit after 30 seconds
      30)))
 
 
