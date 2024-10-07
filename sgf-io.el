@@ -593,7 +593,14 @@ Each rectangle is represented as ((left . top) . (right . bottom)),
 where all positions in the rectangle are filled in coords.
 
 For example:
-(sgf-io-xys-to-rows '((1 . 1) (1 . 2)))
+(sgf-io-rows-to-rects
+  (sgf-io-xys-to-rows
+  '((15 . 5) (15 . 6) (15 . 7) (15 . 8) (15 . 9) (15 . 10))))
+=> (((15 . 5) . (15 . 10)))
+
+(sgf-io-xys-to-rows '((1 . 1)))
+=> (((1 . 1) . (1 . 1)))
+
 (sgf-io-xys-to-rows '((0 . 0) (1 . 0) (3 . 0) (4 . 0) (0 . 1) (1 . 1)))
  => (((0 . 1) . (1 . 1))
      ((3 . 0) . (4 . 0))
@@ -632,21 +639,23 @@ For example:
   (let ((sorted-rows (sort rows))
         rects)
     (while sorted-rows
-      (let* ((start-row (car sorted-rows))
+      (let* ((start-row (car sorted-rows)) ; 1st row
              (end-row start-row)
-             (left-y (cdar start-row))
-             (left-x (caar start-row))
-             (row-size (- (cadr start-row) left-x)))
+             (lt-x (caar start-row)) ; x of left top position
+             (lt-y (cdar start-row)) ; y of left top position
+             (n 1) ; number of rows in this rect
+             (row-width (- (cadr start-row) lt-x)))
         ;; Process continuous y positions
         (setq sorted-rows (cdr sorted-rows))
         (while (and sorted-rows
                     ;; Check if the next row is left aligned
-                    (= (caar (car sorted-rows)) left-x)
+                    (= (caar (car sorted-rows)) lt-x)
                     ;; check if the next row is immediately below the current row
-                    (= (cdar (car sorted-rows)) (1+ left-y))
+                    (= (cdar (car sorted-rows)) (+ n lt-y))
                     ;; check if the next row has the same width
-                    (= (- (cadr (car sorted-rows)) left-x) row-size))
+                    (= (- (cadr (car sorted-rows)) lt-x) row-width))
           (setq end-row (car sorted-rows))
+          (setq n (1+ n))  ; increment the number of rows in the rect
           (setq sorted-rows (cdr sorted-rows)))
         ;; Create a rectangle from the collected rows
         (push (cons (car start-row) (cdr end-row)) rects)))
