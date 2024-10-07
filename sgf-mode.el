@@ -76,11 +76,15 @@ the text value of this variable to elisp object.")
          (curr-node  (aref curr-lnode 1)))
     ;; Add stones
     (sgf-svg-add-stones svg game-state)
-    (sgf-svg-add-mvnums svg game-state)
+    (if (sgf-game-plist-get :show-move-number ov)
+        (sgf-svg-add-mvnums svg game-state)
+      (sgf-svg-mark-last-move svg curr-node))
     (sgf-svg-update-status-prisoners svg pcounts)
     (sgf-svg-update-status-turn svg turn)
-    (sgf-svg-update-next svg curr-lnode)
-    (sgf-svg-update-marks svg curr-node board-2d)
+    (if (sgf-game-plist-get :show-next-hint ov)
+        (sgf-svg-update-next svg curr-lnode))
+    (if (sgf-game-plist-get :show-mark ov)
+        (sgf-svg-update-marks svg curr-node board-2d))
     (overlay-put ov 'display (svg-image svg :map hot-areas))))
 
 
