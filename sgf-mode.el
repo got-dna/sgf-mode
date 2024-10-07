@@ -663,11 +663,11 @@ The move number will be incremented."
                        (progn (sgf-board-set xy 'E board-2d)
                               (delete xy xys))  ;; Remove stone from the list
                      (progn (sgf-board-set xy stone board-2d)
-                            (nconc xys (list xy))))))
+                            (push xy xys)))))
           (if xys
               (if prop
                   (setcdr prop xys)  ; Update existing entry
-                (nconc curr-node (list (list prop-key xys)))) ; Add new property entry
+                (nconc curr-node (list (cons prop-key xys)))) ; Add new property entry
             ;; If the xy list is empty, remove the property entirely
             (setq curr-node (assq-delete-all prop-key curr-node)))
           (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))
