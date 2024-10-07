@@ -62,34 +62,7 @@ It is a reference for all other element sizes."
 (defvar sgf-svg--node-id-marks "marks"
   "The id of the group node for marks on the board.")
 
-(defun sgf-svg-gradient (svg id type stops &rest args)
-  "Instead of svg-gradient. svg-gradient not support additional
-attributes(cx, cy, fx, fy, r, etc...)"
-  (svg--def
-   svg
-   (apply
-    'dom-node
-    (if (eq type 'linear)
-        'linearGradient
-      'radialGradient)
-    `((id . ,id)
-      ,@(svg--arguments svg args))
-    (mapcar
-     (lambda (stop)
-       (dom-node 'stop `((offset . ,(format "%s%%" (car stop)))
-                         (stop-color . ,(cdr stop)))))
-     stops))))
 
-(defun sgf-svg-stone-gradient (svg color stops)
-  (sgf-svg-gradient
-   svg "black" 'radial '((0 . "#606060") (100 . "#000000"))
-   :cx 0.5 :cy 0.5 :fx 0.7 :fy 0.3 :r 0.55)
-  (sgf-svg-gradient
-   svg "white" 'radial '((0 . "#ffffff") (80 . "#e0e0e0") (100 . "#b0b0b0"))
-   :cx 0.5 :cy 0.5 :fx 0.7 :fy 0.3 :r 0.6)
-  svg)
-
-;; Create the SVG object
 (defun sgf-svg-stone-gradient (svg color stops)
   "Create stone gradients"
   (let* ((defs (svg-node svg 'defs)) ; Create the <defs> node
@@ -99,14 +72,6 @@ attributes(cx, cy, fx, fy, r, etc...)"
     (mapc (lambda (stop)
             (svg-node gradient 'stop :offset (car stop) :stop-color (cdr stop)))
           stops)))
-;; (svg-node gradient-black 'stop :offset "0%" :stop-color "#606060")
-;; (svg-node gradient-black 'stop :offset "100%" :stop-color "#000000")
-;; (svg-node gradient-white 'stop :offset "0%" :stop-color "#ffffff")
-;; (svg-node gradient-white 'stop :offset "100%" :stop-color "#b0b0b0")))
-
-;; (let ((svg  (svg-create 800 800)))
-;;   (sgf-svg-stone-gradient svg "black" '((0 . "#606060") (100 . "#000000")))
-;;   (svg-print svg))
 
 
 (defun sgf-svg-init (w h &optional show-move-number show-next-hint show-mark)
