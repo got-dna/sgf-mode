@@ -19,16 +19,16 @@
 (require 'sgf-io)
 
 
-(defvar sgf-show-next-hint t
+(defvar sgf-show-next t
   "Show the hint mark(s) for next move(s).")
 
-(defvar sgf-show-move-number t
+(defvar sgf-show-number t
   "Show move number on the stones.")
 
 (defvar sgf-show-mark t
   "Show marks on the board.")
 
-(defvar sgf-allow-suicide-move nil
+(defvar sgf-suicide-move nil
   "Allow suicide or not. Some rule set allow suicide: https://senseis.xmp.net/?Suicide")
 
 (defvar sgf-editable t
@@ -60,32 +60,6 @@ the text value of this variable to elisp object.")
   "Show the comment of the move/node."
   ;; if 'C' does not exist, it shows an empty str.
   (message (mapconcat 'identity (alist-get 'C node) " ")))
-
-
-(defun sgf-update-display (&optional ov)
-  "Update the svg object and display according to the current game state."
-  (interactive)
-  (if (null ov) (setq ov (sgf-get-overlay)))
-  (let* ((game-state (overlay-get ov 'game-state))
-         (svg (overlay-get ov 'svg))
-         (hot-areas (overlay-get ov 'hot-areas))
-         (board-2d   (aref game-state 1))
-         (turn       (aref game-state 3))
-         (pcounts    (aref game-state 4))
-         (curr-lnode (aref game-state 0))
-         (curr-node  (aref curr-lnode 1)))
-    ;; Add stones
-    (sgf-svg-add-stones svg game-state)
-    (if (sgf-game-plist-get :show-move-number ov)
-        (sgf-svg-add-mvnums svg game-state)
-      (sgf-svg-mark-last-move svg curr-node))
-    (sgf-svg-update-status-prisoners svg pcounts)
-    (sgf-svg-update-status-turn svg turn)
-    (if (sgf-game-plist-get :show-next-hint ov)
-        (sgf-svg-update-next svg curr-lnode))
-    (if (sgf-game-plist-get :show-mark ov)
-        (sgf-svg-update-marks svg curr-node board-2d))
-    (overlay-put ov 'display (svg-image svg :map hot-areas))))
 
 
 (defun sgf-push-undo (change game-state)
@@ -232,7 +206,7 @@ See also `sgf-forward-move'."
          ko-new prisoners
          black-xys white-xys empty-xys)
     ;; check it is legal move before make any change to game state
-    (unless (sgf-valid-move-p xy stone game-state (sgf-game-plist-get :allow-suicide-move))
+    (unless (sgf-valid-move-p xy stone game-state (sgf-game-plist-get :suicide-move))
       (error "Invalid move of %S at %S" stone xy))
     (when xy
       ;; node is not a pass
@@ -367,13 +341,13 @@ See also `sgf-lnode-depth'."
          (svg  (overlay-get ov 'svg))
          group)
     (cond ((equal layer 'mvnum)
-           (sgf-game-plist-toggle :show-move-number ov)
+           (sgf-game-plist-toggle :show-number ov)
            (setq group (sgf-svg-group-mvnums svg)))
           ((equal layer 'mark)
            (sgf-game-plist-toggle :show-mark ov)
            (setq group (sgf-svg-group-marks svg)))
           ((equal layer 'next)
-           (sgf-game-plist-toggle :show-next-hint ov)
+           (sgf-game-plist-toggle :show-next ov)
            (setq group (sgf-svg-group-next svg))))
     (if (dom-attr group 'visibility)
         ;; show the numbers
@@ -383,12 +357,12 @@ See also `sgf-lnode-depth'."
     (sgf--display-svg ov)))
 
 
-(defun sgf-toggle-move-number ()
+(defun sgf-toggle-numbers ()
   "Toggle the display of move numbers."
   (interactive)
   (sgf--toggle-layer 'mvnum))
 
-(defun sgf-toggle-next-hint ()
+(defun sgf-toggle-nexts ()
   "Toggle the display of next move hint."
   (interactive)
   (sgf--toggle-layer 'next))
@@ -536,7 +510,7 @@ Cases:
      ;; Case 1: Clicked on one of the next move position
      (found (sgf-forward-move found))
      ;; Case 2: Clicked on an empty position not equal to ko
-     ((sgf-valid-move-p xy turn game-state (sgf-game-plist-get :allow-suicide-move ov))
+     ((sgf-valid-move-p xy turn game-state (sgf-game-plist-get :suicide-move ov))
       (let ((n (length next-lnodes))
             (new-lnode (sgf-linked-node curr-lnode `((,turn ,xy)))))
         ;; add the new node as the last branch
@@ -844,6 +818,45 @@ The move number will be incremented."
 ;;           (overlay-put ov 'display (svg-image svg :map hot-areas))
 ;;           (overlay-put ov 'svg svg)))))
 
+
+(defun sgf-update-display (&optional ov)
+  "Update the svg object and display according to the current game state."
+  (interactive)
+  (if (null ov) (setq ov (sgf-get-overlay)))
+  (let* ((game-state (overlay-get ov 'game-state))
+         (svg (overlay-get ov 'svg))
+         (hot-areas (overlay-get ov 'hot-areas))
+         (board-2d   (aref game-state 1))
+         (turn       (aref game-state 3))
+         (pcounts    (aref game-state 4))
+         (curr-lnode (aref game-state 0))
+         (curr-node  (aref curr-lnode 1)))
+    ;; Add stones
+    (sgf-svg-add-stones svg game-state)
+    (if (sgf-game-plist-get :show-number ov)
+        (sgf-svg-add-mvnums svg game-state)
+      (sgf-svg-mark-last-move svg curr-node))
+    (sgf-svg-update-status-prisoners svg pcounts)
+    (sgf-svg-update-status-turn svg turn)
+    (if (sgf-game-plist-get :show-next ov)
+        (sgf-svg-update-nexts svg curr-lnode))
+    (if (sgf-game-plist-get :show-mark ov)
+        (sgf-svg-update-marks svg curr-node board-2d))
+    (overlay-put ov 'display (svg-image svg :map hot-areas))))
+
+
+(defun sgf-refresh-game-state (&optional beg end)
+  "Refresh game from modified SGF buffer content."
+  (setq beg (or beg (point-min))
+        end (or end (point-max)))
+  (let* ((ov (sgf-get-overlay))
+         (path (sgf-lnode-path))
+         (new-game-state (sgf-parse-buffer-to-game-state beg end)))
+    (overlay-put ov 'game-state new-game-state)
+    ;; traverse to the same game state
+    (sgf-traverse path)))
+
+
 (defun sgf-toggle-svg-display (&optional beg end)
   "Toggle graphical display. Overlay keeps unchanged.
 
@@ -854,54 +867,98 @@ If BEG and END are nil, parse the whole buffer as SGF content."
         (if (overlay-get ov 'display)
             (sgf--hide-svg ov)
           (sgf--display-svg ov))
-      (sgf-create-overlay (or beg (point-min))
+      (sgf-start-the-game (or beg (point-min))
                           (or end (point-max))))))
 
 
-(defun sgf-create-overlay (&optional beg end)
-  "Create a fresh overlay and setup overlay properties.
+(defun sgf-create-game-plist (&rest game-plist)
+  "Create a property list for the game.
 
-It removes old overlays if there is any."
+Update the global default variable value in the plist from GAME-PLIST.
 
+ Examples:
+
+(sgf-create-game-plist :show-next t :show-number nil :show-mark t :editable t)"
+  (let ((g-plist (list :show-next sgf-show-next
+                       :show-number sgf-show-number
+                       :show-mark sgf-show-mark
+                       :suicide-move sgf-suicide-move
+                       :path sgf-traverse-path
+                       :editable sgf-editable)))
+    (while game-plist
+      (plist-put g-plist (pop game-plist) (pop game-plist)))
+    g-plist))
+
+
+(defun sgf--setup-overlay (ov game-state svg-hot-areas game-plist)
+  "Setup overlay properties for the game."
+  ;; game properties
+  (let ((g-plist (sgf-create-game-plist game-plist)))
+    (overlay-put ov 'game-plist g-plist)
+    (overlay-put ov 'game-state game-state)
+    (overlay-put ov 'svg (car svg-hot-areas))
+    (overlay-put ov 'hot-areas (cdr svg-hot-areas))
+    (overlay-put ov 'keymap sgf-mode-graphical-map)
+
+    ;; Traverse to the specified game state and update display
+    (sgf-traverse (sgf-game-plist-get :path))
+    (sgf-update-display ov)
+    ;; toggle to the specified
+    (unless (plist-get g-plist :show-next) (sgf-toggle-nexts t))
+    (unless (plist-get g-plist :show-number) (sgf-toggle-numbers t))
+    (unless (plist-get g-plist :show-mark) (sgf-toggle-marks t))
+    ov))
+
+
+(defun sgf-setup-new-game (&optional beg end &rest game-plist)
+  "Initialize a new game and overlay with empty SGF content.
+
+The existing SGF content in the buffer will be erased."
   (interactive)
   (setq beg (or beg (point-min))
         end (or end (point-max)))
   ;; remove old ones; otherwise, it accumulates repetitive overlays
   ;; over calls
   (remove-overlays beg end)
+  (let* ((w (read-number "board width: " 19))
+         (h (read-number "board height: " 19))
+         (b-w (read-char-choice "Player to start (b)lack or (w)hite: " '(?b ?w)))
+         (pl (if (eq b-w ?b) 'B 'W))
+         (root-node `((FF 4)
+                      (GM 1)
+                      (SZ (,w . ,h))
+                      (PL ,pl)))
+         (root-lnode (sgf-linked-node nil root-node nil))
+         (game-state (sgf-init-game-state root-lnode))
+         (svg-hot-areas (sgf-svg-init w h))
+         (ov (make-overlay beg end nil nil t)))
+    ;; update buffer content; otherwise, the *empty* overlay (empty
+    ;; overlays are overlays cover no text) won't display.
+    (sgf-serialize-game-to-buffer root-lnode (current-buffer))
+    (sgf--setup-overlay ov game-state svg-hot-areas game-plist)))
+
+
+(defun sgf-start-the-game (&optional beg end &rest game-plist)
+  "Create a fresh overlay and setup overlay properties.
+
+It removes old overlays if there is any."
+  (interactive)
+  (setq beg (or beg (point-min))
+        end (or end (point-max)))
+  ;; remove old ones; otherwise, it accumulates repetitive overlays
+  ;; over calls
+  (if (yes-or-no-p "Do you want to restart the current game?")
+      (remove-overlays beg end))
   ;; set front- and rear-advance parameters to allow
   ;; the overlay cover the whole buffer even if it is
   ;; updated from game playing.
   (let* ((ov (make-overlay beg end nil nil t))
-         (game-state (sgf-parse-buffer-to-game beg end))
+         (game-state (sgf-parse-buffer-to-game-state beg end))
          (board-2d   (aref game-state 1))
          (h (length board-2d))
          (w (length (aref board-2d 0)))
-         (svg-hot-areas (sgf-svg-init w h
-                                      sgf-show-move-number
-                                      sgf-show-next-hint
-                                      sgf-show-mark))
-         (svg (car svg-hot-areas))
-         (hot-areas (cdr svg-hot-areas)))
-
-    ;; game state
-    (overlay-put ov 'game-state game-state)
-    ;; game properties
-    (overlay-put ov 'game-plist
-                 (list :show-next-hint sgf-show-next-hint
-                       :show-move-number sgf-show-move-number
-                       :show-mark sgf-show-mark
-                       :allow-suicide-move sgf-allow-suicide-move
-                       :traverse-path sgf-traverse-path
-                       :editable sgf-editable))
-    (overlay-put ov 'svg svg)
-    (overlay-put ov 'hot-areas hot-areas)
-    (overlay-put ov 'keymap sgf-mode-graphical-map)
-    ;; traverse to the specified game state
-    (sgf-traverse sgf-traverse-path)
-    (sgf-update-display ov)
-    ov))
-
+         (svg-hot-areas (sgf-svg-init w h)))
+    (sgf--setup-overlay ov game-state svg-hot-areas game-plist)))
 
 
 (defun sgf-get-overlay-at (&optional pos)
@@ -946,14 +1003,6 @@ It removes old overlays if there is any."
     (overlay-put ov 'display (svg-image svg :map hot-areas))))
 
 
-;; (defun sgf-redo-overlay ()
-;;   "Delete old overlay and create and return a new one."
-;;   ;(remove-overlays) ; remove all the overlays in the buffer
-;;   (let ((new-ov (make-overlay (point-min) (point-max) (current-buffer) nil t)))
-;;     (sgf-create-overlay new-ov)
-;;     new-ov))
-
-
 (defun sgf-game-plist-get (key &optional ov)
   "Return game property of KEY"
   (let* ((ov (or (sgf-get-overlay)))
@@ -985,15 +1034,15 @@ It removes old overlays if there is any."
                    (sgf-toggle-allow-suicide-move
                     menu-item "Allow Suicide Move"
                     sgf-toggle-allow-suicide-move
-                    :button (:toggle . (sgf-game-plist-get :allow-suicide-move ,ov)))
-                   (sgf-toggle-move-number ; key symbol
+                    :button (:toggle . (sgf-game-plist-get :suicide-move ,ov)))
+                   (sgf-toggle-numbers ; key symbol
                     menu-item "Show Move Number"
-                    sgf-toggle-move-number
-                    :button (:toggle . (sgf-game-plist-get :show-move-number ,ov)))
-                   (sgf-toggle-next-hint
+                    sgf-toggle-numbers
+                    :button (:toggle . (sgf-game-plist-get :show-number ,ov)))
+                   (sgf-toggle-nexts
                     menu-item "Show Next Hint"
-                    sgf-toggle-next-hint
-                    :button (:toggle . (sgf-game-plist-get :show-next-hint ,ov)))
+                    sgf-toggle-nexts
+                    :button (:toggle . (sgf-game-plist-get :show-next ,ov)))
                    (sgf-toggle-marks
                     menu-item "Show Marks"
                     sgf-toggle-marks
@@ -1018,7 +1067,8 @@ It removes old overlays if there is any."
 
 (defvar sgf-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-c") 'sgf-create-overlay)
+    (define-key map (kbd "C-c C-c") 'sgf-start-the-game) ; use the org babel evaluate binding
+    (define-key map (kbd "C-c C-i") 'sgf-setup-new-game); initialize
     (define-key map (kbd "C-c C-t") 'sgf-toggle-svg-display)
     map)
   "Keymap for SGF major mode.")
@@ -1040,9 +1090,9 @@ It removes old overlays if there is any."
     (define-key map "j" 'sgf-jump-moves)
     (define-key map "t" 'sgf-traverse)
     ;; display/show functions
-    (define-key map (kbd "s n") 'sgf-toggle-move-number)
+    (define-key map (kbd "s n") 'sgf-toggle-numbers)
     (define-key map (kbd "s m") 'sgf-toggle-marks)
-    (define-key map (kbd "s h") 'sgf-toggle-next-hint)
+    (define-key map (kbd "s h") 'sgf-toggle-nexts)
     ;; modify functions
     (define-key map (kbd "m k") 'sgf-prune-inclusive) ; kill node
     (define-key map (kbd "m K") 'sgf-prune)

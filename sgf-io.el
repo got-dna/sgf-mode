@@ -290,14 +290,14 @@ of syntax tree converted from the SGF content of FILE."
 ;;; process syntax tree into linked node, board, and starting game state
 
 ;;;###autoload
-(defun sgf-parse&display-game (file name)
+(defun sgf-parse&display-game-state (file name)
   "Display in a popup buffer the pretty printed Emacs Lisp object of game
 state converted from the SGF content of FILE."
   (interactive "fRead SGF file: \nsOutput to buffer name: ")
-  (sgf-parse-file file 'sgf-parse-buffer-to-game name))
+  (sgf-parse-file file 'sgf-parse-buffer-to-game-state name))
 
 
-(defun sgf-parse-buffer-to-game (beg end)
+(defun sgf-parse-buffer-to-game-state (beg end)
   "Convert the SGF content of buffer to emacs lisp object of game state."
   (let ((pre-root-lnode (vector nil nil nil))
         (sgf-tree (sgf-parse-buffer-to-tree beg end))
@@ -689,10 +689,13 @@ For example:
   "Update the buffer region with the SGF string representation of game."
   ;; move to the root node
   (while (aref lnode 0) (setq lnode (aref lnode 0)))
-  (let ((sgf-str (sgf-serialize-game-to-str lnode)))
+  (let ((sgf-str (sgf-serialize-game-to-str lnode))
+        (inhibit-read-only t))
     (with-current-buffer (or buffer (current-buffer))
+      (setq buffer-read-only nil)
       (delete-region (or beg (point-min)) (or end (point-max)))
-      (insert "(" sgf-str ")"))))
+      (insert "(" sgf-str ")")
+      (setq buffer-read-only t))))
 
 
 (provide 'sgf-io)

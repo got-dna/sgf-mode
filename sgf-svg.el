@@ -24,7 +24,7 @@ It is a reference for all other element sizes."
   :type '(number)
   :group 'sgf-svg)
 
-(defcustom sgf-svg-margin 27
+(defcustom sgf-svg-margin 35
   "Default pixels for the margin of the board."
   :type '(number)
   :group 'sgf-svg)
@@ -74,7 +74,7 @@ It is a reference for all other element sizes."
           stops)))
 
 
-(defun sgf-svg-init (w h &optional show-move-number show-next-hint show-mark)
+(defun sgf-svg-init (w h)
   (let* ((grid-w (* sgf-svg-interval (1- w)))
          (grid-h (* sgf-svg-interval (1- h)))
          (board-w (+ sgf-svg-margin grid-w sgf-svg-margin))
@@ -112,6 +112,7 @@ It is a reference for all other element sizes."
     (setq grid (svg-node board 'g
                          :id "game-grid"
                          :font-size sgf-svg-font-size
+                         :font-family sgf-svg-font-family
                          :transform (format "translate(%s, %s)" sgf-svg-margin sgf-svg-margin)))
     ;; Grid Lines
     (dotimes (n w)
@@ -146,15 +147,10 @@ It is a reference for all other element sizes."
 
     ;; Layers: different types of information on board
     (svg-node grid 'g :id sgf-svg--node-id-stones)
-    (if show-move-number
-        (svg-node grid 'g :id sgf-svg--node-id-mvnums)
-      (svg-node grid 'g :id sgf-svg--node-id-mvnums :visibility "hidden"))
-    (if show-next-hint
-        (svg-node grid 'g :id sgf-svg--node-id-nexts)
-      (svg-node grid 'g :id sgf-svg--node-id-nexts :visibility "hidden"))
-    (if show-mark
-        (svg-node grid 'g :id sgf-svg--node-id-marks)
-      (svg-node grid 'g :id sgf-svg--node-id-marks :visibility "hidden"))
+    (svg-node grid 'g :id sgf-svg--node-id-mvnums)
+    (svg-node grid 'g :id sgf-svg--node-id-nexts)
+    (svg-node grid 'g :id sgf-svg--node-id-marks)
+
     ;; Status Bar
     (setq status-bar (svg-node svg 'g
                                :id "status-bar"
@@ -311,8 +307,8 @@ It removes the old marks and adds the new marks."
               (sgf-svg-add-text marks-group x y label xy-state)))))))
 
 
-(defun sgf-svg-update-next (svg curr-lnode)
-  "Update and show next move(s) on board svg."
+(defun sgf-svg-update-nexts (svg curr-lnode)
+  "Update and show branches/next move(s) on board svg."
   (let* ((next-lnodes (aref curr-lnode 2))
          (branch-count (length next-lnodes))
          (branch-index 0)
