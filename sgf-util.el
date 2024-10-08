@@ -15,6 +15,36 @@
 
 ;;; Code:
 
+(defun sgf-default-game-plist ()
+  "Get the game-plist keys from defcustom variables.
+
+(sgf-default-game-plist) =>
+(:show-next :show-number :show-mark :suicide-move :editable :traverse-path)"
+  (let ((plist))
+    (dolist (i (custom-group-members 'sgf-plist nil))
+      (let* ((var (car i))
+             (key (intern (format ":%s" (substring (symbol-name (car i)) 4)))))
+        (push var plist)
+        (push key plist)))
+    plist))
+
+
+(defun sgf-create-game-plist (&rest plist)
+  "Create a property list for the game.
+
+Update the global default variable value in the plist from GAME-PLIST.
+
+ Examples:
+(sgf-create-game-plist :foo 'a :editable nil)
+(sgf-create-game-plist :show-next nil :show-mark t :path '(9 ?b ?a))"
+  (let ((game-plist (sgf-default-game-plist)))
+    (while plist
+      (let* ((key (pop plist))
+             (value (pop plist)))
+        (if (plist-member game-plist key)
+            ;; only update/add if it is a customizable variable
+            (plist-put game-plist key value))))
+      game-plist))
 
 ;; Alternative implementation
 ;; (defun sgf-process-move (node)

@@ -19,22 +19,27 @@
 (require 'sgf-io)
 
 
-(defvar sgf-show-next t
-  "Show the hint mark(s) for next move(s).")
+(defcustom sgf-show-next t
+  "Show the hint mark(s) for next move(s)."
+  :group 'sgf-plist)
 
-(defvar sgf-show-number t
-  "Show move number on the stones.")
+(defcustom sgf-show-number nil
+  "Show move number on the stones."
+  :group 'sgf-plist)
 
-(defvar sgf-show-mark t
-  "Show marks on the board.")
+(defcustom sgf-show-mark t
+  "Show marks on the board."
+  :group 'sgf-plist)
 
-(defvar sgf-suicide-move nil
-  "Allow suicide or not. Some rule set allow suicide: https://senseis.xmp.net/?Suicide")
+(defcustom sgf-suicide-move nil
+  "Allow suicide or not. Some rule set allow suicide: https://senseis.xmp.net/?Suicide"
+  :group 'sgf-plist)
 
-(defvar sgf-editable t
-  "Allow edit of the SGF buffer from the game.")
+(defcustom sgf-editable t
+  "Allow edit of the SGF buffer from the game."
+  :group 'sgf-plist)
 
-(defvar sgf-traverse-path nil
+(defcustom sgf-traverse-path nil
   "Default path to traverse thru when initiate game and display.
 
 Examples:
@@ -52,7 +57,8 @@ Examples:
 6. `(B (1 . 2))'. move to the first move put B stone at the position x=1 and y=2.
 
 See also `sgf-traverse'. It uses `read-from-string' or `read' to convert
-the text value of this variable to elisp object.")
+the text value of this variable to elisp object."
+  :group 'sgf-plist)
 
 
 ;; TODO check there is only one entity for every type of prop
@@ -870,24 +876,6 @@ If BEG and END are nil, parse the whole buffer as SGF content."
       (sgf-start-the-game (or beg (point-min))
                           (or end (point-max))))))
 
-
-(defun sgf-create-game-plist (&rest game-plist)
-  "Create a property list for the game.
-
-Update the global default variable value in the plist from GAME-PLIST.
-
- Examples:
-
-(sgf-create-game-plist :show-next t :show-number nil :show-mark t :editable t)"
-  (let ((g-plist (list :show-next sgf-show-next
-                       :show-number sgf-show-number
-                       :show-mark sgf-show-mark
-                       :suicide-move sgf-suicide-move
-                       :path sgf-traverse-path
-                       :editable sgf-editable)))
-    (while game-plist
-      (plist-put g-plist (pop game-plist) (pop game-plist)))
-    g-plist))
 
 
 (defun sgf--setup-overlay (ov game-state svg-hot-areas game-plist)
