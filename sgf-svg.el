@@ -14,22 +14,18 @@
 (require 'svg)
 (require 'sgf-util)
 
-(defgroup sgf-svg nil
-  "SVG visualization of a game of go."
-  :group 'games)
-
-(defcustom sgf-svg-interval 27
+(defcustom sgf-svg-interval 25
   "Default pixels for the size of grid cells.
 It is a reference for all other element sizes."
   :type '(number)
   :group 'sgf-svg)
 
-(defcustom sgf-svg-margin 35
+(defcustom sgf-svg-margin 25
   "Default pixels for the margin of the board."
   :type '(number)
   :group 'sgf-svg)
 
-(defcustom sgf-svg-bar 27
+(defcustom sgf-svg-bar 25
   "Default pixels for the bar height of the board."
   :type '(number)
   :group 'sgf-svg)
@@ -86,7 +82,7 @@ It is a reference for all other element sizes."
                              (+ sgf-svg-bar sgf-svg-margin (* (1- h) sgf-svg-interval))))
          (hot-areas (list (list (cons 'rect (cons hot-grid-u-l hot-grid-b-r))
                                 'hot-grid (list 'pointer 'hand))))
-         svg statu-bar board grid menu-bar ; svg nodes
+         svg status-bar board grid menu-bar ; svg nodes
          idx)
     ;; Note that the order of svg elements matters
     (setq svg (svg-create board-w (+ sgf-svg-bar board-h sgf-svg-bar)
@@ -184,19 +180,6 @@ It is a reference for all other element sizes."
               :text-anchor "middle" :dy "-0.5em")
 
     (cons svg hot-areas)))
-
-
-;; todo: not used
-(defun sgf-svg-create-mark-edit-buttons (menu-bar)
-  "Create all the buttons and return the hot areas for the mark edit buttons."
-  (let ((btns '((hot-quit "Quit" "quit")
-                (hot-cr "󰧟" "Add circle (CR)") ; ◯
-                (hot-ma "󱎘" "Add cross (MA)")
-                (hot-tr "󰔶" "Add triangle (TR)") ; △
-                (hot-sq "󰨕" "Add square (SQ)") ; ▢
-                (hot-lb "󰁥" "Add text label (LB)")
-                (hot-del "Del" "Delete the mark")))
-        (x sgf-svg-padding) (y sgf-svg-padding))))
 
 
 (defun sgf-svg-create-menu-buttons (menu-bar)
@@ -313,7 +296,7 @@ It removes the old marks and adds the new marks."
          (branch-count (length next-lnodes))
          (branch-index 0)
          (next-group (sgf-svg-group-next svg))
-         text play color xy x y)
+         text play stone xy x y)
     (sgf-svg-clear-node-content next-group)
     (dolist (next-lnode next-lnodes)
       (if (= branch-count 1)

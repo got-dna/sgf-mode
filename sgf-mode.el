@@ -19,7 +19,6 @@
 (require 'sgf-io)
 
 
-
 ;; TODO check there is only one entity for every type of prop
 (defun sgf-show-comment (node)
   "Show the comment of the move/node."
@@ -85,7 +84,6 @@ See also `sgf-branch-selection'."
   ;; it is 1
   (interactive "i\np")
   (let* ((ov          (sgf-get-overlay))
-         (svg         (overlay-get ov 'svg))
          (game-state  (overlay-get ov 'game-state))
          (curr-lnode  (aref game-state 0))
          (next-lnodes (aref curr-lnode 2))
@@ -218,8 +216,8 @@ It pauses at fork and wait for user input to select a branch.
 See also `sgf-forward-move'."
   (interactive "nMove _ plays forward (pos number) or backward (neg number): \ni\np")
   (if (> n 0)
-      (dotimes (i n) (sgf-forward-move branch))
-    (dotimes (i (- n)) (sgf-backward-move)))
+      (dotimes (_ n) (sgf-forward-move branch))
+    (dotimes (_ (- n)) (sgf-backward-move)))
   (if interactive-call (sgf-update-display (sgf-get-overlay))))
 
 
@@ -237,8 +235,7 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
           ((integerp path)
            (cond ((> path 0) (sgf-jump-moves path 0))
                  ;; if it is negative, jump to end and move back PATH steps.
-                 ((< path 0) (sgf-last-move 0) (sgf-jump-moves path))
-                 ((= path 0) nil)))
+                 ((< path 0) (sgf-last-move 0) (sgf-jump-moves path))))
           ((listp path) ; eg (9 ?b ?a)
            (let ((steps (car path))
                  (branches (cdr path))
@@ -252,57 +249,9 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
     (if interactive-call (sgf-update-display ov))))
 
 
-(defun sgf-lnode-path (&optional lnode)
-  "Return the path in the form of '(steps branch-1 branch-2 ...) to reach
-LNODE from the root.
-
-The return value can be passed to `sgf-traverse'."
-  (unless lnode
-    (let* ((ov (sgf-get-overlay))
-           (game-state (overlay-get ov 'game-state)))
-      (setq lnode (aref game-state 0))))
-
-  (let ((depth 0) (path '()))
-    (while (not (sgf-root-p lnode))
-      (let* ((prev-lnode (aref lnode 0))
-             (siblings (aref prev-lnode 2)))
-        (if (> (length siblings) 1)
-            ;; Find the index of the current lnode in sibling nodes and
-            ;; append to the end of path
-            (push (+ ?a (seq-position siblings lnode)) path))
-        (setq lnode prev-lnode
-              depth (1+ depth))))
-    (cons depth (nreverse path))))
-
-
-(defun sgf-lnode-depth (lnode)
-  "Return the depth of the LNODE from the root node."
-  (let ((depth 0))
-    (while (not (sgf-root-p lnode))
-      (setq lnode (aref lnode 0)
-            depth (1+ depth)))
-    depth))
-
-
-(defun sgf-lnode-move-number (lnode)
-  "Return the move number for the LNODE.
-
-It computes the depth of LNODE from the root node or previous MN
-property, not include setup node.
-
-See also `sgf-lnode-depth'."
-  (let ((num 0) mn-prop)
-    (while (and (not (sgf-root-p lnode))
-                (not (setq mn-prop (car (alist-get 'MN (aref lnode 1)))))
-                (setq num (1+ num)))
-      (setq lnode (aref lnode 0)))
-    (+ (or mn-prop 0) num)))
-
-
 (defun sgf--toggle-layer(layer)
   "Toggle the display of a give layer."
   (let* ((ov (sgf-get-overlay))
-         (game-state (overlay-get ov 'game-state))
          (svg  (overlay-get ov 'svg))
          group)
     (cond ((equal layer 'mvnum)
@@ -414,7 +363,7 @@ See also `sgf-lnode-depth'."
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0)))
-    (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))))
+    (sgf-serialize-game-to-buffer ov)))
 
 
 (defun sgf-prune ()
@@ -424,7 +373,7 @@ See also `sgf-lnode-depth'."
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0)))
     (aset curr-lnode 2 nil)
-    (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))))
+    (sgf-serialize-game-to-buffer ov)))
 
 
 (defun sgf-prune-inclusive ()
@@ -441,7 +390,7 @@ See also `sgf-lnode-depth'."
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0)))
-    (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))))
+    (sgf-serialize-game-to-buffer ov)))
 
 
 (defun sgf-mouse-event-to-xy (event)
@@ -466,6 +415,7 @@ Cases:
          (ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
+         (board-2d   (aref game-state 1))
          (ko   (aref game-state 2))
          (turn (aref game-state 3))
          (next-lnodes (aref curr-lnode 2))
@@ -482,7 +432,7 @@ Cases:
         (aset curr-lnode 2 (nconc next-lnodes (list new-lnode)))
         (sgf-forward-move n) ; if n=0, case 2.1; otherwise, case 2.2
         (sgf-update-display ov)
-        (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))))
+        (sgf-serialize-game-to-buffer ov)))
      ;; Case 3.
      (t (message "Illegal move!")))))
 
@@ -563,7 +513,7 @@ The move number will be incremented."
          (next-lnodes (aref curr-lnode 2))
          (new-lnode (sgf-linked-node curr-lnode '((W)))))
     (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
-    (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))
+    (sgf-serialize-game-to-buffer ov)
     (sgf-update-display ov)))
 
 
@@ -609,7 +559,7 @@ The move number will be incremented."
                 (nconc curr-node (list (cons prop-key xys)))) ; Add new property entry
             ;; If the xy list is empty, remove the property entirely
             (setq curr-node (assq-delete-all prop-key curr-node)))
-          (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))
+          (sgf-serialize-game-to-buffer ov)
           (sgf-update-display ov)
           (message "Edited %s stone at %s" stone xy))
       (error "Cannot edit setup stones on a non-root node. Move to the beginning of the game with `sgf-first-move'"))))
@@ -654,7 +604,7 @@ The move number will be incremented."
       ;; If the mark doesn't exist, add it
       (message "Added mark at %s" xy)
       (nconc curr-node (list (cons shape (list xy)))))
-    (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))
+    (sgf-serialize-game-to-buffer ov)
     ;; Update the display
     (sgf-update-display ov)))
 
@@ -725,7 +675,7 @@ The move number will be incremented."
             (nconc curr-node (list (cons 'LB (list (cons xy new-txt)))))))
         (message "Updated label at %s with text '%s'" xy new-txt)))
     ;; Serialize the game state to the buffer
-    (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))
+    (sgf-serialize-game-to-buffer ov)
     ;; Update the display
     (sgf-update-display ov)))
 
@@ -751,7 +701,7 @@ The move number will be incremented."
         (when (and curr-mark (member xy curr-mark))
           (delete xy curr-mark)
           (message "Deleted mark at %s" xy)
-          (sgf-serialize-game-to-buffer curr-lnode (overlay-buffer ov))
+          (sgf-serialize-game-to-buffer ov)
           (sgf-update-display ov))))))
 
 (defun sgf-delete-mark ()
@@ -822,6 +772,12 @@ The move number will be incremented."
     (sgf-traverse path)))
 
 
+(defun sgf-update-game-from-text (ov after beg end &optional length)
+  (let ((inhibit-modification-hooks t))
+    (if after                           ; after the text change
+        (sgf-refresh-game-state beg end))))
+
+
 (defun sgf-toggle-svg-display (&optional beg end)
   "Toggle graphical display. Overlay keeps unchanged.
 
@@ -880,7 +836,7 @@ The existing SGF content in the buffer will be erased."
          (ov (make-overlay beg end nil nil t)))
     ;; update buffer content; otherwise, the *empty* overlay (empty
     ;; overlays are overlays cover no text) won't display.
-    (sgf-serialize-game-to-buffer root-lnode (current-buffer))
+    (sgf-serialize-game-to-buffer ov)
     (sgf--setup-overlay ov game-state svg-hot-areas game-plist)))
 
 
@@ -951,20 +907,20 @@ It removes old overlays if there is any."
 
 (defun sgf-game-plist-get (key &optional ov)
   "Return game property of KEY"
-  (let* ((ov (or (sgf-get-overlay)))
+  (let* ((ov (or ov (sgf-get-overlay)))
          (game-plist (overlay-get ov 'game-plist)))
     (plist-get game-plist key)))
 
 
 (defun sgf-game-plist-set (key value &optional ov)
-  (let* ((ov (or (sgf-get-overlay)))
+  (let* ((ov (or ov (sgf-get-overlay)))
          (game-plist (overlay-get ov 'game-plist)))
     (plist-put game-plist key value)))
 
 
 (defun sgf-game-plist-toggle (key &optional ov)
   "Toggle the game property of KEY."
-  (let* ((ov (or (sgf-get-overlay)))
+  (let* ((ov (or ov (sgf-get-overlay)))
          (game-plist (overlay-get ov 'game-plist)))
     (sgf-game-plist-set ov key (not (plist-get game-plist key)))))
 

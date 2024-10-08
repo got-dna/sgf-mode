@@ -100,13 +100,65 @@ Update the global default variable value in the plist from GAME-PLIST.
 (defun sgf-process-move (node)
   "Process a play node.
 
-If 'B or 'W is present in the node, return (B . (x . y) or (W . (x . y).
-If 'B or 'W exists without coordinates, return (B) or (W).
-If neither 'B nor 'W is present, return nil."
+If \\='B or \\='W is present in the node, return (B . (x . y) or (W . (x . y).
+If \\='B or \\='W exists without coordinates, return (B) or (W).
+If neither \\='B nor \\='W is present, return nil."
   (pcase (or (assoc 'B node) (assoc 'W node))
     (`(,stone (,x . ,y)) (cons stone (cons x y))) ;; Extract (B/W (x . y)) case
     (`(,stone) (list stone))                  ;; Handle (B) or (W)
     (_ nil)))                                 ;; If nothing found, return nil
+
+
+(define-inline sgf-root-p (lnode)
+  "Check if LNODE is the root node."
+  (inline-quote (null (aref ,lnode 0))))
+
+
+(defun sgf-lnode-path (&optional lnode)
+  "Return the path in the form of `(steps branch-1 branch-2 ...)' to reach
+LNODE from the root.
+
+The return value can be passed to `sgf-traverse'."
+  (unless lnode
+    (let* ((ov (sgf-get-overlay))
+           (game-state (overlay-get ov 'game-state)))
+      (setq lnode (aref game-state 0))))
+
+  (let ((depth 0) (path '()))
+    (while (not (sgf-root-p lnode))
+      (let* ((prev-lnode (aref lnode 0))
+             (siblings (aref prev-lnode 2)))
+        (if (> (length siblings) 1)
+            ;; Find the index of the current lnode in sibling nodes and
+            ;; append to the end of path
+            (push (+ ?a (seq-position siblings lnode)) path))
+        (setq lnode prev-lnode
+              depth (1+ depth))))
+    (cons depth (nreverse path))))
+
+
+(defun sgf-lnode-depth (lnode)
+  "Return the depth of the LNODE from the root node."
+  (let ((depth 0))
+    (while (not (sgf-root-p lnode))
+      (setq lnode (aref lnode 0)
+            depth (1+ depth)))
+    depth))
+
+
+(defun sgf-lnode-move-number (lnode)
+  "Return the move number for the LNODE.
+
+It computes the depth of LNODE from the root node or previous MN
+property, not include setup node.
+
+See also `sgf-lnode-depth'."
+  (let ((num 0) mn-prop)
+    (while (and (not (sgf-root-p lnode))
+                (not (setq mn-prop (car (alist-get 'MN (aref lnode 1)))))
+                (setq num (1+ num)))
+      (setq lnode (aref lnode 0)))
+    (+ (or mn-prop 0) num)))
 
 
 (defun sgf-board-hoshi (w h)
@@ -158,11 +210,6 @@ If neither 'B nor 'W is present, return nil."
   (if (equal stone 'B) 'W 'B))
 
 
-(define-inline sgf-root-p (lnode)
-  "Check if LNODE is the root node."
-  (inline-quote (null (aref ,lnode 0))))
-
-
 (defun sgf-valid-stone-p (stone)
   "Check if STONE is a valid color."
   (or (equal stone 'B) (equal stone 'W)))
@@ -180,18 +227,16 @@ If neither 'B nor 'W is present, return nil."
   (equal (sgf-board-get xy board-2d) 'E))
 
 
-(defun sgf-valid-move-p (xy stone game-state &optional allow-suicide)
+(defun sgf-valid-move-p (xy stone board-2d ko &optional allow-suicide)
   "Check if the move of STONE at XY position on BOARD-2D is valid"
-  (let* ((board-2d (aref game-state 1))
-         (ko (aref game-state 2)))
-    (and
-     board-2d
-     (sgf-valid-stone-p stone)       ;; valid color
-     (sgf-xy-on-board-p xy board-2d) ;; position is on board
-     (sgf-xy-is-empty-p xy board-2d) ;; no stone at this position yet
-     (not (equal xy ko))             ;; pos is not ko
-     (if (not allow-suicide)         ;; not suicide move
-         (not (sgf-suicide-stones xy board-2d))))))
+  (and
+   board-2d
+   (sgf-valid-stone-p stone)       ;; valid color
+   (sgf-xy-on-board-p xy board-2d) ;; position is on board
+   (sgf-xy-is-empty-p xy board-2d) ;; no stone at this position yet
+   (not (equal xy ko))             ;; pos is not ko
+   (if (not allow-suicide)         ;; not suicide move
+       (not (sgf-suicide-stones xy board-2d)))))
 
 
 (defun sgf-neighbors-xy (xy board-2d)
@@ -200,12 +245,12 @@ If neither 'B nor 'W is present, return nil."
          (w (length (aref board-2d 0)))
          (h (length board-2d)))
     (delq nil
-    (mapcar (lambda (offset)
-              (let ((nx (+ x (car offset)))
-                    (ny (+ y (cdr offset))))
-                (if (and (>= nx 0) (< nx w) (>= ny 0) (< ny h))
-                  (cons nx ny))))
-            '((-1 . 0) (1 . 0) (0 . -1) (0 . 1))))))
+          (mapcar (lambda (offset)
+                    (let ((nx (+ x (car offset)))
+                          (ny (+ y (cdr offset))))
+                      (if (and (>= nx 0) (< nx w) (>= ny 0) (< ny h))
+                          (cons nx ny))))
+                  '((-1 . 0) (1 . 0) (0 . -1) (0 . 1))))))
 
 
 (defun sgf-check-liberty (xy board-2d &optional prev-stone visited)

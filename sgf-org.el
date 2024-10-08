@@ -16,6 +16,7 @@
 
 
 ;;; Code:
+(require 'sgf-mode)
 
 (require 'ob)
 (require 'ob-ref)
@@ -53,6 +54,7 @@
 (defun org-src-block-value-begin-end ()
   "Return the beginning and end of the value (ie the code content) of the
 current source block."
+  (require 'org-element)
   (let* ((element (org-element-at-point))
          (end (org-element-end element))
          (post-affiliated (org-element-post-affiliated element))
@@ -61,12 +63,12 @@ current source block."
     (save-excursion
       (goto-char post-affiliated)
       (forward-line 1)
-      (setq beg (point))
+      (setq val-beg (point))
       (goto-char end)
       (forward-line (- (1+ post-blank)))
       ;; `1-' to move to the end of the previous line
-      (setq end (1- (point))))
-    (cons beg end)))
+      (setq val-end (1- (point))))
+    (cons val-beg val-end)))
 
 ;; This is the main function which is called to evaluate a code
 ;; block.
@@ -93,17 +95,7 @@ This function is called by `org-babel-execute-src-block'"
   (message "executing SGF block to play game...")
   (let* ((game-plist (sgf-default-game-plist))
          (beg-end (org-src-block-value-begin-end))
-         (processed-params (org-babel-process-params params))
-         ;; set the session if the value of the session keyword is not the
-         ;; string `none'
-         ;; variables assigned for use in the block
-         (vars (org-babel--get-vars processed-params))
-         (result-params (assq :result-params processed-params))
-         ;; either OUTPUT or VALUE which should behave as described above
-         (result-type (assq :result-type processed-params))
-         ;; expand the body with `org-babel-expand-body:sgf'
-         (full-body (org-babel-expand-body:sgf
-                     body params processed-params)))
+         (processed-params (org-babel-process-params params)))
     ;; (message "params:\n%S" processed-params)
     (dolist (param processed-params)
       (let* ((key (car param))

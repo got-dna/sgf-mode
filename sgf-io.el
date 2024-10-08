@@ -68,9 +68,8 @@
        (<= c ?Z)))
 
 (defun sgf-parse-skip-ws ()
-  (let (ch wss)
-    (while (sgf-parse-ws-p (char-after))
-      (forward-char))))
+  (while (sgf-parse-ws-p (char-after))
+    (forward-char)))
 
 (defun sgf-parse-match-char (c)
   (let ((strm-c (char-after)))
@@ -301,7 +300,7 @@ state converted from the SGF content of FILE."
   "Convert the SGF content of buffer to emacs lisp object of game state."
   (let ((pre-root-lnode (vector nil nil nil))
         (sgf-tree (sgf-parse-buffer-to-tree beg end))
-        root-lnode root-node)
+        root-lnode)
     (sgf-linkup-nodes pre-root-lnode sgf-tree)
     ;; remove pre-root-lnode
     (setq root-lnode (car (aref pre-root-lnode 2)))
@@ -349,7 +348,7 @@ state converted from the SGF content of FILE."
     (sgf-game-state root-lnode board-2d nil turn)))
 
 
-(defun sgf-setup-board (root board-2d &optional clear)
+(defun sgf-setup-board (root board-2d)
   "Process root node to add setup stones."
   (dolist (prop root)
     (let* ((prop-key (car prop))
@@ -669,33 +668,54 @@ For example:
   (concat ";" (mapconcat (lambda (prop) (sgf-encode-prop prop)) node)))
 
 
-(defun sgf-serialize-game-to-str (&optional lnode)
+(defun sgf-serialize-game-to-str (lnode)
   "Convert a game tree starting from LNODE to an SGF string."
-  ;; (sgf-serialize-game-to-str (aref (overlay-get (sgf-get-overlay) 'game-state) 0))
-  (let ((curr-lnode lnode)
-        (next-lnodes (aref lnode 2))
-        (node-str (sgf-encode-node (aref lnode 1))))
-    (if (null next-lnodes)
-        node-str
-      (let ((next-strs (mapcar #'sgf-serialize-game-to-str next-lnodes)))
-        (if (= (length next-lnodes) 1)
-            ;; No fork, just append the next node string
-            (concat node-str (car next-strs))
-          ;; Fork, wrap each branch in parentheses
-          (concat node-str "(" (mapconcat #'identity next-strs ")(") ")"))))))
-
-
-(defun sgf-serialize-game-to-buffer (lnode &optional buffer beg end)
-  "Update the buffer region with the SGF string representation of game."
-  ;; move to the root node
+  ;; Move to the root node
   (while (aref lnode 0) (setq lnode (aref lnode 0)))
-  (let ((sgf-str (sgf-serialize-game-to-str lnode))
-        (inhibit-read-only t))
-    (with-current-buffer (or buffer (current-buffer))
-      (setq buffer-read-only nil)
-      (delete-region (or beg (point-min)) (or end (point-max)))
-      (insert "(" sgf-str ")")
-      (setq buffer-read-only t))))
+  (let ((stack '()) (output '()))
+    ;; Push the root node onto the stack
+    (push (list lnode 0 nil) stack)
+
+    (while stack
+      (let* ((item (pop stack))
+             (node (nth 0 item))
+             (child-index (nth 1 item))
+             (is-branch (nth 2 item))
+             (next-lnodes (aref node 2))
+             (n (length next-lnodes)))
+
+        ;; Handle the current node
+        (when (= child-index 0)
+          (if is-branch (push "(" output))
+          (push (sgf-encode-node (aref node 1)) output))
+
+        ;; Process the children
+        (if (< child-index n)
+            (progn
+              ;; Increment child index and push the current node back
+              (push (list node (1+ child-index) is-branch) stack)
+              ;; Push the next child node onto the stack
+              (push (list (nth child-index next-lnodes) 0 (> n 1)) stack))
+          ;; No more children, close the branch if needed
+          (if is-branch (push ")" output)))))
+
+    ;; Return the final result as a concatenated string
+    (format "(%s)" (apply #'concat (nreverse output)))))
+
+
+(defun sgf-serialize-game-to-buffer (ov)
+  "Update the buffer region with the SGF string representation of game."
+
+  (let* ((buffer (overlay-buffer ov))
+         (beg (overlay-start ov))
+         (end (overlay-end ov))
+         (game-state (overlay-get ov 'game-state))
+         (lnode (aref game-state 0))
+         (sgf-str (sgf-serialize-game-to-str lnode)))
+    (with-current-buffer buffer)
+    ;; (setq buffer-read-only nil)
+    (delete-region beg end)
+    (insert "(" sgf-str ")")))
 
 
 (provide 'sgf-io)
