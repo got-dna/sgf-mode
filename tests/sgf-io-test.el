@@ -7,37 +7,81 @@
 ;; Keywords: keywords
 
 ;;; Code:
+(require 'sgf-io)
+(require 'sgf-mode)
 
-(ert-deftest sgf-io-parse-test ()
-  (let ((obs (sgf-io-parse-file "test-13x15.sgf" 'sgf-io-parse-buffer))
-        (exp [1
-              ([2
-                ([3 "FF" ([5 "4" 8]) 8] [8 "GM" ([10 "1" 13]) 13]
-                 [13 "SZ" ([15 "13:15" 22]) 22]
-                 [22 "AB" ([24 "ca" 28] [28 "bb" 32] [32 "db:eb" 39] [39 "cc" 43])
-                     43]
-                 [43 "AW" ([45 "da:ea" 52] [52 "fb" 56] [56 "dc:ec" 63]) 63]
-                 [63 "PL" ([65 "W" 68]) 68] [68 "CA" ([70 "UTF-8" 77]) 77]
-                 [77 "AP" ([79 "Sabaki:0.52.2" 94]) 94]
-                 [94 "KM" ([96 "6.5" 101]) 101]
-                 [101 "DT" ([103 "2024-09-19" 115]) 116])
-                116]
-               [116 ([117 "W" ([118 "ce" 122]) 122]) 122]
-               [122 ([123 "B" ([124 "be" 128]) 129]) 129]
-               ([129
-                 ([131
-                   ([133 "W" ([135 "cb" 141]) 142] [142 "SQ" ([144 "bb" 148]) 148]
-                    [148 "TR" ([150 "db" 154] [154 "eb" 158]) 158]
-                    [158 "LB" ([160 "fb:A" 166]) 166]
-                    [166 "C" ([167 "comment@\\[foo\\]" 184]) 184]
-                    [184 "MN" ([186 "15" 190]) 192])
-                   192]
-                  [192 ([193 "B" ([194 "db" 198]) 200]) 200]
-                  [200 ([201 "W" ([202 "eb" 206]) 208]) 208]
-                  [208 ([209 "B" ([210 "cb" 214]) 215]) 215])
-                 216]
-                [217 ([218 ([219 "W" ([220 "ba" 224]) 224]) 224]) 225]))
-              227]
+(ert-deftest sgf-decode-prop-pos-test ()
+  (let ((cases '(("aa" . ((0 . 0)))
+                 ("aa:ac" . ((0 . 0) (0 . 1) (0 . 2)))
+                 ("aa:ca" . ((0 . 0) (1 . 0) (2 . 0)))
+                 ("aa:cc" . ((0 . 0) (0 . 1) (0 . 2)
+                             (1 . 0) (1 . 1) (1 . 2)
+                             (2 . 0) (2 . 1) (2 . 2))))))
 
-))
-        (should (equal obs exp))))
+    (dolist (i cases)
+      (should (equal (sgf-decode-prop-pos (car i)) (cdr i))))))
+
+
+(ert-deftest sgf-decode-prop-LB ()
+  (let ((cases '(("ee:foo" . ((4 . 4) . "foo"))
+                 ("bb:spam:a" . ((1 . 1) . "spam:a"))))
+        label)
+    (dolist (i cases)
+      (setq label (car i))
+      (should (equal (cdr i) (sgf-decode-prop-LB label))))))
+
+
+(ert-deftest sgf-parse-test ()
+  (require 'project)
+  ;; TODO any better alternatives to get tests dir?
+  (let* ((root-dir (project-root (project-current)))
+         (test-dir "tests")
+         (data-filename "test-13x15.sgf")
+         (data-filepath (file-name-concat root-dir test-dir data-filename))
+         (obs (sgf-parse-file data-filepath 'sgf-parse-buffer-to-tree))
+         (exp [1
+               ([2
+                 ([3 "FF" ([5 "4" 8]) 8] [8 "GM" ([10 "1" 13]) 13]
+                  [13 "SZ" ([15 "13:15" 22]) 22]
+                  [22 "AB" ([24 "ca" 28] [28 "bb" 32] [32 "db:eb" 39] [39 "cc" 43])
+                      43]
+                  [43 "AW" ([45 "da:ea" 52] [52 "fb" 56] [56 "dc:ec" 63]) 63]
+                  [63 "PL" ([65 "W" 68]) 68] [68 "CA" ([70 "UTF-8" 77]) 77]
+                  [77 "AP" ([79 "Sabaki:0.52.2" 94]) 94]
+                  [94 "KM" ([96 "6.5" 101]) 101]
+                  [101 "DT" ([103 "2024-09-19" 115]) 116])
+                 116]
+                [116 ([117 "W" ([118 "ce" 122]) 122]) 122]
+                [122 ([123 "B" ([124 "be" 128]) 129]) 129]
+                ([129
+                  ([131
+                    ([133 "W" ([135 "cb" 141]) 142] [142 "SQ" ([144 "bb" 148]) 148]
+                     [148 "TR" ([150 "db" 154] [154 "eb" 158]) 158]
+                     [158 "LB" ([160 "fb:A" 166]) 166]
+                     [166 "C" ([167 "comment@\\[foo\\]" 184]) 184]
+                     [184 "MN" ([186 "15" 190]) 192])
+                    192]
+                   [192 ([193 "B" ([194 "db" 198]) 200]) 200]
+                   [200 ([201 "W" ([202 "eb" 206]) 208]) 208]
+                   [208 ([209 "B" ([210 "cb" 214]) 215]) 215])
+                  216]
+                 [217 ([218 ([219 "W" ([220 "ba" 224]) 224]) 224]) 225]))
+               227]
+
+              ))
+    (should (equal obs exp))))
+
+
+(ert-deftest sgf-io-cycle-test ()
+  "Test `sgf-str-to-game-tree' and `sgf-str-from-game-tree'."
+  (let* ((cases '("(;FF[4]GM[1]SZ[3:2])"
+                  "(;FF[4]GM[1]SZ[3:2];B[aa];W[ba])"
+                  "(;FF[4]GM[1]SZ[9];B[ba]C[comment](;W[cc];B[ab])(;W[ee]))"
+                 "(;FF[4]GM[1]SZ[13:15]AB[bb][ca][cc][db:eb]AW[da:ea][dc:ec][fb]PL[W]CA[UTF-8]AP[Sabaki:0.52.2]KM[6.5]DT[2024-09-19];W[ce];B[be](;W[cb]SQ[bb]TR[db:eb]LB[fb:A]C[comment@\\[foo\\]]MN[15];B[db];W[eb];B[cb])(;W[ba]))"))
+         game-state)
+    (dolist (sgf-str cases)
+      (with-temp-buffer
+        (erase-buffer)
+        (insert sgf-str)
+        (setq game-state (sgf-parse-buffer-to-game-state (point-min) (point-max)))
+        (should (string= (sgf-serialize-game-to-str (aref game-state 0))  sgf-str))))))

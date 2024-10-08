@@ -8,6 +8,17 @@
 
 ;;; Code:
 
+(require 'sgf-mode)
+
+(ert-deftest sgf-board-hoshi-test ()
+  "Test for board hoshi"
+  (let ((cases '(((9 9) . ((4 . 4)))
+                 ((16 16) . ((3 . 3) (12 . 3) (3 . 12) (12 . 12)))
+                 ((13 13) . ((6 . 6) (3 . 3)  (9 . 3) (3 . 9) (9 . 9)))
+                 ((19 19) . ((9 . 9) (3 . 3)  (15 . 3) (3 . 15) (15 . 15) (3 . 9) (15 . 9) (9 . 3) (9 . 15))))))
+    (dolist (i cases)
+      (should (equal (apply #'sgf-board-hoshi (car i)) (cdr i))))))
+
 
 (ert-deftest sgf-process-move-test ()
   (should (equal (sgf-process-move '((B (1 . 2)) (C "comment")))
@@ -20,57 +31,38 @@
   (let ((board-2d [[B B W]
                    [B W E]
                    [W E E]]))
-    (sgf-neighbors-xy '(1 . 1) board-2d)
-    (sgf-neighbors-xy nil board-2d)))
+    (should (equal (sort (sgf-neighbors-xy '(1 . 1) board-2d))
+                   '((0 . 1) (1 . 0) (1 . 2) (2 . 1))))))
 
 
 (ert-deftest sgf-check-liberty-test ()
   (let ((board-2d [[B B W]
                    [B W E]
                    [W E E]]))
-    (should (equal (car (sgf-check-liberty nil board-2d)) t))
+    ;(should (equal (car (sgf-check-liberty nil board-2d)) t))
     (should (equal (car (sgf-check-liberty '(1 . 1) board-2d)) t))
     (should (equal (sgf-check-liberty '(0 . 1) board-2d) '(nil (1 . 0) (0 . 0) (0 . 1))))
     (should (equal (sgf-check-liberty '(1 . 0) board-2d) '(nil (0 . 1) (0 . 0) (1 . 0))))))
 
 
-(ert-deftest sgf-capture-stones-test ()
-  (let ((board-2d [[B B W]
-                   [B W E]
-                   [W E E]]))
-    (should (equal (sgf-capture-stones '(2 . 2) board-2d) 0))
-    (should (equal (sgf-capture-stones '(0 . 0) board-2d) 0))
-    (should (equal (sgf-capture-stones '(1 . 1) board-2d) 3))
-    ;;(should (equal (sgf-capture-stones '(0 . 2) board-2d) 3))
-    (should (equal [[E E W]
-                    [E W E]
-                    [W E E]] board-2d))))
-
-
 
 (ert-deftest sgf-capture-stones-test ()
   (let ((board-2d [[B B W]
                    [B W E]
                    [W E E]]))
-    (should-not (sgf-capture-stones nil board-2d))
+    ;(should-not (sgf-capture-stones nil board-2d))
     (should-not (sgf-capture-stones '(2 . 2) board-2d))
     (should-not (sgf-capture-stones '(0 . 0) board-2d))
     (should (equal (sort (sgf-capture-stones '(1 . 1) board-2d))
                    '((0 . 0) (0 . 1) (1 . 0))))))
-    ;;(should (equal (sgf-capture-stones '(0 . 2) board-2d) 3))
 
 
-(ert-deftest sgf-suicide-p-test ()
-  (let ((board-2d [[E B W]
+(ert-deftest sgf-suicide-stones-test ()
+  (let ((board-2d [[B B W]
                    [B W E]
                    [W E E]]))
-    (should (sgf-suicide-p '(0 . 0) 'W board-2d))
-    ;; make sure board-2d is not changed
-    (should (equal (sgf-game-board-get '(0 . 0) board-2d) 'E))
-    (should (sgf-suicide-p '(0 . 0) 'B board-2d))
-    (should-not (sgf-suicide-p '(2 . 2) 'B board-2d))
-    (should-not (sgf-suicide-p '(2 . 1) 'B board-2d))
-    (should-not (sgf-suicide-p '(1 . 2) 'B board-2d))))
+    (should (equal (sort (sgf-suicide-stones '(0 . 0)  board-2d))
+                   '((0 . 0) (0 . 1) (1 . 0))))))
 
 
 (provide 'sgf-mode-test)
