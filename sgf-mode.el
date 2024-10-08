@@ -19,47 +19,6 @@
 (require 'sgf-io)
 
 
-(defcustom sgf-show-next t
-  "Show the hint mark(s) for next move(s)."
-  :group 'sgf-plist)
-
-(defcustom sgf-show-number nil
-  "Show move number on the stones."
-  :group 'sgf-plist)
-
-(defcustom sgf-show-mark t
-  "Show marks on the board."
-  :group 'sgf-plist)
-
-(defcustom sgf-suicide-move nil
-  "Allow suicide or not. Some rule set allow suicide: https://senseis.xmp.net/?Suicide"
-  :group 'sgf-plist)
-
-(defcustom sgf-editable t
-  "Allow edit of the SGF buffer from the game."
-  :group 'sgf-plist)
-
-(defcustom sgf-traverse-path nil
-  "Default path to traverse thru when initiate game and display.
-
-Examples:
-
-1. `nil' or `0'. do nothing and stay at the beginning of the game.
-
-2. `t'. move to the end of the game. choose the first branch when come across a fork.
-
-3. `-1'. similar to Example 2 except stay at the move next to the last.
-
-4. `3'. similar to Example 2 except stay at the 3rd move from the beginning.
-
-5. `(34 ?a ?b ?a)'. move forward 34 steps in total by selecting branch a, b and then a respectively
-
-6. `(B (1 . 2))'. move to the first move put B stone at the position x=1 and y=2.
-
-See also `sgf-traverse'. It uses `read-from-string' or `read' to convert
-the text value of this variable to elisp object."
-  :group 'sgf-plist)
-
 
 ;; TODO check there is only one entity for every type of prop
 (defun sgf-show-comment (node)
@@ -516,7 +475,7 @@ Cases:
      ;; Case 1: Clicked on one of the next move position
      (found (sgf-forward-move found))
      ;; Case 2: Clicked on an empty position not equal to ko
-     ((sgf-valid-move-p xy turn game-state (sgf-game-plist-get :suicide-move ov))
+     ((sgf-valid-move-p xy turn board-2d ko (sgf-game-plist-get :suicide-move ov))
       (let ((n (length next-lnodes))
             (new-lnode (sgf-linked-node curr-lnode `((,turn ,xy)))))
         ;; add the new node as the last branch
@@ -881,24 +840,23 @@ If BEG and END are nil, parse the whole buffer as SGF content."
 (defun sgf--setup-overlay (ov game-state svg-hot-areas game-plist)
   "Setup overlay properties for the game."
   ;; game properties
-  (let ((g-plist (sgf-create-game-plist game-plist)))
-    (overlay-put ov 'game-plist g-plist)
+    (overlay-put ov 'game-plist game-plist)
     (overlay-put ov 'game-state game-state)
     (overlay-put ov 'svg (car svg-hot-areas))
     (overlay-put ov 'hot-areas (cdr svg-hot-areas))
     (overlay-put ov 'keymap sgf-mode-graphical-map)
-
+    ;; (overlay-put ov 'modification-hooks '(sgf-update-game-from-text))
     ;; Traverse to the specified game state and update display
-    (sgf-traverse (sgf-game-plist-get :path))
+    (sgf-traverse (sgf-game-plist-get :traverse-path))
     (sgf-update-display ov)
     ;; toggle to the specified
-    (unless (plist-get g-plist :show-next) (sgf-toggle-nexts t))
-    (unless (plist-get g-plist :show-number) (sgf-toggle-numbers t))
-    (unless (plist-get g-plist :show-mark) (sgf-toggle-marks t))
-    ov))
+    (unless (plist-get game-plist :show-next) (sgf-toggle-nexts))
+    (unless (plist-get game-plist :show-number) (sgf-toggle-numbers))
+    (unless (plist-get game-plist :show-mark) (sgf-toggle-marks))
+    ov)
 
 
-(defun sgf-setup-new-game (&optional beg end &rest game-plist)
+(defun sgf-setup-new-game (&optional beg end game-plist)
   "Initialize a new game and overlay with empty SGF content.
 
 The existing SGF content in the buffer will be erased."
@@ -926,7 +884,7 @@ The existing SGF content in the buffer will be erased."
     (sgf--setup-overlay ov game-state svg-hot-areas game-plist)))
 
 
-(defun sgf-start-the-game (&optional beg end &rest game-plist)
+(defun sgf-start-the-game (&optional beg end game-plist)
   "Create a fresh overlay and setup overlay properties.
 
 It removes old overlays if there is any."

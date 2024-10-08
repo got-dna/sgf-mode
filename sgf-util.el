@@ -15,36 +15,76 @@
 
 ;;; Code:
 
+
+(defcustom sgf-show-next t
+  "Show the hint mark(s) for next move(s)."
+  :type '(boolean))
+
+(defcustom sgf-show-number nil
+  "Show move number on the stones."
+  :type '(boolean))
+
+(defcustom sgf-show-mark t
+  "Show marks on the board."
+  :type '(boolean))
+
+(defcustom sgf-suicide-move nil
+  "Allow suicide or not. Some rule set allow suicide: https://senseis.xmp.net/?Suicide"
+  :type '(boolean))
+
+(defcustom sgf-editable t
+  "Allow edit of the SGF buffer from the game."
+  :type '(boolean))
+
+(defcustom sgf-traverse-path nil
+  "Default path to traverse thru when initiate game and display.
+
+Examples:
+
+1. `nil' or `0'. do nothing and stay at the beginning of the game.
+
+2. `t'. move to the end of the game. choose the first branch when come across a fork.
+
+3. `-1'. similar to Example 2 except stay at the move next to the last.
+
+4. `3'. similar to Example 2 except stay at the 3rd move from the beginning.
+
+5. `(34 ?a ?b ?a)'. move forward 34 steps in total by selecting branch a, b and then a respectively
+
+See also `sgf-traverse'. It uses `read-from-string' or `read' to convert
+the text value of this variable to elisp object."
+  :type '(choice (integer :tag "number of moves from start (positive number) or from end (negative number)")
+                 (boolean :tag "start or end of the game")
+                 (list :tag "list of steps and branches"
+                       :value '(1 ?a)    ;; Default value as an example
+                       (natnum :tag "number of steps")
+                       (repeat character :tag "branch character"))))
+
+
 (defun sgf-default-game-plist ()
-  "Get the game-plist keys from defcustom variables.
-
-(sgf-default-game-plist) =>
-(:show-next :show-number :show-mark :suicide-move :editable :traverse-path)"
-  (let ((plist))
-    (dolist (i (custom-group-members 'sgf-plist nil))
-      (let* ((var (car i))
-             (key (intern (format ":%s" (substring (symbol-name (car i)) 4)))))
-        (push var plist)
-        (push key plist)))
-    plist))
+  `(:show-next ,sgf-show-next
+               :show-number ,sgf-show-number
+               :show-mark ,sgf-show-mark
+               :suicide-move ,sgf-suicide-move
+               :editable ,sgf-editable
+               :traverse-path ,sgf-traverse-path))
 
 
-(defun sgf-create-game-plist (&rest plist)
+(defun sgf-update-game-plist (input-plist &rest plist)
   "Create a property list for the game.
 
 Update the global default variable value in the plist from GAME-PLIST.
 
  Examples:
-(sgf-create-game-plist :foo 'a :editable nil)
-(sgf-create-game-plist :show-next nil :show-mark t :path '(9 ?b ?a))"
-  (let ((game-plist (sgf-default-game-plist)))
-    (while plist
-      (let* ((key (pop plist))
-             (value (pop plist)))
-        (if (plist-member game-plist key)
-            ;; only update/add if it is a customizable variable
-            (plist-put game-plist key value))))
-      game-plist))
+(sgf-update-game-plist (sgf-default-game-plist) :foo 1 :editable nil)
+(sgf-update-game-plist (sgf-default-game-plist) :show-mark t :traverse-path \\='(9 ?b ?a))"
+  (while plist
+    (let* ((key (pop plist))
+           (value (pop plist)))
+      (if (plist-member input-plist key)
+          ;; only update/add if it is a defined customizable variable
+          (plist-put input-plist key value))))
+  input-plist)
 
 ;; Alternative implementation
 ;; (defun sgf-process-move (node)
