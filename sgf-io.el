@@ -711,11 +711,14 @@ For example:
          (end (overlay-end ov))
          (game-state (overlay-get ov 'game-state))
          (lnode (aref game-state 0))
-         (sgf-str (sgf-serialize-game-to-str lnode)))
-    (with-current-buffer buffer)
-    ;; (setq buffer-read-only nil)
-    (delete-region beg end)
-    (insert "(" sgf-str ")")))
+         (hooks (overlay-get ov 'modification-hooks)))
+    ;; disable the hook temporarily
+    (overlay-put ov 'modification-hooks nil)
+    (with-current-buffer buffer
+      ;; (setq buffer-read-only nil)
+      (delete-region beg end)
+      (insert (sgf-serialize-game-to-str lnode)))
+    (overlay-put ov 'modification-hooks hooks)))
 
 
 (provide 'sgf-io)

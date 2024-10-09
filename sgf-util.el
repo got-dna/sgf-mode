@@ -20,7 +20,7 @@
   "Show the hint mark(s) for next move(s)."
   :type '(boolean))
 
-(defcustom sgf-show-number nil
+(defcustom sgf-show-number t
   "Show move number on the stones."
   :type '(boolean))
 
@@ -85,6 +85,15 @@ Update the global default variable value in the plist from GAME-PLIST.
           ;; only update/add if it is a defined customizable variable
           (plist-put input-plist key value))))
   input-plist)
+
+
+(defun sgf-toggle (current &optional true-or-false)
+  "Toggle boolean options."
+  (cond ((null true-or-false) (not current)) ; toggle
+        ((eq true-or-false 'true) t)
+        ((eq true-or-false 'false) nil)
+        (t current)))
+
 
 ;; Alternative implementation
 ;; (defun sgf-process-move (node)
@@ -224,7 +233,7 @@ See also `sgf-lnode-depth'."
 
 (defun sgf-xy-is-empty-p (xy board-2d)
   "Check if XY is empty on the board."
-  (equal (sgf-board-get xy board-2d) 'E))
+  (eq (sgf-board-get xy board-2d) 'E))
 
 
 (defun sgf-valid-move-p (xy stone board-2d ko &optional allow-suicide)

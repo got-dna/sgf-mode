@@ -27,7 +27,7 @@
 
 
 ;;; Code:
-(require 'sgf-mode)
+(require 'sgf-io)
 
 (require 'ob)
 ;; (require 'ob-ref)

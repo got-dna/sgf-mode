@@ -20,7 +20,7 @@ It is a reference for all other element sizes."
   :type '(number)
   :group 'sgf-svg)
 
-(defcustom sgf-svg-margin 25
+(defcustom sgf-svg-margin 30
   "Default pixels for the margin of the board."
   :type '(number)
   :group 'sgf-svg)
@@ -77,10 +77,11 @@ It is a reference for all other element sizes."
          (board-h (+ sgf-svg-margin grid-h sgf-svg-margin))
          (line-width 0.5)
          (star-radius 2)
-         (hot-grid-u-l (cons sgf-svg-margin (+ sgf-svg-bar sgf-svg-margin)))
+         (idx-font-scale 0.7)
+         (hot-grid-t-l (cons sgf-svg-margin (+ sgf-svg-bar sgf-svg-margin)))
          (hot-grid-b-r (cons (+ sgf-svg-margin (* (1- w) sgf-svg-interval))
                              (+ sgf-svg-bar sgf-svg-margin (* (1- h) sgf-svg-interval))))
-         (hot-areas (list (list (cons 'rect (cons hot-grid-u-l hot-grid-b-r))
+         (hot-areas (list (list (cons 'rect (cons hot-grid-t-l hot-grid-b-r))
                                 'hot-grid (list 'pointer 'hand))))
          svg status-bar board grid menu-bar ; svg nodes
          idx)
@@ -107,7 +108,6 @@ It is a reference for all other element sizes."
     ;; Board Grid
     (setq grid (svg-node board 'g
                          :id "game-grid"
-                         :font-size sgf-svg-font-size
                          :font-family sgf-svg-font-family
                          :transform (format "translate(%s, %s)" sgf-svg-margin sgf-svg-margin)))
     ;; Grid Lines
@@ -115,9 +115,11 @@ It is a reference for all other element sizes."
       ;; vertical lines
       (setq idx (format "%c" (if (< n (- ?I ?A)) (+ ?A n) (+ ?A n 1)))) ; skip char I
       (svg-text grid idx :class "grid-idx"
+                :font-size (* sgf-svg-font-size idx-font-scale)
                 :x (* sgf-svg-interval n) :y (- sgf-svg-font-size)
                 :dominant-baseline "hanging" :text-anchor "middle")
       (svg-text grid idx :class "grid-idx"
+                :font-size (* sgf-svg-font-size idx-font-scale)
                 :x (* sgf-svg-interval n) :y (* sgf-svg-interval h)
                 :text-anchor "middle")
       (svg-line grid (* sgf-svg-interval n) 0 (* sgf-svg-interval n) (* grid-h)
@@ -126,9 +128,11 @@ It is a reference for all other element sizes."
       ;; horizontal lines
       (setq idx (number-to-string (- h n)))
       (svg-text grid idx :class "grid-idx"
+                :font-size (* sgf-svg-font-size idx-font-scale)
                 :x (- sgf-svg-font-size) :y (* sgf-svg-interval n)
                 :text-anchor "end" :dy ".25em")
       (svg-text grid idx :class "grid-idx"
+                :font-size (* sgf-svg-font-size idx-font-scale)
                 :x (+ grid-w sgf-svg-font-size) :y (* sgf-svg-interval n)
                 :text-anchor "start" :dy ".25em")
       (svg-line grid 0 (* sgf-svg-interval n) grid-w (* sgf-svg-interval n)
@@ -264,7 +268,7 @@ PRISONERS is a cons cell of black and white prisoner counts."
       (setcdr (cdr node) nil)))
 
 
-(defun sgf-svg-update-marks (svg node board-2d)
+(defun sgf-svg-add-marks (svg node board-2d)
   "Process and update the marks on the board for a node.
 
 It removes the old marks and adds the new marks."
@@ -276,21 +280,24 @@ It removes the old marks and adds the new marks."
       (setq type (car prop))
       (if (member type '(SQ TR CR MA))
           (dolist (xy (cdr prop))
-            (let ((x (car xy))
-                  (y (cdr xy))
-                  (xy-state (sgf-board-get xy board-2d)))
-              (sgf-svg-add-mark type marks-group x y xy-state))))
+            (let* ((x (car xy))
+                   (y (cdr xy))
+                   (xy-state (sgf-board-get xy board-2d))
+                   (color (sgf-svg-set-color xy-state)))
+              (sgf-svg-add-mark type marks-group x y color))))
       (if (equal type 'LB)
           (dolist (prop-val (cdr prop))
             (let* ((label (cdr prop-val))
                    (xy (car prop-val))
                    (x (car xy))
                    (y (cdr xy))
-                   (xy-state (sgf-board-get xy board-2d)))
-              (sgf-svg-add-text marks-group x y label xy-state)))))))
+                   (xy-state (sgf-board-get xy board-2d))
+                   (color (sgf-svg-set-color xy-state)))
+              (message "---------%S %S" xy-state color)
+              (sgf-svg-add-text marks-group x y label color)))))))
 
 
-(defun sgf-svg-update-nexts (svg curr-lnode)
+(defun sgf-svg-add-nexts (svg curr-lnode)
   "Update and show branches/next move(s) on board svg."
   (let* ((next-lnodes (aref curr-lnode 2))
          (branch-count (length next-lnodes))
@@ -332,17 +339,17 @@ It removes the old marks and adds the new marks."
 (defun sgf-svg-mvnum-id (x y) (format "mvnum-%s-%s" x y))
 
 
-(defun sgf-svg-remove-last-move (svg-group)
-  (svg-remove svg-group "last-move"))
+;; (defun sgf-svg-remove-last-move (svg-group)
+;;   (svg-remove svg-group "last-move"))
 
 
-(defun sgf-svg-mark-last-move (svg curr-node)
-  "Highlight the last move on the board."
-  (let* ((svg-group (sgf-svg-group-stones svg))
-         (xy (cdr (sgf-process-move curr-node))))
-    (sgf-svg-remove-last-move svg-group)
-    (if xy
-        (sgf-svg-add-square svg-group (car xy) (cdr xy) :id "last-move" :fill "red"))))
+;; (defun sgf-svg-mark-last-move (svg curr-node)
+;;   "Highlight the last move on the board."
+;;   (let* ((svg-group (sgf-svg-group-stones svg))
+;;          (xy (cdr (sgf-process-move curr-node))))
+;;     (sgf-svg-remove-last-move svg-group)
+;;     (if xy
+;;         (sgf-svg-add-square svg-group (car xy) (cdr xy) :id "last-move" :fill "red"))))
 
 
 
@@ -441,10 +448,9 @@ It removes the old marks and adds the new marks."
            attributes)))
 
 
-(defun sgf-svg-add-mark (type svg-group x y xy-state)
+(defun sgf-svg-add-mark (type svg-group x y color)
   "Add a mark to the marks group in a svg."
-  (let* ((color (sgf-svg-set-color xy-state))
-         (adders '((SQ . sgf-svg-add-square)
+  (let* ((adders '((SQ . sgf-svg-add-square)
                    (CR . sgf-svg-add-circle)
                    (TR . sgf-svg-add-triangle)
                    (MA . sgf-svg-add-cross)))
@@ -452,5 +458,12 @@ It removes the old marks and adds the new marks."
     (funcall adder svg-group x y
              :fill "none" :stroke color :stroke-width 2)))
 
+
+(defun sgf-svg-toggle-visibility (svg-group)
+  "Toggle the visibility of the SVG-GROUP."
+  (let ((visibility (dom-attr svg-group 'visibility)))
+    (dom-set-attribute svg-group 'visibility
+                       (if (or (null visibility) (equal visibility "visible"))
+                           "hidden" "visible"))))
 
 (provide 'sgf-svg)
