@@ -1,4 +1,4 @@
-;;; sgf-org.el --- sgf block in org-mode -*- lexical-binding: t -*-
+;;; ob-sgf.el --- sgf block in org-mode -*- lexical-binding: t -*-
 
 ;; Author: Zech Xu <
 ;; Version: version
@@ -11,27 +11,37 @@
 
 ;;; Commentary:
 
-;; Implement SGF code block in org-mode. It defines new header args. C-c C-c to display graphics.
-;; Used template at https://orgmode.org/worg/org-contrib/babel/languages/index.html#develop
+;; Implement SGF code block in org-mode using template at
+;; https://orgmode.org/worg/org-contrib/babel/languages/index.html#develop.
+;; It defines new header args:
+
+;; 1. :show-number - t or nil value to show move number on the game board or not.
+;; 2. :show-mark - t or nil value to show marks on the board or not.
+;; 3. :show-next - t or nil value to show hint mark(s) for next move on the board or not.
+;; 4. :traverse-path - See `sgf-traverse-path' value to traverse to the game state.
+;; 5. :editable - t or nil value to allow change on the game
+
+;; It takes advantage of `C-c C-c' to display graphics of game board.
+;; Use `C-u C-c C-c' to delete existing overlay and recreate the game.
+
 
 
 ;;; Code:
 (require 'sgf-mode)
 
 (require 'ob)
-(require 'ob-ref)
-(require 'ob-comint)
-(require 'ob-eval)
-;; possibly require modes required for your language
+;; (require 'ob-ref)
+;; (require 'ob-comint)
+;; (require 'ob-eval)
 
 ;; optionally define a file extension for this language
 (add-to-list 'org-babel-tangle-lang-exts '("SGF" . "sgf"))
 
-;; create overlay object (call sgf-create-overlay)
-;; retrieve header args and update game-plist on overlay
 
 ;; optionally declare default header arguments for this language
-(defvar org-babel-default-header-args:sgf '())
+;; set cache so that overlay is recreated only upon C-u C-c C-c.
+(defvar org-babel-default-header-args:sgf '((:show-next . "nil")
+                                            (:cache . "yes")))
 
 ;; This function expands the body of a source code block by doing things like
 ;; prepending argument definitions to the body, it should be called by the
@@ -63,6 +73,7 @@ current source block."
     (save-excursion
       (goto-char post-affiliated)
       (forward-line 1)
+      (sgf-parse-skip-ws)
       (setq val-beg (point))
       (goto-char end)
       (forward-line (- (1+ post-blank)))
@@ -89,7 +100,7 @@ current source block."
 ;; "session" evaluation).  Also you are free to define any new header
 ;; arguments which you feel may be useful -- all header arguments
 ;; specified by the user will be available in the PARAMS variable.
-(defun org-babel-execute:sgf (body params)
+(defun org-babel-execute:sgf (_body params)
   "Execute a block of SGF code with org-babel.
 This function is called by `org-babel-execute-src-block'"
   (message "executing SGF block to play game...")
@@ -105,47 +116,9 @@ This function is called by `org-babel-execute-src-block'"
             (sgf-update-game-plist game-plist key (read val)))))
     ;; (message "game-plist:\n%S" game-plist)
 
-    (sgf-start-the-game (car beg-end) (cdr beg-end) game-plist)
-
-    ;; actually execute the source-code block either in a session or
-    ;; possibly by dropping it to a temporary file and evaluating the
-    ;; file.
-    ;;
-    ;; for session based evaluation the functions defined in
-    ;; `org-babel-comint' will probably be helpful.
-    ;;
-    ;; for external evaluation the functions defined in
-    ;; `org-babel-eval' will probably be helpful.
-    ;;
-    ;; when forming a shell command, or a fragment of code in some
-    ;; other language, please preprocess any file names involved with
-    ;; the function `org-babel-process-file-name'. (See the way that
-    ;; function is used in the language files)
-    ))
-
-;; This function should be used to assign any variables in params in
-;; the context of the session environment.
-(defun org-babel-prep-session:sgf (session params)
-  "Prepare SESSION according to the header arguments specified in PARAMS."
-  )
-
-(defun org-babel-sgf-var-to-sgf (var)
-  "Convert an elisp var into a string of sgf source code
-specifying a var of the same value."
-  (format "%S" var))
-
-(defun org-babel-sgf-table-or-string (results)
-  "If the results look like a table, then convert them into an
-Emacs-lisp table, otherwise return the results as a string."
-  )
-
-(defun org-babel-sgf-initiate-session (&optional session)
-  "If there is not a current inferior-process-buffer in SESSION then create.
-Return the initialized session."
-  (unless (string= session "none")
-    ))
+    ;; (sgf-setup-game (string= cache "no") (car beg-end) (cdr beg-end) game-plist)
+    (sgf-setup-game nil (car beg-end) (cdr beg-end) game-plist)))
 
 (provide 'ob-sgf)
 
-(provide 'sgf-org)
-;;; sgf-org.el ends here
+;;; ob-sgf.el ends here
