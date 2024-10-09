@@ -575,7 +575,33 @@ The move number will be incremented."
    "Click on the board to edit white stones. "))
 
 
-(defun sgf--action-mark (event shape)
+(defun sgf-edit-mark-function-maker (mark-type mark-name)
+  "Create a function to add/delete a MARK-NAME mark on the board."
+  (let ((fn-name (intern (format "sgf-edit-mark-%s" mark-name)))
+        (action-fn (pcase mark-type
+                     ((or 'SQ 'TR 'CR 'MA) 'sgf--action-mark-shape)
+                     ('LB 'sgf--action-mark-label))))
+    (fset fn-name
+          (lambda ()
+            "Add/delete a mark on the board of the current game state."
+            (interactive)
+            (unless (sgf-game-plist-get :show-mark)
+              (message "Marks were not displayed. Enable it.")
+              (sgf-toggle-marks))
+            (sgf--handle-mouse-input
+             (lambda (event) (interactive "e") (funcall action-fn event mark-type))
+             (format "Click on the board to edit %s mark." mark-name))))
+    fn-name))
+
+;; Create the marking functions
+(sgf-edit-mark-function-maker 'SQ "square")
+(sgf-edit-mark-function-maker 'TR "triangle")
+(sgf-edit-mark-function-maker 'CR "circle")
+(sgf-edit-mark-function-maker 'MA "cross")
+(sgf-edit-mark-function-maker 'LB "label")
+
+
+(defun sgf--action-mark-shape (event shape)
   (let* ((xy (sgf-mouse-event-to-xy event))
          (ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
@@ -602,44 +628,8 @@ The move number will be incremented."
     ;; Update the display
     (sgf-update-display ov)))
 
-;; TODO dynamically generate these functions
-(defun sgf-edit-mark-square ()
-  "Add/delete a square mark on the board of current game state."
-  (interactive)
-  (unless (sgf-game-plist-get :show-mark)
-    (message "Marks were not displayed. Enable it.")
-    (sgf-toggle-marks))
-  (sgf--handle-mouse-input
-   ;; Create a closure that captures the value of `stone`
-   (lambda (event) (interactive "e") (sgf--action-mark event 'SQ))
-   "Click on the board to edit square mark. "))
 
-(defun sgf-edit-mark-triangle ()
-  "Add/delete a triangle mark on the board of current game state."
-  (interactive)
-  (sgf--handle-mouse-input
-   ;; Create a closure that captures the value of `stone`
-   (lambda (event) (interactive "e") (sgf--action-mark event 'TR))
-   "Click on the board to edit triangle mark. "))
-
-(defun sgf-edit-mark-circle ()
-  "Add/delete a circle mark on the board of current game state."
-  (interactive)
-  (sgf--handle-mouse-input
-   ;; Create a closure that captures the value of `stone`
-   (lambda (event) (interactive "e") (sgf--action-mark event 'CR))
-   "Click on the board to edit circle mark. "))
-
-(defun sgf-edit-mark-cross ()
-  "Add/delete a cross mark on the board of current game state."
-  (interactive)
-  (sgf--handle-mouse-input
-   ;; Create a closure that captures the value of `stone`
-   (lambda (event) (interactive "e") (sgf--action-mark event 'MA))
-   "Click on the board to edit cross mark. "))
-
-
-(defun sgf--action-mark-label (event)
+(defun sgf--action-mark-label (event _)
   "Add, edit, or delete a label mark on the board of current game state."
   (interactive "e")
   (let* ((xy (sgf-mouse-event-to-xy event))
@@ -675,14 +665,6 @@ The move number will be incremented."
     (sgf-serialize-game-to-buffer ov)
     ;; Update the display
     (sgf-update-display ov)))
-
-
-(defun sgf-edit-mark-label ()
-  "edit a label mark on the board of current game state."
-  (interactive)
-  (sgf--handle-mouse-input
-   'sgf--action-mark-label
-   "Click on the board to edit label. "))
 
 
 (defun sgf--action-delete-mark (event)
