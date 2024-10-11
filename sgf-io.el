@@ -460,7 +460,7 @@ state converted from the SGF content of FILE."
 
 
 (defun sgf-decode-prop-pos (val &optional beg end)
-  "Convert a single 2-letter or compressed position string (eg 'aa:ac') into a list of numeric pairs.
+  "Convert a single 2-letter or compressed position string (eg `aa:ac') into a list of numeric pairs.
 
 https://www.red-bean.com/sgf/sgf4.html#3.5.1
 
@@ -509,7 +509,7 @@ See also `sgf-encode-prop-pos'."
         (end (format "%s: " end))
         (t "")))
 
-;; todo: format and prettify text like move comment str
+;; todo: format and prettify text like comment str
 (defun sgf-io--prettify-text (txt)
   ;; Delete escaped line-break
   (setq txt (replace-regexp-in-string "\\\\\\(\n\r?\\|\r\n?\\)" "" txt))
@@ -705,20 +705,27 @@ For example:
 
 (defun sgf-serialize-game-to-buffer (ov)
   "Update the buffer region with the SGF string representation of game."
-
   (let* ((buffer (overlay-buffer ov))
          (beg (overlay-start ov))
          (end (overlay-end ov))
          (game-state (overlay-get ov 'game-state))
          (lnode (aref game-state 0))
-         (hooks (overlay-get ov 'modification-hooks)))
+         ;; disable all modification hooks including the overlay
+         ;; modification hooks temporarily.
+         (inhibit-modification-hooks t)
+         (inhibit-read-only t))
     ;; disable the hook temporarily
-    (overlay-put ov 'modification-hooks nil)
     (with-current-buffer buffer
       ;; (setq buffer-read-only nil)
-      (delete-region beg end)
-      (insert (sgf-serialize-game-to-str lnode)))
-    (overlay-put ov 'modification-hooks hooks)))
+      (save-excursion
+        ;; Wraps the operation in undo-boundary calls to ensure it's
+        ;; treated as a distinct unit in the undo list
+        (undo-boundary)
+        ;; group the delete and insert operations into a single undo unit.
+        (combine-change-calls beg end
+          (delete-region beg end)
+          (insert (sgf-serialize-game-to-str lnode)))
+        (undo-boundary)))))
 
 
 (provide 'sgf-io)

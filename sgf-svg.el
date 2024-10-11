@@ -223,7 +223,6 @@ SGF-SVG-BAR is the starting y coordinate for menu bar."
 
 (defun sgf-svg-set-color (xy-state)
   "Set mark/text color according to background color of the intersections on board."
-  ;; @todo optimize color
   (cond ((equal xy-state 'B) "white")
         ((equal xy-state 'W) "black")
         ((equal xy-state 'E) "white")
@@ -259,13 +258,6 @@ PRISONERS is a cons cell of black and white prisoner counts."
         (pw (cdr prisoners)))
     (setcar (nthcdr 2 status-pb) (number-to-string pb))
     (setcar (nthcdr 2 status-pw) (number-to-string pw))))
-
-
-(defun sgf-svg-clear-node-content (node)
-  "Remove all content under the SVG NODE."
-  (if node
-      ;; Keep the tag name and attributes, remove all children
-      (setcdr (cdr node) nil)))
 
 
 (defun sgf-svg-add-marks (svg node board-2d)
@@ -465,5 +457,15 @@ It removes the old marks and adds the new marks."
     (dom-set-attribute svg-group 'visibility
                        (if (or (null visibility) (equal visibility "visible"))
                            "hidden" "visible"))))
+
+
+(defun sgf-svg-clear-node-content (node)
+  "Remove all content under the SVG NODE.
+
+Attributes are kept."
+  (if node
+      ;; Keep the tag name and attributes, remove all children
+      (setcdr (cdr node) nil)))
+
 
 (provide 'sgf-svg)

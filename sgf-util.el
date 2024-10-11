@@ -88,7 +88,7 @@ Update the global default variable value in the plist from GAME-PLIST.
 
 
 (defun sgf-toggle (current &optional true-or-false)
-  "Toggle boolean options."
+  "Toggle the CURRENT boolean option."
   (cond ((null true-or-false) (not current)) ; toggle
         ((eq true-or-false 'true) t)
         ((eq true-or-false 'false) nil)

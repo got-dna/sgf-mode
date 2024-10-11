@@ -221,14 +221,14 @@ See also `sgf-forward-move'."
   (if interactive-call (sgf-update-display)))
 
 
-(defun sgf-traverse (path &optional interactive-call)
+(defun sgf-traverse (path &optional ov interactive-call)
   "Traverse the game tree from current node according to the PATH.
 
 For example, (sgf-traverse '(9 ?b ?a)) will move forward 9 steps and
 pick branch b and a in the 1st and 2nd forks (if come across forks),
  respectively."
-  (interactive "xTraverse path: \np")
-  (let* ((ov (sgf-get-overlay))
+  (interactive "xTraverse path: \ni\np")
+  (let* ((ov (or ov (sgf-get-overlay)))
          (game-state (overlay-get ov 'game-state)))
     (cond ((null path) nil) ; do nothing
           ((eq path t) (sgf-last-move 0)) ; pick the first branch at all forks
@@ -347,8 +347,7 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
     (sgf-serialize-game-to-buffer ov)))
 
 
-;; igo-editor-move-mode-make-move-root
-;; todo
+;; todo igo-editor-move-mode-make-move-root
 (defun sgf-root-node ()
   "Make the current node the root node.
 1. move all the nodes in between to the root node of setup.
@@ -495,7 +494,7 @@ Returns linked node found or nil if not. The game-state remains unchanged."
             (setq curr-lnode (aref curr-lnode 0))))))  ;; Move to the previous node
     found-lnode))  ;; Return the found node, or nil if not found
 
-;; todo: to finish
+
 (defun sgf-pass ()
   "Pass the current. Add a new node of W[] or B[].
 
@@ -694,7 +693,7 @@ The move number will be incremented."
 ;; (defun sgf-track-dragging ()
 ;;   "Track dragging on the board. igo-editor-track-dragging"
 ;;   (interactive)
-;;   (let* ((ov (car (overlays-in (point-min) (point-max))))
+;;   (let* ((ov   (sgf-get-overlay))
 ;;          (svg  (overlay-get ov 'svg))
 ;;          (hot-areas (overlay-get ov 'hot-areas))
 ;;          (sgf-svg-interval (car (overlay-get ov 'svg-params)))
@@ -737,22 +736,19 @@ The move number will be incremented."
     (overlay-put ov 'display (svg-image svg :map hot-areas))))
 
 
-(defun sgf-refresh-game-state (ov beg end)
-  "Refresh game from modified SGF buffer content."
-  (setq beg (or beg (point-min))
-        end (or end (point-max)))
-  (let* ((ov (sgf-get-overlay))
-         (path (sgf-lnode-path))
-         (new-game-state (sgf-parse-buffer-to-game-state beg end)))
-    (overlay-put ov 'game-state new-game-state)
-    ;; traverse to the same game state
-    (sgf-traverse path t)))
-
-
-(defun sgf-update-overlay-from-sgf (ov after beg end &optional length)
-  (let ((inhibit-modification-hooks t))
-    (if after                           ; after the text change
-        (sgf-refresh-game-state ov beg end))))
+(defun sgf-buffer-update-hook (ov after beg end &optional length)
+  ;; (message "--- beg: %d end: %d" beg end)
+  (when after                            ; after the text change
+    ;; (message "--- buffer %s" (buffer-substring beg end))
+    (let ((inhibit-modification-hooks nil)
+          (path (sgf-lnode-path))
+          (new-game-state (sgf-parse-buffer-to-game-state beg end)))
+      ;; (message "--- new game state\n: %S" new-game-state)
+      ;; (message "--- path: %S" path)
+      ;; (message "--- current buffer: %s" (buffer-substring-no-properties beg end))
+      (overlay-put ov 'game-state new-game-state)
+      ;; traverse to the same game state and display
+      (sgf-traverse path ov t))))
 
 
 (defun sgf-toggle-svg-display (&optional beg end)
@@ -768,8 +764,6 @@ If BEG and END are nil, parse the whole buffer as SGF content."
       (sgf-start-the-game (or beg (point-min))
                           (or end (point-max))))))
 
-
-
 (defun sgf--setup-overlay (ov game-state svg-hot-areas game-plist)
   "Setup overlay properties for the game."
   (let ((svg (car svg-hot-areas))
@@ -779,9 +773,9 @@ If BEG and END are nil, parse the whole buffer as SGF content."
     (overlay-put ov 'svg svg)
     (overlay-put ov 'hot-areas hot-areas)
     (overlay-put ov 'keymap sgf-mode-graphical-map)
-    (overlay-put ov 'modification-hooks '(sgf-update-overlay-from-sgf))
+    (overlay-put ov 'insert-behind-hooks '(sgf-buffer-update-hook))
     ;; Traverse to the specified game state and update display
-    (sgf-traverse (plist-get game-plist :traverse-path))
+    (sgf-traverse (plist-get game-plist :traverse-path) ov)
     ;; these svg group are visible when svg was created and needs to
     ;; be synced with game-plist when the overlay is initialized.
     (dolist (p '(:show-number :show-next :show-mark))
@@ -797,16 +791,20 @@ If BEG and END are nil, parse the whole buffer as SGF content."
 (defun sgf-setup-game (&optional new-game beg end game-plist)
   "Setup a game overlay.
 
-If NEW-GAME is non-nil, initializes a new game with empty SGF content.
-Otherwise, starts the game from the current buffer content."
-  (interactive "P\nr")
+If the prefix arg NEW-GAME is non-nil, initializes a new game with empty SGF content.
+Otherwise, starts the game from the current region (if active) or the whole buffer content.
+
+GAME-PLIST is primarily for header args of sgf block in org-mode."
+  (interactive
+   (if (use-region-p)
+       (list current-prefix-arg (region-beginning) (region-end))
+     (list current-prefix-arg (point-min) (point-max))))
   ;; remove old ones; otherwise, it accumulates repetitive overlays
-  ;; over calls
+  ;; over calls. it is safe to remove since game update should be
+  ;; reflected in buffer.
   (remove-overlays beg end)
 
-  (setq beg (or beg (point-min))
-        end (or end (point-max))
-        game-plist (or game-plist (sgf-default-game-plist)))
+  (setq game-plist (or game-plist (sgf-default-game-plist)))
 
   (if new-game
       (sgf-setup-new-game beg end game-plist)
@@ -824,6 +822,7 @@ The existing SGF content in the buffer will be erased."
          (pl (if (eq b-w ?b) 'B 'W))
          (root-node `((FF 4)
                       (GM 1)
+                      (DT ,(format-time-string "%Y-%m-%d"))
                       (SZ (,w . ,h))
                       (PL ,pl)))
          (root-lnode (sgf-linked-node nil root-node nil))
@@ -863,7 +862,8 @@ It removes old overlays if there is any."
         ;; make sure get the right overlay
         (if (overlay-get ov 'game-state)
             (setq sgf-ov ov))))
-    sgf-ov))
+    (or sgf-ov
+        (error "No SGF overlay found at position. Try moving point to an overlay region."))))
 
 
 (defun sgf-get-overlay ()
@@ -967,6 +967,7 @@ It removes old overlays if there is any."
 
 (defvar sgf-mode-graphical-map
   (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-t") 'sgf-toggle-svg-display)
     ;; navigation functions
     (define-key map "f" 'sgf-forward-move)
     (define-key map [hot-forward mouse-1] 'sgf-forward-move)
@@ -1019,7 +1020,7 @@ and only activated when the overlay is displayed.")
   "Major mode for editing SGF files. The following commands are available:
 \\{sgf-mode-map}"
   :keymap sgf-mode-map)
-;; TODO  font-lock, use imenu, use xref, use completion-at-point
+;; TODO  font-lock, use imenu
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.sgf\\'" . sgf-mode))
