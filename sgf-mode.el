@@ -967,6 +967,10 @@ It removes old overlays if there is any."
 
 (defvar sgf-mode-graphical-map
   (let ((map (make-sparse-keymap)))
+    ;; only the explicitly defined keys in your keymap will work. All
+    ;; other key presses that would normally insert characters will
+    ;; instead do nothing or produce an error message.
+    (suppress-keymap map)
     (define-key map (kbd "C-c C-t") 'sgf-toggle-svg-display)
     ;; navigation functions
     (define-key map "f" 'sgf-forward-move)
