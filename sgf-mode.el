@@ -161,18 +161,18 @@ See also `sgf-forward-move'."
          (stone (car move))
          (xy (cdr move))
          (board-2d (aref game-state 1))
-         (xy-state-old (sgf-board-get xy board-2d))
          (turn-old (aref game-state 3))
          (turn-new (sgf-enemy-stone turn-old))
          (ko-old (aref game-state 2))
          (pcounts (aref game-state 4))
          ko-new prisoners
          black-xys white-xys empty-xys)
-    ;; check it is legal move before make any change to game state
-    (unless (sgf-valid-move-p xy stone board-2d ko-old (sgf-game-plist-get :suicide-move))
-      (error "Invalid move of %S at %S" stone xy))
-    (when xy
-      ;; node is not a pass
+    (when xy   ; node is not a pass
+      ;; check it is legal move before make any change to game state
+      (unless (sgf-valid-move-p xy stone board-2d ko-old (sgf-game-plist-get :suicide-move))
+        (error "Invalid move of %S at %S" stone xy))
+      (if (eq (sgf-board-get xy board-2d) 'E)
+          (setq empty-xys (list xy)))
       (sgf-board-set xy stone board-2d)
       (setq prisoners (sgf-capture-stones xy board-2d))
       ;; Remove captured stones
@@ -185,9 +185,7 @@ See also `sgf-forward-move'."
         (setq white-xys prisoners))
       (when (eq stone 'W)
         (setcar pcounts (+ (length prisoners) (car pcounts)))
-        (setq black-xys prisoners))
-      (if (eq xy-state-old 'E)
-          (setq empty-xys (list xy))))
+        (setq black-xys prisoners)))
     (aset game-state 3 turn-new)
     (sgf-push-undo (vector black-xys white-xys empty-xys ko-old turn-old)
                    game-state)))
@@ -504,8 +502,10 @@ The move number will be incremented."
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (next-lnodes (aref curr-lnode 2))
+         (n (length next-lnodes))
          (new-lnode (sgf-linked-node curr-lnode '((W)))))
-    (aset curr-lnode 2 (append next-lnodes (list new-lnode)))
+    (aset curr-lnode 2 (nconc next-lnodes (list new-lnode)))
+    (sgf-forward-move n)
     (sgf-serialize-game-to-buffer ov)
     (sgf-update-display ov)))
 

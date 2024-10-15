@@ -379,22 +379,22 @@ It removes the old marks and adds the new marks."
     (while (not (sgf-root-p curr-lnode))
       (let* ((node (aref curr-lnode 1))
              (move (sgf-process-move node))
-             (xy (cdr move))
-             (stone (car move))
-             (xy-state (sgf-board-get xy board-2d))
-             (color (if (eq xy-state 'E)
-                        (sgf-svg-set-color (sgf-enemy-stone stone))
-                      (sgf-svg-set-color xy-state))))
+             (xy    (cdr move))
+             (stone (car move)))
         (setq mvnum
               (cond ((null mvnum) (setq color "red") curr-mvnum) ; the last move
                     ;; reset move number to the specified move
                     ;; number in the closest node backwards
                     ((alist-get 'MN node) (sgf-lnode-move-number curr-lnode))
                     (t (1- mvnum))))
-        (unless (gethash xy numbered-xys)
-          ;; add move number only if it does not already have a number.
-          (sgf-svg-add-mvnum svg-group (car xy) (cdr xy) mvnum color)
-          (puthash xy t numbered-xys))
+        (unless (or (null xy) (gethash xy numbered-xys))
+          (let* ((xy-state (sgf-board-get xy board-2d))
+                 (color (if (eq xy-state 'E)
+                            (sgf-svg-set-color (sgf-enemy-stone stone))
+                          (sgf-svg-set-color xy-state))))
+            ;; add move number only if it does not already have a number.
+            (sgf-svg-add-mvnum svg-group (car xy) (cdr xy) mvnum color)
+            (puthash xy t numbered-xys)))
         (setq curr-lnode (aref curr-lnode 0))))))
 
 
