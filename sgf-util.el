@@ -18,23 +18,28 @@
 
 (defcustom sgf-show-next t
   "Show the hint mark(s) for next move(s)."
-  :type '(boolean))
+  :type '(boolean)
+  :group 'sgf)
 
 (defcustom sgf-show-number t
   "Show move number on the stones."
-  :type '(boolean))
+  :type '(boolean)
+  :group 'sgf)
 
 (defcustom sgf-show-mark t
   "Show marks on the board."
-  :type '(boolean))
+  :type '(boolean)
+  :group 'sgf)
 
 (defcustom sgf-suicide-move nil
   "Allow suicide or not. Some rule set allow suicide: https://senseis.xmp.net/?Suicide"
-  :type '(boolean))
+  :type '(boolean)
+  :group 'sgf)
 
 (defcustom sgf-editable t
   "Allow edit of the SGF buffer from the game."
-  :type '(boolean))
+  :type '(boolean)
+  :group 'sgf)
 
 (defcustom sgf-traverse-path nil
   "Default path to traverse thru when initiate game and display.
@@ -49,16 +54,16 @@ Examples:
 
 4. `3'. similar to Example 2 except stay at the 3rd move from the beginning.
 
-5. `(34 ?a ?b ?a)'. move forward 34 steps in total by selecting branch a, b and then a respectively
+5. `(34 ?a ?b ?a)'. move forward 34 steps in total by selecting branch a, b and then a respectively for the first 3 forks.
 
-See also `sgf-traverse'. It uses `read-from-string' or `read' to convert
-the text value of this variable to elisp object."
-  :type '(choice (integer :tag "number of moves from start (positive number) or from end (negative number)")
-                 (boolean :tag "start or end of the game")
-                 (list :tag "list of steps and branches"
-                       :value '(1 ?a)    ;; Default value as an example
-                       (natnum :tag "number of steps")
-                       (repeat character :tag "branch character"))))
+See also `sgf-traverse'."
+  :type '(radio (integer :tag "Number of moves from start (positive number) or from end (negative number)")
+                (boolean :tag "Start or end of the game")
+                (cons :tag "Total step number and branches"
+                      (natnum :tag "number of steps" :value 9)
+                      (repeat :tag "branch character(s)"
+                              (character :tag "char (a-zA-Z)" :value ?a))))
+  :group 'sgf)
 
 
 (defun sgf-default-game-plist ()
