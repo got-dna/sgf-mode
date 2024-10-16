@@ -357,13 +357,16 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
     (sgf-serialize-game-to-buffer ov)))
 
 
-(defun sgf-prune ()
+(defun sgf-prune (&optional interactive-call)
   "Delete all its children of the current node."
-  (interactive)
+  (interactive "p")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0)))
     (aset curr-lnode 2 nil)
+    ;; update hint display if the hint is set to shown
+    (if (and interactive-call (sgf-game-plist-get :show-next))
+        (sgf-update-display ov t t nil))
     (sgf-serialize-game-to-buffer ov)))
 
 
@@ -371,8 +374,9 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
   "Delete the current node and all its children."
   (interactive)
   ;; update display
-  (sgf-backward-move t)
-  (sgf-prune))
+  (sgf-backward-move)
+  (sgf-prune)
+  (sgf-update-display))
 
 ;; todo
 (defun sgf-edit-game-info ()
