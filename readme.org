@@ -1,50 +1,42 @@
-require librsvg
+#+TILE: SGF-MODE - emacs-lisp package for GO game
+#+OPTIONS: ^:{}
+#+property: header-args+ :results none
 
-it has
-1. SGF converted, tree-like, list data object
-2. SVG data (or str for ascii board) for visualization
-3. it should be synced
+* Installation
+~sgf-mode~ requires Emacs version >= 26 and librsvg.
 
-2-d board: find-liberty
-node: doubly linked list, properties, color, move number
-ko: ko position
-prisoners number
-undo stack
+- Add to ~load-path~
+  #+begin_src emacs-lisp
+    (add-to-list 'load-path "~/git/sgf-mode")
+    (require 'sgf-mode)
+  #+end_src
 
-
-<?xml version="1.0" encoding="utf-8"?>
-<svg width="800px" height="800px" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <radialGradient id="stone-black" cx=".3" cy=".3" r=".8">
-      <stop offset="0"   stop-color="#777"/>
-      <stop offset="0.3" stop-color="#222"/>
-      <stop offset="1"   stop-color="#000"/>
-    </radialGradient>
-
-    <radialGradient id="stone-black" r="0.55" fy="0.3" fx="0.7" cy="0.5" cx="0.5">
-      <stop offset="0%" stop-color="#606060"></stop>
-      <stop offset="100%" stop-color="#000000"></stop>
-    </radialGradient>
-
-    <radialGradient id="stone-white" r="0.6" fy="0.3" fx="0.7" cy="0.5" cx="0.5">
-      <stop offset="0%" stop-color="#ffffff"></stop>
-      <stop offset="80%" stop-color="#e0e0e0"></stop>
-      <stop offset="100%" stop-color="#b0b0b0"></stop>
-    </radialGradient>
-
-    <radialGradient id="rg" cx=".47" cy=".49" r=".48">
-      <stop offset=".7" stop-color="#FFF"/>
-      <stop offset=".9" stop-color="#DDD"/>
-      <stop offset="1" stop-color="#777"/>
-    </radialGradient>
-
-    <radialGradient id="rg" cx=".3" cy=".3" r=".8">
-      <stop offset="0" stop-color="#777"/>
-      <stop offset=".3" stop-color="#222"/>
-      <stop offset="1" stop-color="#000"/>
-    </radialGradient>
-
-  </defs>
-
-  <rect width="500" height="500" fill="#DCB35C"/>
-  <circle cx="250" cy="250" r="245" fill="url(#rg)"/>
+- For latest Emacs, it can also be installed with ~use-package~:
+  #+begin_src emacs-lisp
+  (use-package sgf-mode
+    :vc (:url https://github.com/RNAer/sgf-mode.git))
+  #+end_src
+* usage
+** .sgf file and sgf-mode
+- =C-c C-c=: draw the svg board for the current game
+- =C-u C-c C-c=: initiate a new game and draw the board
+- Once putting the cursor on the drawn svg board, =C-h b= shows all the key bindings for playing GO game on the board.
+** sgf src block in org-mode
+recommended workflow:
+1. =C-c '= to edit the game in a separate buffer
+2. in this separate buffer, ~sgf-mode~ is enabled
+*** tangle file
+- =C-c C-v t= to tangle all the games of sgf blocks to a single file;
+- =C-u C-c C-v t= to tangle current sgf block only.
+*** display game
+- =C-c C-c= to display the game in the current sgf block.
+- ~org-babel-execute-buffer~ (=C-c C-v b=) to display all the games in the org file.
+* alternatives
+- [[https://github.com/misohena/el-igo][igo-org]]: learned a lot from it
+- [[https://github.com/eschulte/el-go][el-go]]
+* TODO
+- A pass move is shown as '[]' or alternatively as '[tt]' (only for boards <= 19x19), i.e. applications should be able to deal with both representations. '[tt]' is kept for compatibility with FF[3].
+- In FF[4] it is possible to specify board sizes upto 52x52. In this case uppercase letters are used to represent points from 27-52, i.e. 'a'=1 ... 'z'=26 , 'A'=27 ... 'Z'=52
+- sgf parser
+- use unicode instead of svg item for marks (borrow from el-go)
+- add validity check: 1. xy in the range of wxh

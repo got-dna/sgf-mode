@@ -17,7 +17,6 @@
 (require 'sgf-util)
 (require 'sgf-svg)
 (require 'sgf-io)
-(require 'ob-sgf)
 
 ;; TODO check there is only one entity for every type of prop
 (defun sgf-show-comment (node)
@@ -222,7 +221,7 @@ See also `sgf-forward-move'."
 (defun sgf-traverse (path &optional ov interactive-call)
   "Traverse the game tree from current node according to the PATH.
 
-For example, (sgf-traverse '(9 ?b ?a)) will move forward 9 steps and
+For example, (sgf-traverse \\='(9 ?b ?a)) will move forward 9 steps and
 pick branch b and a in the 1st and 2nd forks (if come across forks),
  respectively."
   (interactive "xTraverse path: \ni\np")
@@ -740,7 +739,7 @@ The move number will be incremented."
     (overlay-put ov 'display (svg-image svg :map hot-areas))))
 
 
-(defun sgf-buffer-update-hook (ov after beg end &optional length)
+(defun sgf-buffer-update-hook (ov after beg end &optional _length)
   ;; (message "--- beg: %d end: %d" beg end)
   (when after                            ; after the text change
     ;; (message "--- buffer %s" (buffer-substring beg end))
@@ -765,8 +764,8 @@ If BEG and END are nil, parse the whole buffer as SGF content."
         (if (overlay-get ov 'display)
             (sgf--hide-svg ov)
           (sgf--display-svg ov))
-      (sgf-start-the-game (or beg (point-min))
-                          (or end (point-max))))))
+      (sgf-setup-game t (or beg (point-min)) (or end (point-max))))))
+
 
 (defun sgf--setup-overlay (ov game-state svg-hot-areas game-plist)
   "Setup overlay properties for the game."
@@ -856,34 +855,6 @@ It removes old overlays if there is any."
     (sgf--setup-overlay ov game-state svg-hot-areas game-plist)))
 
 
-(defun sgf-get-overlay-at (&optional pos)
-  "Return the SGF overlay at POS position in the current buffer."
-  (let* ((pos (or pos (point)))
-         (ovs (overlays-in (1- pos) (1+ pos)))
-         sgf-ov)
-    (while (and ovs (not sgf-ov))
-      (let ((ov (pop ovs)))
-        ;; make sure get the right overlay
-        (if (overlay-get ov 'game-state)
-            (setq sgf-ov ov))))
-    (or sgf-ov
-        (error "No SGF overlay found at position. Try moving point to an overlay region."))))
-
-
-(defun sgf-get-overlay ()
-  "Return the SGF overlay (even if mouse clicked on non current buffer)."
-  (if (or (mouse-event-p last-input-event)
-          (memq (event-basic-type last-input-event) '(wheel-up wheel-down)))
-      (let* ((mouse-pos (event-start last-input-event))
-             (pos    (posn-point mouse-pos))
-             (window (posn-window mouse-pos))
-             (buffer (window-buffer window)))
-        (set-window-point window pos)
-        (with-current-buffer buffer
-          (sgf-get-overlay-at pos)))
-    (sgf-get-overlay-at)))
-
-
 (defun sgf--hide-svg (ov)
   (overlay-put ov 'display nil)
   (overlay-put ov 'keymap nil))
@@ -897,26 +868,6 @@ It removes old overlays if there is any."
       (error "Overlay %S does not have 'svg' or 'hot-areas' properties" ov))
     (overlay-put ov 'keymap sgf-mode-graphical-map)
     (overlay-put ov 'display (svg-image svg :map hot-areas))))
-
-
-(defun sgf-game-plist-get (key &optional ov)
-  "Return game property of KEY"
-  (let* ((ov (or ov (sgf-get-overlay)))
-         (game-plist (overlay-get ov 'game-plist)))
-    (plist-get game-plist key)))
-
-
-(defun sgf-game-plist-set (key value &optional ov)
-  (let* ((ov (or ov (sgf-get-overlay)))
-         (game-plist (overlay-get ov 'game-plist)))
-    (plist-put game-plist key value)))
-
-
-(defun sgf-game-plist-toggle (key &optional ov)
-  "Toggle the game property of KEY."
-  (let* ((ov (or ov (sgf-get-overlay)))
-         (game-plist (overlay-get ov 'game-plist)))
-    (sgf-game-plist-set key (not (plist-get game-plist key)) ov)))
 
 
 (defun sgf-menu ()
@@ -1010,8 +961,12 @@ It removes old overlays if there is any."
     (define-key map "z" 'sgf-export-image)
     (define-key map [hot-grid mouse-1] #'sgf-board-click-left)
     (define-key map [hot-grid mouse-3] #'sgf-board-click-right)
+    ;; allow scrolling on the board
+    ;; (define-key map [hot-grid wheel-up] #'pixel-scroll-up)
+    ;; (define-key map [hot-grid wheel-down] #'pixel-scroll-down)
     (define-key map [hot-del mouse-1] #'sgf-prune-inclusive)
     (define-key map [hot-menu mouse-1] #'sgf-menu)
+    (define-key map [hot-pass mouse-1] #'sgf-pass)
     (define-key map "p" 'sgf-pass)
     map)
   "Keymap set for the overlay svg display. It is set as overlay property

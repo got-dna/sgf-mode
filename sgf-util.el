@@ -92,12 +92,60 @@ Update the global default variable value in the plist from GAME-PLIST.
   input-plist)
 
 
+(defun sgf-game-plist-get (key &optional ov)
+  "Return game property of KEY"
+  (let* ((ov (or ov (sgf-get-overlay)))
+         (game-plist (overlay-get ov 'game-plist)))
+    (plist-get game-plist key)))
+
+
+(defun sgf-game-plist-set (key value &optional ov)
+  (let* ((ov (or ov (sgf-get-overlay)))
+         (game-plist (overlay-get ov 'game-plist)))
+    (plist-put game-plist key value)))
+
+
+(defun sgf-game-plist-toggle (key &optional ov)
+  "Toggle the game property of KEY."
+  (let* ((ov (or ov (sgf-get-overlay)))
+         (game-plist (overlay-get ov 'game-plist)))
+    (sgf-game-plist-set key (not (plist-get game-plist key)) ov)))
+
+
 (defun sgf-toggle (current &optional true-or-false)
   "Toggle the CURRENT boolean option."
   (cond ((null true-or-false) (not current)) ; toggle
         ((eq true-or-false 'true) t)
         ((eq true-or-false 'false) nil)
         (t current)))
+
+
+(defun sgf-get-overlay-at (&optional pos)
+  "Return the SGF overlay at POS position in the current buffer."
+  (let* ((pos (or pos (point)))
+         (ovs (overlays-in (1- pos) (1+ pos)))
+         sgf-ov)
+    (while (and ovs (not sgf-ov))
+      (let ((ov (pop ovs)))
+        ;; make sure get the right overlay
+        (if (overlay-get ov 'game-state)
+            (setq sgf-ov ov))))
+    (or sgf-ov
+        (error "No SGF overlay found at position. Try moving point to an overlay region."))))
+
+
+(defun sgf-get-overlay ()
+  "Return the SGF overlay (even if mouse clicked on non current buffer)."
+  (if (or (mouse-event-p last-input-event)
+          (memq (event-basic-type last-input-event) '(wheel-up wheel-down)))
+      (let* ((mouse-pos (event-start last-input-event))
+             (pos    (posn-point mouse-pos))
+             (window (posn-window mouse-pos))
+             (buffer (window-buffer window)))
+        (set-window-point window pos)
+        (with-current-buffer buffer
+          (sgf-get-overlay-at pos)))
+    (sgf-get-overlay-at)))
 
 
 ;; Alternative implementation

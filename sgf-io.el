@@ -405,14 +405,14 @@ state converted from the SGF content of FILE."
                     ((eq key 'PL)
                      (cond ((string= val-str "B") '(B))
                            ((string= val-str "W") '(W))
-                           (t (error "%sInvalid player value - should be B or W (%s)."
+                           (t (error "%sInvalid player value: %s (expected B or W)."
                                      (sgf-io--format-location beg-pos end-pos) val-str))))
                     ((eq key 'SZ)
                      (list (sgf-decode-prop-SZ val-str beg-pos end-pos)))
                     ((eq key 'GM)
                      (if (string= val-str "1")
                          (list val-str)
-                       (error "%sGame type is not Go (GM[1])."
+                       (error "%sGame type is not Go: %s (expected GM[1])."
                               (sgf-io--format-location beg-pos end-pos) val-str)))
                     ((eq key 'MN)
                      (list (string-to-number val-str)))
@@ -522,16 +522,7 @@ See also `sgf-encode-prop-pos'."
 
 ;; TODO remove quote for str values and escape [ ] etc
 (defun sgf-encode-prop (prop)
-  "Convert to a string of SGF property.
-
-(sgf-encode-prop '(B (0 . 0) (1 . 0))) => B[aa:ba]
-(sgf-encode-prop '(W)) => W[]
-(sgf-encode-prop '(TR (0 . 0))) => TR[aa]
-(sgf-encode-prop '(FF 4)) => FF[4]
-(sgf-encode-prop '(AB (1 . 1) (1 . 2))) => AB[bb:bc]
-(sgf-encode-prop '(SZ (15 . 13))) => SZ[15:13]
-(sgf-encode-prop '(LB ((0 . 27) . \"label\"))) => LB[aB:label]
-(sgf-encode-prop '(C \"comment\")) => C[comment]"
+  "Convert to a string of SGF property."
   (let ((prop-key (car prop))
         (prop-vals (cdr prop))
         prop-val-str)
@@ -565,12 +556,7 @@ See also `sgf-encode-prop-pos'."
 
 
 (defun sgf-encode-prop-pos (xys)
-  "Compress a sequence of positions.
-
-For example:
-(sgf-encode-prop-pos '((0 . 0) (1 . 0) (3 . 0) (4 . 0) (0 . 1) (1 . 1)))
-(sgf-encode-prop-pos '((0 . 0) (1 . 0)))
-(sgf-encode-prop-pos '((0 . 0)))
+  "Encode a sequence of position(s) into SGF format.
 
 See also `sgf-io-from-positions'."
   (mapconcat
@@ -589,21 +575,7 @@ See also `sgf-io-from-positions'."
 (defun sgf-io-xys-to-rows (xys)
   "Convert a list of (x . y) coordinates to a list of rectangle blocks.
 Each rectangle is represented as ((left . top) . (right . bottom)),
-where all positions in the rectangle are filled in coords.
-
-For example:
-(sgf-io-rows-to-rects
-  (sgf-io-xys-to-rows
-  '((15 . 5) (15 . 6) (15 . 7) (15 . 8) (15 . 9) (15 . 10))))
-=> (((15 . 5) . (15 . 10)))
-
-(sgf-io-xys-to-rows '((1 . 1)))
-=> (((1 . 1) . (1 . 1)))
-
-(sgf-io-xys-to-rows '((0 . 0) (1 . 0) (3 . 0) (4 . 0) (0 . 1) (1 . 1)))
- => (((0 . 1) . (1 . 1))
-     ((3 . 0) . (4 . 0))
-     ((0 . 0) . (1 . 0)))"
+where all positions in the rectangle are filled in coords."
   ;; Sort the coordinates by y then x
   (let ((sorted-xys (sort xys :key (lambda (xy) (list (cdr xy) (car xy)))))
         rows)
@@ -623,18 +595,7 @@ For example:
     rows))
 
 (defun sgf-io-rows-to-rects (rows)
-  "Convert a list of rows to a list of rectangle blocks.
-
-For example:
-(sgf-io-rows-to-rects '(((1 . 2) . (1 . 2))
-                        ((1 . 1) . (1 . 1)))) =>
- (((1 . 1) . (1 . 2)))
-
-(sgf-io-rows-to-rects '(((0 . 1) . (1 . 1))
-                        ((3 . 0) . (4 . 0))
-                        ((0 . 0) . (1 . 0)))) =>
- (((0 . 0) . (1 . 1))
-  ((3 . 0) . (4 . 0)))"
+  "Convert a list of rows to a list of rectangle blocks."
   (let ((sorted-rows (sort rows))
         rects)
     (while sorted-rows
@@ -662,9 +623,7 @@ For example:
 
 
 (defun sgf-encode-node (node)
-  "Convert a node to an SGF string.
-
-(sgf-encode-node '((FF 4) (SZ (15 . 13)) (AB (1 . 1) (1 . 2)))) => ;FF[4]SZ[15:13]AB[bb][bc]"
+  "Convert a node to an SGF string."
   (concat ";" (mapconcat (lambda (prop) (sgf-encode-prop prop)) node)))
 
 
@@ -705,6 +664,8 @@ For example:
 
 (defun sgf-serialize-game-to-buffer (ov)
   "Update the buffer region with the SGF string representation of game."
+  (unless (sgf-game-plist-get :editable ov)
+    (error "Game is not editable."))
   (let* ((buffer (overlay-buffer ov))
          (beg (overlay-start ov))
          (end (overlay-end ov))

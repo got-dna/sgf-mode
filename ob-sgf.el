@@ -28,6 +28,7 @@
 
 ;;; Code:
 (require 'sgf-io)
+(require 'sgf-mode)
 
 (require 'ob)
 ;; (require 'ob-ref)
@@ -40,25 +41,7 @@
 
 ;; optionally declare default header arguments for this language
 ;; set cache so that overlay is recreated only upon C-u C-c C-c.
-(defvar org-babel-default-header-args:sgf '((:show-next . "nil")
-                                            (:cache . "yes")))
-
-;; This function expands the body of a source code block by doing things like
-;; prepending argument definitions to the body, it should be called by the
-;; `org-babel-execute:sgf' function below. Variables get concatenated in
-;; the `mapconcat' form, therefore to change the formatting you can edit the
-;; `format' form.
-(defun org-babel-expand-body:sgf (body params &optional processed-params)
-  "Expand BODY according to PARAMS, return the expanded body."
-  (require 'inf-template nil t)
-  (let ((vars (org-babel--get-vars (or processed-params (org-babel-process-params params)))))
-    (concat
-     (mapconcat ;; define any variables
-      (lambda (pair)
-        (format "%s=%S"
-                (car pair) (org-babel-sgf-var-to-sgf (cdr pair))))
-      vars "\n")
-     "\n" body "\n")))
+(defvar org-babel-default-header-args:sgf '())
 
 
 (defun org-src-block-value-begin-end ()
