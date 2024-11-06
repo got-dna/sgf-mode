@@ -776,6 +776,7 @@ If BEG and END are nil, parse the whole buffer as SGF content."
     (overlay-put ov 'svg svg)
     (overlay-put ov 'hot-areas hot-areas)
     (overlay-put ov 'keymap sgf-mode-graphical-map)
+    (sgf--scroll-map-areas hot-areas sgf-mode-graphical-map)
     (overlay-put ov 'insert-behind-hooks '(sgf-buffer-update-hook))
     ;; Traverse to the specified game state and update display
     (sgf-traverse (plist-get game-plist :traverse-path) ov)
@@ -961,9 +962,6 @@ It removes old overlays if there is any."
     (define-key map "z" 'sgf-export-image)
     (define-key map [hot-grid mouse-1] #'sgf-board-click-left)
     (define-key map [hot-grid mouse-3] #'sgf-board-click-right)
-    ;; allow scrolling on the board
-    ;; (define-key map [hot-grid wheel-up] #'pixel-scroll-up)
-    ;; (define-key map [hot-grid wheel-down] #'pixel-scroll-down)
     (define-key map [hot-del mouse-1] #'sgf-prune-inclusive)
     (define-key map [hot-menu mouse-1] #'sgf-menu)
     (define-key map [hot-pass mouse-1] #'sgf-pass)
@@ -972,6 +970,13 @@ It removes old overlays if there is any."
   "Keymap set for the overlay svg display. It is set as overlay property
 and only activated when the overlay is displayed.")
 
+
+(defun sgf--scroll-map-areas (hot-areas keymap)
+  "Allow scrolling for all the map areas on the board."
+  (dolist (area hot-areas)
+    (let ((area-id (nth 1 area)))
+          (define-key keymap (vector area-id 'wheel-up) #'pixel-scroll-precision)
+          (define-key keymap (vector area-id 'wheel-down) #'pixel-scroll-precision))))
 
 
 ;; Emacs automatically creates a hook for the mode (e.g.,
