@@ -5,28 +5,18 @@
 * “关门板六”
 ** 无外气，后走死；
 #+name: no outside liberties
-#+begin_src sgf :editable nil
+#+begin_src sgf
 (;FF[4]GM[1]SZ[9]AB[ae:de][df:di]AW[af:cf][cg:ci](;B[ah]C[白棋打劫活。];W[bh];B[ag];W[ai];B[bi])(;B[bh];W[ah];B[bi];W[bg]))
 #+end_src
 
-#+RESULTS[d8e08499916289a049ba90cfff1feb0620a5e191]: no outside liberties
-: #<overlay from 199 to 316 in test.org>
-
 ** 有一外气，劫；
 #+name: one outside liberties
-#+begin_src sgf :show-number nil :show-next nil :show-mark nil :traverse-path nil
+#+begin_src sgf :show-number t :show-next nil :show-mark nil :traverse-path t
 (;FF[4]GM[1]SZ[9]AB[ae:de][df:dh][ei]AW[af:cf][cg:ci];B[ah];W[bh];B[ag];W[ai];B[bi])
 #+end_src
-
-#+RESULTS[140f84e50b4816905d704e200cefa02f901dad99]: one outside liberties
-: #<overlay from 567 to 651 in test.org>
-
 
 ** 有二外气，活（可走成胀牯牛）
 #+name: two outside liberties
 #+begin_src sgf
 (;FF[4]GM[1]SZ[9]AB[ad][be:de][df:dh][ei]AW[af:cf][cg:ci](;B[bh];W[ah](;B[bg];W[ag];B[bi])(;B[bi];W[bg]))(;B[ah]C[白棋打劫活。];W[bh];B[ag];W[ai];B[bi]))
 #+end_src
-
-#+RESULTS[c6d9901fe7f16ae5a1f25af1c5ef52c4dea31cc5]: two outside liberties
-: #<overlay from 845 to 992 in test.org>

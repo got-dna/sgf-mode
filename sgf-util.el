@@ -126,7 +126,7 @@ Update the global default variable value in the plist from GAME-PLIST.
         (if (overlay-get ov 'game-state)
             (setq sgf-ov ov))))
     (or sgf-ov
-        (error "No SGF overlay found at position. Try moving point to an overlay region."))))
+        (error "No SGF overlay found at position %d. Try moving point to an overlay region." pos))))
 
 
 (defun sgf-get-overlay ()
@@ -384,7 +384,7 @@ Returns nil or (x . y) for KO position. "
             (setq empty-or-same-color-count (1+ empty-or-same-color-count))
             (setq empty-or-same-color-position neighbor))))
       (if (= empty-or-same-color-count 1)
-            empty-or-same-color-position))))
+          empty-or-same-color-position))))
 
 
 (provide 'sgf-util)

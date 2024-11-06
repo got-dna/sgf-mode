@@ -377,15 +377,60 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
   (sgf-prune)
   (sgf-update-display))
 
-;; todo
+;; TODO finish
 (defun sgf-edit-game-info ()
   "Edit the game information."
   (interactive)
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
-         (curr-lnode (aref game-state 0)))
+         (lnode (aref game-state 0)))
+    ;; move to root node
+    (while (aref lnode 0) (setq lnode (aref lnode 0)))
+    (switch-to-buffer "*Go Game Information*")
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (widget-insert "Game Information\n\n")
+      (widget-insert " C-c C-c: Save\n")
+      (widget-insert " C-c C-k: Cancel\n\n")
+
+      (dolist (prop sgf-game-info-props)
+        (let* ((prop-id (car prop))
+               (prop-description (nth 1 prop))
+               (prop-type (igo-sgf-game-info-prop-type prop))
+               (prop-value (car (igo-node-get-sgf-property root-node prop-id)))
+               (indent (- max-width (string-width prop-title)))
+               (widget (widget-create
+                        ;;@todo support number, real (nullable)
+                        (cond
+                         ;;((eq prop-type 'number) 'integer)
+                         ;;((eq prop-type 'real) 'number)
+                         ((eq prop-type 'text) 'text)
+                         (t 'editable-field))
+                        :keymap igo-editor-game-info-field-keymap
+                        :size 13
+                        :format (format "%s%s: %%v" (make-string indent ? ) prop-title)
+                        (or prop-value ""))))
+          (push (cons prop-id widget) widgets)
+          (widget-insert "\n")
+          ))
+
+      (widget-create 'push-button :notify 'sgf-edit-game-info--save "Save")
+      (widget-insert " ")
+      (widget-create 'push-button :notify 'sgf-edit-game-info--cancel "Cancel")
+      (widget-insert "\n")
+      (use-local-map widget-keymap)
+      (widget-setup)
+      (widget-forward 1)) ;;to first field
+
     (sgf-serialize-game-to-buffer ov)))
 
+
+(defun sgf-edit-game-info--save (&rest _ignore)
+  (interactive)
+  (kill-buffer))
+
+(defun sgf-edit-game-info--cancel (&rest _ignore)
+  (interactive))
 
 (defun sgf-mouse-event-to-xy (event)
   "Convert a mouse click to a board position (X . Y)."

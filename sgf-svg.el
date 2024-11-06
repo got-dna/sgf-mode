@@ -114,6 +114,7 @@ It is a reference for all other element sizes."
     (dotimes (n w)
       ;; vertical lines
       (setq idx (format "%c" (if (< n (- ?I ?A)) (+ ?A n) (+ ?A n 1)))) ; skip char I
+      ;; (setq idx (format "%c" (sgf-encode-d2c n)))
       (svg-text grid idx :class "grid-idx"
                 :font-size (* sgf-svg-font-size idx-font-scale)
                 :x (* sgf-svg-interval n) :y (- sgf-svg-font-size)
@@ -285,7 +286,7 @@ It removes the old marks and adds the new marks."
                    (y (cdr xy))
                    (xy-state (sgf-board-get xy board-2d))
                    (color (sgf-svg-set-color xy-state)))
-              (message "---------%S %S" xy-state color)
+              ;; (message "---------%S %S" xy-state color)
               (sgf-svg-add-text marks-group x y label color)))))))
 
 
