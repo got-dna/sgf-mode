@@ -70,7 +70,7 @@ N, indicating your branch choice. If it is nil, it will prompt."
         branch
       (error "Invalid branch selection: %c" (+ branch ?a)))))
 
-(defun sgf-forward-move (&optional branch interactive-call)
+(defun sgf-forward-move (&optional branch interactive-call ov)
   "Move to the next move in the game tree and update board.
 
 See also `sgf-branch-selection'."
@@ -82,7 +82,7 @@ See also `sgf-branch-selection'."
   ;; called non-interactively, interactive-call will be nil; otherwise
   ;; it is 1
   (interactive "i\np")
-  (let* ((ov          (sgf-get-overlay))
+  (let* ((ov   (or ov (sgf-get-overlay)))
          (game-state  (overlay-get ov 'game-state))
          (curr-lnode  (aref game-state 0))
          (next-lnodes (aref curr-lnode 2))
@@ -95,17 +95,17 @@ See also `sgf-branch-selection'."
       (setq next-lnode (nth branch next-lnodes))
       (setq next-node  (aref next-lnode 1))
       (if interactive-call (sgf-show-comment next-node))
-      (sgf-apply-node next-node game-state)
+      (sgf-apply-node next-node game-state (sgf-game-plist-get :suicide-move ov))
       (aset game-state 0 next-lnode)
       ;; return t if it is a noninteractive call, to indicate a
       ;; successful forward move.
       (if interactive-call (sgf-update-display ov) t))))
 
 
-(defun sgf-forward-fork (&optional interactive-call)
+(defun sgf-forward-fork (&optional interactive-call ov)
   "Move to the step before the next fork."
   (interactive "p")
-  (let* ((ov (sgf-get-overlay))
+  (let* ((ov (or ov (sgf-get-overlay)))
          (game-state (overlay-get ov 'game-state))
          (continue t))
     (while continue
@@ -118,12 +118,12 @@ See also `sgf-branch-selection'."
     (if interactive-call (sgf-update-display ov))))
 
 
-(defun sgf-backward-move (&optional interactive-call)
+(defun sgf-backward-move (&optional interactive-call ov)
   "Move to the previous move in the game tree and update board.
 
 See also `sgf-forward-move'."
   (interactive "p")
-  (let* ((ov         (sgf-get-overlay))
+  (let* ((ov  (or ov (sgf-get-overlay)))
          (game-state  (overlay-get ov 'game-state))
          (curr-lnode  (aref game-state 0))
          (prev-lnode  (aref curr-lnode 0)))
@@ -154,7 +154,7 @@ See also `sgf-forward-move'."
     (if interactive-call (sgf-update-display ov))))
 
 
-(defun sgf-apply-node (node game-state)
+(defun sgf-apply-node (node game-state allow-suicide)
   "Apply the node of move to the game state."
   (let* ((move (sgf-process-move node))
          (stone (car move))
@@ -168,7 +168,7 @@ See also `sgf-forward-move'."
          black-xys white-xys empty-xys)
     (when xy   ; node is not a pass
       ;; check it is legal move before make any change to game state
-      (unless (sgf-valid-move-p xy stone board-2d ko-old (sgf-game-plist-get :suicide-move))
+      (unless (sgf-valid-move-p xy stone board-2d ko-old allow-suicide)
         (error "Invalid move of %S at %S" stone xy))
       (if (eq (sgf-board-get xy board-2d) 'E)
           (setq empty-xys (list xy)))
@@ -190,30 +190,30 @@ See also `sgf-forward-move'."
                    game-state)))
 
 
-(defun sgf-first-move (&optional interactive-call)
+(defun sgf-first-move (&optional interactive-call ov)
   "Move to the first node in the game tree."
   (interactive "p")
-  (while (sgf-backward-move))
+  (while (sgf-backward-move nil ov))
   (if interactive-call (sgf-update-display)))
 
 
-(defun sgf-last-move (&optional branch interactival-call)
+(defun sgf-last-move (&optional interactival-call ov)
   "Move to the last node in the game tree.
 
-See also `sgf-forward-move'."
-  (interactive "i\np")
-  (while (sgf-forward-move branch))
+Always pick the 1st branch upon fork. See also `sgf-forward-move'."
+  (interactive "p")
+  (while (sgf-forward-move 0 nil ov))
   (if interactival-call (sgf-update-display)))
 
 
-(defun sgf-jump-moves (n &optional branch interactive-call)
+(defun sgf-jump-moves (n &optional interactive-call ov)
   "Move forward or backward N nodes.
 
 It pauses at fork and wait for user input to select a branch.
 See also `sgf-forward-move'."
-  (interactive "nMove _ plays forward (pos number) or backward (neg number): \ni\np")
+  (interactive "nMove _ plays forward (pos number) or backward (neg number): \np")
   (if (> n 0)
-      (dotimes (_ n) (sgf-forward-move branch))
+      (dotimes (_ n) (sgf-forward-move 0 nil ov))
     (dotimes (_ (- n)) (sgf-backward-move)))
   (if interactive-call (sgf-update-display)))
 
@@ -223,26 +223,26 @@ See also `sgf-forward-move'."
 
 For example, (sgf-traverse \\='(9 ?b ?a)) will move forward 9 steps and
 pick branch b and a in the 1st and 2nd forks (if come across forks),
- respectively."
+ respectively. See also `sgf-traverse-path'."
   (interactive "xTraverse path: \ni\np")
   (let* ((ov (or ov (sgf-get-overlay)))
          (game-state (overlay-get ov 'game-state)))
     (cond ((null path) nil) ; do nothing
-          ((eq path t) (sgf-last-move 0)) ; pick the first branch at all forks
+          ((eq path t) (sgf-last-move nil ov)) ; pick the first branch at all forks
           ((integerp path)
-           (cond ((> path 0) (sgf-jump-moves path 0))
+           (cond ((> path 0) (sgf-jump-moves path ov))
                  ;; if it is negative, jump to end and move back PATH steps.
-                 ((< path 0) (sgf-last-move 0) (sgf-jump-moves path))))
+                 ((< path 0) (sgf-last-move nil ov) (sgf-jump-moves path ov))))
           ((listp path) ; eg (9 ?b ?a)
            (let ((steps (car path))
                  (branches (cdr path))
                  (diff 0))
              (dolist (branch branches)
-               (sgf-forward-fork)
-               (sgf-forward-move (- branch ?a)))
+               (sgf-forward-fork nil ov)
+               (sgf-forward-move (- branch ?a) nil ov))
              (setq diff (- steps (sgf-lnode-depth (aref game-state 0))))
              ;; if come across additional forks, pick the 1st branch
-             (sgf-jump-moves diff 0))))
+             (sgf-jump-moves diff ov))))
     (if interactive-call (sgf-update-display ov))))
 
 
