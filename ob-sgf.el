@@ -19,7 +19,7 @@
 ;; 2. :show-mark - t or nil value to show marks on the board or not.
 ;; 3. :show-next - t or nil value to show hint mark(s) for next move on the board or not.
 ;; 4. :traverse-path - See `sgf-traverse-path' value to traverse to the game state.
-;; 5. :editable - t or nil value to allow change on the game
+
 
 ;; It takes advantage of `C-c C-c' to display graphics of game board.
 ;; Use `C-u C-c C-c' to delete existing overlay and recreate the game.

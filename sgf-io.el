@@ -18,7 +18,6 @@
 ;;; parse SGF into syntax tree
 
 ;; Game Info Properties
-;; TODO
 (defconst sgf-game-info-props
   '(("CP" "Copyright")
     ("US" "Enterer Name")
@@ -664,8 +663,6 @@ where all positions in the rectangle are filled in coords."
 
 (defun sgf-serialize-game-to-buffer (ov)
   "Update the buffer region with the SGF string representation of game."
-  (unless (sgf-game-plist-get :editable ov)
-    (error "Game is not editable."))
   (let* ((buffer (overlay-buffer ov))
          (beg (overlay-start ov))
          (end (overlay-end ov))

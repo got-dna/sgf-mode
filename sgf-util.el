@@ -36,10 +36,6 @@
   :type '(boolean)
   :group 'sgf)
 
-(defcustom sgf-editable t
-  "Allow edit of the SGF buffer from the game."
-  :type '(boolean)
-  :group 'sgf)
 
 (defcustom sgf-traverse-path nil
   "Default path to traverse thru when initiate game and display.
@@ -71,7 +67,6 @@ See also `sgf-traverse'."
                :show-number ,sgf-show-number
                :show-mark ,sgf-show-mark
                :suicide-move ,sgf-suicide-move
-               :editable ,sgf-editable
                :traverse-path ,sgf-traverse-path))
 
 
