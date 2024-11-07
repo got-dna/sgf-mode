@@ -372,22 +372,16 @@ It removes the old marks and adds the new marks."
   (let* ((svg-group (sgf-svg-group-mvnums svg))
          (board-2d (aref game-state 1))
          (curr-lnode (aref game-state 0))
-         (curr-mvnum (sgf-lnode-move-number curr-lnode))
+         (mvnum (sgf-lnode-move-number curr-lnode))
          (numbered-xys (make-hash-table :test 'equal))
-         mvnum color)
-    (sgf-svg-update-status-mvnum svg curr-mvnum)
+         color)
+    (sgf-svg-update-status-mvnum svg mvnum)
     (sgf-svg-clear-node-content svg-group)
     (while (not (sgf-root-p curr-lnode))
       (let* ((node (aref curr-lnode 1))
              (move (sgf-process-move node))
              (xy    (cdr move))
              (stone (car move)))
-        (setq mvnum
-              (cond ((null mvnum) curr-mvnum) ; the last move
-                    ;; reset move number to the specified move
-                    ;; number in the closest node backwards
-                    ((alist-get 'MN node) (sgf-lnode-move-number curr-lnode))
-                    (t (1- mvnum))))
         (unless (or (null xy) (gethash xy numbered-xys))
           (let ((xy-state (sgf-board-get xy board-2d)))
             (if color
@@ -398,7 +392,13 @@ It removes the old marks and adds the new marks."
             ;; add move number only if it does not already have a number.
             (sgf-svg-add-mvnum svg-group (car xy) (cdr xy) mvnum color)
             (puthash xy t numbered-xys)))
-        (setq curr-lnode (aref curr-lnode 0))))))
+        ;; move to the previous node
+        (setq curr-lnode (aref curr-lnode 0))
+        ;; decrement move number for the previous node, or re-calculate we just passed thru a node with MN
+        (setq mvnum
+              (if (alist-get 'MN node)
+                  (sgf-lnode-move-number curr-lnode)
+                (1- mvnum)))))))
 
 
 (defun sgf-svg-add-mvnum (svg-group x y mvnum color)
