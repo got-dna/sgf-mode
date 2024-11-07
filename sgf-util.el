@@ -284,16 +284,14 @@ See also `sgf-lnode-depth'."
   (eq (sgf-board-get xy board-2d) 'E))
 
 
-(defun sgf-valid-move-p (xy stone board-2d ko &optional allow-suicide)
+(defun sgf-valid-move-p (xy stone board-2d ko)
   "Check if the move of STONE at XY position on BOARD-2D is valid"
   (and
    board-2d
    (sgf-valid-stone-p stone)       ;; valid color
    (sgf-xy-on-board-p xy board-2d) ;; position is on board
    (sgf-xy-is-empty-p xy board-2d) ;; no stone at this position yet
-   (not (equal xy ko))             ;; pos is not ko
-   (if (not allow-suicide)         ;; not suicide move
-       (not (sgf-suicide-stones xy board-2d)))))
+   (not (equal xy ko))))           ;; pos is not ko
 
 
 (defun sgf-neighbors-xy (xy board-2d)

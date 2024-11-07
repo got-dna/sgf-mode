@@ -25,7 +25,7 @@
   (message (mapconcat 'identity (alist-get 'C node) " ")))
 
 
-(defun sgf-push-undo (change game-state)
+(defun sgf-push-undo (game-state change)
   "Push a game CHANGE to the undo stack in GAME-STATE."
   (let ((undos (aref game-state 5)))
     (aset game-state 5 (cons change undos))))
@@ -39,9 +39,10 @@
           change)
       nil)))
 
-
-(defun sgf-revert-undo (change game-state)
+(defun sgf-revert-undo (game-state &optional change)
   "Revert the CHANGE for the GAME-STATE"
+  (unless change
+    (setq change (sgf-pop-undo game-state)))
   (let ((black-xys (aref change 0))
         (white-xys (aref change 1))
         (empty-xys (aref change 2))
@@ -94,16 +95,18 @@ See also `sgf-branch-selection'."
       (setq branch (sgf-branch-selection n branch))
       (setq next-lnode (nth branch next-lnodes))
       (setq next-node  (aref next-lnode 1))
-      (if interactive-call (sgf-show-comment next-node))
       (sgf-apply-node next-node game-state (sgf-game-plist-get :suicide-move ov))
       (aset game-state 0 next-lnode)
       ;; return t if it is a noninteractive call, to indicate a
       ;; successful forward move.
-      (if interactive-call (sgf-update-display ov) t))))
+      (if interactive-call
+          (progn (sgf-show-comment next-node)
+                 (sgf-update-display ov))
+        t))))
 
 
 (defun sgf-forward-fork (&optional interactive-call ov)
-  "Move to the step before the next fork."
+  "Move to the step just before the next fork."
   (interactive "p")
   (let* ((ov (or ov (sgf-get-overlay)))
          (game-state (overlay-get ov 'game-state))
@@ -113,7 +116,7 @@ See also `sgf-branch-selection'."
              (lnodes (aref curr-lnode 2))
              (n (length lnodes)))
         (if (= n 1)
-            (sgf-forward-move)
+            (sgf-forward-move 0 nil ov)
           (setq continue nil))))
     (if interactive-call (sgf-update-display ov))))
 
@@ -131,7 +134,7 @@ See also `sgf-forward-move'."
         ;; make sure to return nil if it is the root node.
         (progn (message "No more previous move.") nil)
       (if interactive-call (sgf-show-comment (aref prev-lnode 1)))
-      (sgf-revert-undo (sgf-pop-undo game-state) game-state)
+      (sgf-revert-undo game-state)
       (aset game-state 0 prev-lnode)
       (if interactive-call (sgf-update-display ov) t))))
 
@@ -148,7 +151,7 @@ See also `sgf-forward-move'."
              siblings)
         (if prev-lnode
             (setq siblings (aref prev-lnode 2)))
-        (sgf-backward-move)
+        (sgf-backward-move nil ov)
         (if (/= (length siblings) 1)
             (setq continue nil))))
     (if interactive-call (sgf-update-display ov))))
@@ -168,14 +171,20 @@ See also `sgf-forward-move'."
          black-xys white-xys empty-xys)
     (when xy   ; node is not a pass
       ;; check it is legal move before make any change to game state
-      (unless (sgf-valid-move-p xy stone board-2d ko-old allow-suicide)
-        (error "Invalid move of %S at %S" stone xy))
+      (unless (sgf-valid-move-p xy stone board-2d ko-old)
+        (error "Invalid move of %S at %S!" stone xy))
       (if (eq (sgf-board-get xy board-2d) 'E)
           (setq empty-xys (list xy)))
       (sgf-board-set xy stone board-2d)
       (setq prisoners (sgf-capture-stones xy board-2d))
       ;; Remove captured stones
       (dolist (xy prisoners) (sgf-board-set xy 'E board-2d))
+      ;; Check for suicide after removing captured stones
+      (when (and (not allow-suicide) (sgf-suicide-stones xy board-2d))
+        ;; undo the changes on the board
+        (dolist (xy prisoners) (sgf-board-set xy (sgf-enemy-stone stone) board-2d))
+        (sgf-board-set xy 'E board-2d)
+        (error "Suicide move at %S is not allowed!" xy))
       ;; Check for KO: this code needs to be put after prisoners are removed.
       (setq ko-new (sgf-get-ko xy stone board-2d prisoners))
       (aset game-state 2 ko-new)
@@ -186,8 +195,7 @@ See also `sgf-forward-move'."
         (setcar pcounts (+ (length prisoners) (car pcounts)))
         (setq black-xys prisoners)))
     (aset game-state 3 turn-new)
-    (sgf-push-undo (vector black-xys white-xys empty-xys ko-old turn-old)
-                   game-state)))
+    (sgf-push-undo game-state (vector black-xys white-xys empty-xys ko-old turn-old))))
 
 
 (defun sgf-first-move (&optional interactive-call ov)
@@ -460,20 +468,18 @@ Cases:
          (next-lnodes (aref curr-lnode 2))
          (next-xys (mapcar (lambda (node) (cdr (sgf-process-move (aref node 1)))) next-lnodes))
          (found (car (seq-positions next-xys xy))))
-    (cond
-     ;; Case 1: Clicked on one of the next move position
-     (found (sgf-forward-move found t))
-     ;; Case 2: Clicked on an empty position not equal to ko
-     ((sgf-valid-move-p xy turn board-2d ko (sgf-game-plist-get :suicide-move ov))
-      (let ((n (length next-lnodes))
-            (new-lnode (sgf-linked-node curr-lnode `((,turn ,xy)))))
+    (if found
+        ;; Case 1: Clicked on one of the next move position
+        (sgf-forward-move found t)
+      ;; Case 2: Clicked on an empty position not equal to ko
+      (let* ((new-node `((,turn ,xy)))
+             (new-lnode (sgf-linked-node curr-lnode new-node)))
+        (sgf-apply-node new-node game-state (sgf-game-plist-get :suicide-move ov))
         ;; add the new node as the last branch
         (aset curr-lnode 2 (nconc next-lnodes (list new-lnode)))
-        (sgf-forward-move n) ; if n=0, case 2.1; otherwise, case 2.2
+        (aset game-state 0 new-lnode)
         (sgf-update-display ov)
-        (sgf-serialize-game-to-buffer ov)))
-     ;; Case 3.
-     (t (message "Illegal move!")))))
+        (sgf-serialize-game-to-buffer ov)))))
 
 
 (defun sgf-board-click-right (event)
@@ -513,7 +519,7 @@ Cases:
              (prev-lnode  (aref curr-lnode 0)))
         (if (equal curr-lnode lnode)
             (setq found t)
-          (sgf-revert-undo (sgf-pop-undo game-state) game-state)
+          (sgf-revert-undo game-state)
           (aset game-state 0 prev-lnode))))
     (sgf-update-display ov)))
 
