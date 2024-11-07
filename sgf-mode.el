@@ -796,7 +796,7 @@ The move number will be incremented."
       ;; (message "--- current buffer: %s" (buffer-substring-no-properties beg end))
       (overlay-put ov 'game-state new-game-state)
       ;; traverse to the same game state and display
-      (sgf-traverse path ov t))))
+      (sgf-traverse (setcar path (1- (car path))) ov t))))
 
 
 (defun sgf-toggle-svg-display (&optional beg end)
