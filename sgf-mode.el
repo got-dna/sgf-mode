@@ -352,6 +352,35 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
     (sgf-serialize-game-to-buffer ov)))
 
 
+(defun sgf-edit-annotation (&optional lnode)
+  "Add or delete move annotation."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (lnode (or lnode (aref game-state 0)))
+         (node (aref lnode 1))
+         ;; C[foo][spam] -> "foo spam"
+         (old-annt (seq-find (lambda (i) (alist-get i node))
+                             '(BM DO IT TE)))
+         (annt-choice (read-multiple-choice "Edit move annotation: "
+                                            '((?b "BM" "bad move")
+                                              (?d "DO" "doubtful move")
+                                              (?i "IT" "interesting move")
+                                              (?t "TE" "tesuji move")
+                                              (?n "nil" "delete annotation"))))
+         (new-annt (intern (cadr annt-choice))))
+    ;; only update if the comment is changed
+    (unless (eq old-annt new-annt)
+      ;; delete the old comment property
+      (setq node (assq-delete-all old-annt node))
+      (aset lnode 1
+            (if (null new-annt)
+                node
+              (nconc node (list (list new-annt "1")))))
+      (sgf-update-display ov nil t t))
+    (sgf-serialize-game-to-buffer ov)))
+
+
 ;; todo igo-editor-move-mode-make-move-root
 (defun sgf-root-node ()
   "Make the current node the root node.
@@ -495,6 +524,9 @@ Cases:
                   ,(lambda () (interactive) (sgf-edit-comment clicked-lnode))]
                  ["Edit Move Number"
                   ,(lambda () (interactive) (sgf-edit-move-number clicked-lnode))
+                  :enable ,(not (sgf-root-p clicked-lnode))]
+                 ["Edit Move Annotation"
+                  ,(lambda () (interactive) (sgf-edit-annotation clicked-lnode))
                   :enable ,(not (sgf-root-p clicked-lnode))]
                  ["Back to This Move"
                   ,(lambda () (interactive) (sgf-goto-back-lnode clicked-lnode))
@@ -743,7 +775,6 @@ The move number will be incremented."
    'sgf--action-delete-mark
    "Click on the board to delete marks. "))
 
-
 ;; (defun sgf-track-dragging ()
 ;;   "Track dragging on the board. igo-editor-track-dragging"
 ;;   (interactive)
@@ -780,6 +811,7 @@ The move number will be incremented."
          (curr-node  (aref curr-lnode 1)))
     (unless no-move
       (sgf-svg-add-stones svg game-state)
+      (sgf-svg-add-mvants svg game-state)
       (sgf-svg-update-status-prisoners svg pcounts)
       (sgf-svg-update-status-turn svg turn))
     (unless no-number
@@ -1010,6 +1042,7 @@ It removes old overlays if there is any."
     (define-key map (kbd "m b") 'sgf-edit-setup-black-stone)
     (define-key map (kbd "m w") 'sgf-edit-setup-white-stone)
     (define-key map (kbd "m i") 'sgf-edit-game-info)
+    (define-key map (kbd "m h") 'sgf-edit-annotation) ; highlight
     (define-key map "z" 'sgf-export-image)
     (define-key map [hot-grid mouse-1] #'sgf-board-click-left)
     (define-key map [hot-grid mouse-3] #'sgf-board-click-right)
@@ -1024,6 +1057,7 @@ and only activated when the overlay is displayed.")
 
 (defun sgf--scroll-map-areas (hot-areas keymap)
   "Allow scrolling for all the map areas on the board."
+  (require 'pixel-scroll)
   (dolist (area hot-areas)
     (let ((area-id (nth 1 area)))
           (define-key keymap (vector area-id 'wheel-up) #'pixel-scroll-precision)

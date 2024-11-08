@@ -366,6 +366,34 @@ It removes the old marks and adds the new marks."
                 :id (sgf-svg-stone-id x y)
                 :gradient stone)))
 
+(defun sgf-svg-add-mvants (svg game-state)
+  "Add move annotations to the board.
+
+For the move annotation, add circle ring of color to the stone on the board."
+  (let ((board-2d (aref game-state 1))
+        (curr-lnode (aref game-state 0))
+        (annotated-xys (make-hash-table :test 'equal))
+        (svg-group (sgf-svg-group-stones svg)))
+    (while (not (sgf-root-p curr-lnode))
+      (let* ((node (aref curr-lnode 1))
+             (move (sgf-process-move node))
+             (xy    (cdr move))
+             (color (cond ((alist-get 'BM node) "red") ; good move
+                          ((alist-get 'DO node) "magenta") ; doubtful move
+                          ((alist-get 'IT node) "yellow") ; interesting move
+                          ((alist-get 'TE node) "green")))); tesuji move
+        (if (and xy color ; not a pass and has annotation
+                 (not (sgf-xy-is-empty-p xy board-2d)) ; xy is not empty on current board
+                 (not (gethash xy annotated-xys)))
+            (svg-circle svg-group
+                        (* (car xy) sgf-svg-interval)
+                        (* (cdr xy) sgf-svg-interval)
+                        (* 0.48 sgf-svg-interval)
+                        :fill "none" :stroke color :stroke-width 2))
+        (puthash xy t annotated-xys)
+        ;; move to the previous node
+        (setq curr-lnode (aref curr-lnode 0))))))
+
 
 (defun sgf-svg-add-mvnums (svg game-state)
   "Add move numbers to the board."

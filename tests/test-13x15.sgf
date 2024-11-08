@@ -1,7 +1,9 @@
 (;FF[4]GM[1]SZ[13:15]AB[ca][bb][db:eb][cc]AW[da:ea][fb][dc:ec]PL[W]CA[UTF-8]AP[Sabaki:0.52.2]KM[6.5]DT[2024-09-19]
-;W[ce];B[be]
-( ; W [ cb ] SQ[bb]TR[db][eb]LB[fb:A]C[comment@\[foo\]]MN[15]
- ;B[db]
- ;W[eb]
- ;B[cb] )
-(;W[ba]) )
+;W[ce]TE[1];B[be]BM[1]
+( ; W [ cb ]BM[1] SQ[bb]TR[db][eb]LB[fb:A]C[comment@\[foo\]]MN[15]
+ ;B[db]TE[1]
+ ;W[eb]DO[1]
+ ;B[cb]IT[1] )
+(;W[ba])
+
+)
