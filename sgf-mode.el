@@ -414,60 +414,129 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
   (sgf-prune)
   (sgf-update-display))
 
-;; TODO finish
-(defun sgf-edit-game-info ()
+
+;; Game Info Properties
+(defconst sgf-game-info-props
+  '((CP "Copyright")
+    (US "Enterer Name")
+    (AN "Annotator Name")
+    (SO "Source")
+    (EV "Event Name")
+    (GN "Game Name")
+    (RO "Round Number" :type integer)
+    (DT "Date")
+    (PC "Place")
+    (BT "Black Team")
+    (PB "Black Player")
+    (BR "Black Rank")
+    (WT "White Team")
+    (PW "White Player")
+    (WR "White Rank")
+    (RU "Rule")
+    (OT "Overtime Method")
+    (TM "Time Limit" :type number)
+    (HA "Handicap Stones" :type integer)
+    (KM "Komi" :type number)
+    (RE "Result")
+    (ON "Opening Moves")
+    (GC "Comment" :type text)))
+
+(defun sgf-game-info-prop-type (prop)
+  (or (plist-get (cddr prop) :type) 'text))
+
+(defun sgf-edit-game-info (&optional ov)
   "Edit the game information."
   (interactive)
-  (let* ((ov (sgf-get-overlay))
+  (require 'widget)
+  (let* ((ov (or ov (sgf-get-overlay)))
          (game-state (overlay-get ov 'game-state))
-         (lnode (aref game-state 0)))
+         (lnode (aref game-state 0))
+         (buffer-name "*Go Game Information*")
+         (max-width (apply #'max
+                           (mapcar
+                            (lambda (prop) (string-width (nth 1 prop)))
+                            sgf-game-info-props)))
+         (km (make-sparse-keymap))
+         widgets)
     ;; move to root node
     (while (aref lnode 0) (setq lnode (aref lnode 0)))
-    (switch-to-buffer "*Go Game Information*")
+    (switch-to-buffer buffer-name)
+    (kill-all-local-variables)
     (let ((inhibit-read-only t))
-      (erase-buffer)
-      (widget-insert "Game Information\n\n")
-      (widget-insert " C-c C-c: Save\n")
-      (widget-insert " C-c C-k: Cancel\n\n")
+      (erase-buffer))
+    (remove-overlays)
+    (widget-insert "Game Information\n\n")
+    (widget-insert " C-c C-c: Save ")
+    (widget-insert " C-c C-r: Reset ")
+    (widget-insert " C-x k: Cancel\n\n")
+    (set-keymap-parent km widget-field-keymap)
+    (define-key km (kbd "C-c C-c")
+                (lambda () (interactive) (sgf-edit-game-info--save ov lnode widgets)))
+    (define-key km (kbd "C-c C-r")
+                (lambda () (interactive) (sgf-edit-game-info ov)))
 
-      (dolist (prop sgf-game-info-props)
-        (let* ((prop-id (car prop))
-               (prop-description (nth 1 prop))
-               (prop-type (igo-sgf-game-info-prop-type prop))
-               (prop-value (car (igo-node-get-sgf-property root-node prop-id)))
-               (indent (- max-width (string-width prop-title)))
-               (widget (widget-create
-                        ;;@todo support number, real (nullable)
-                        (cond
-                         ;;((eq prop-type 'number) 'integer)
-                         ;;((eq prop-type 'real) 'number)
-                         ((eq prop-type 'text) 'text)
-                         (t 'editable-field))
-                        :keymap igo-editor-game-info-field-keymap
-                        :size 13
-                        :format (format "%s%s: %%v" (make-string indent ? ) prop-title)
-                        (or prop-value ""))))
-          (push (cons prop-id widget) widgets)
-          (widget-insert "\n")
-          ))
+    (dolist (prop sgf-game-info-props)
+      (let* ((prop-id (car prop))
+             (prop-description (nth 1 prop))
+             (prop-type (sgf-game-info-prop-type prop))
+             (prop-value (car (alist-get prop-id (aref lnode 1))))
+             (field (format "%%%ds: %%%%v" max-width))
+             (widget (widget-create
+                      (or prop-type 'editable-field)
+                      :size 15
+                      :format (format field prop-description)
+                      :keymap km
+                      prop-value)))
+        (push (cons prop-id widget) widgets)
+        (widget-insert "\n")))
+    (widget-insert "\n ")
+    (widget-create 'push-button
+                   :notify (lambda (&rest _) (sgf-edit-game-info--save ov lnode widgets))
+                   "Save")
+    (widget-insert " ")
+    (widget-create 'push-button
+                   :notify (lambda (&rest _) (sgf-edit-game-info ov))
+                   "Reset")
+    (widget-insert " ")
+    (widget-create 'push-button
+                   :notify (lambda (&rest _) (kill-buffer buffer-name))
+                   "Cancel")
+    (widget-insert "\n")
 
-      (widget-create 'push-button :notify 'sgf-edit-game-info--save "Save")
-      (widget-insert " ")
-      (widget-create 'push-button :notify 'sgf-edit-game-info--cancel "Cancel")
-      (widget-insert "\n")
-      (use-local-map widget-keymap)
-      (widget-setup)
-      (widget-forward 1)) ;;to first field
+    (use-local-map widget-keymap)
+    (widget-setup)
+    ;; move to first field-
+    (widget-forward 1)))
 
-    (sgf-serialize-game-to-buffer ov)))
-
-
-(defun sgf-edit-game-info--save (&rest _ignore)
+(defun sgf-edit-game-info--save (ov lnode widgets)
+  "Validate the input value and save it."
   (interactive)
-  (kill-buffer))
+  (let ((node (aref lnode 1)))
+    (dolist (prop sgf-game-info-props)
+      (let* ((prop-id (car prop))
+             (prop-type (sgf-game-info-prop-type prop))
+             (prop-description (nth 1 prop))
+             (widget (cdr (assoc prop-id widgets)))
+             (value (widget-value widget)))
+        ;; (message "%S" prop-id)
+        ;; convert value to string or nil
+        (if (eq prop-type 'text)
+            (setq value (sgf-io-escape-text value)))
+        (if (and (stringp value) (string= value ""))
+            (setq value nil))
+        ;; set or delete property if changed
+        (when (not (equal value (car (alist-get prop-id node))))
+          ;; first, validate if the input is correct value type
+          (if (widget-apply widget :validate)
+              (error "%s: %s" prop-description (widget-get widget :error)))
 
-(defun sgf-edit-game-info--cancel (&rest _ignore)
-  (interactive))
+          (setq node (assoc-delete-all prop-id node))
+          (if value (nconc node (list (list prop-id value))))
+          (aset lnode 1 node))))
+    (sgf-serialize-game-to-buffer ov)
+    (message "Game information saved.")
+    (kill-buffer)))
+
 
 (defun sgf-mouse-event-to-xy (event)
   "Convert a mouse click to a board position (X . Y)."

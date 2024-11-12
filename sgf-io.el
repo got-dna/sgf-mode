@@ -17,35 +17,6 @@
 
 ;;; parse SGF into syntax tree
 
-;; Game Info Properties
-(defconst sgf-game-info-props
-  '(("CP" "Copyright")
-    ("US" "Enterer Name")
-    ("AN" "Annotator Name")
-    ("SO" "Source")
-    ("EV" "Event Name")
-    ("GN" "Game Name")
-    ("RO" "Round Number")
-    ("DT" "Date")
-    ("PC" "Place")
-    ("BT" "Black Team" :player black)
-    ("PB" "Black Player" :player black)
-    ("BR" "Black Rank" :player black)
-    ("WT" "White Team" :player white)
-    ("PW" "White Player" :player white)
-    ("WR" "White Rank" :player white)
-    ("RU" "Rule")
-    ("OT" "Overtime Method")
-    ("TM" "Time Limit" :type real)
-    ("HA" "Handicap Stones" :type number)
-    ("KM" "Komi" :type real)
-    ("RE" "Result")
-    ("ON" "Opening Moves")
-    ("GC" "Comment" :type text)))
-
-
-(defun sgf-game-info-prop-type (prop)
-  (or (plist-get (cddr prop) :type) 'text))
 
 (defun sgf-parse-get-char ()
   (when (< (point) (point-max))
