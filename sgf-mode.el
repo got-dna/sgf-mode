@@ -896,8 +896,10 @@ The move number will be incremented."
       ;; (message "--- path: %S" path)
       ;; (message "--- current buffer: %s" (buffer-substring-no-properties beg end))
       (overlay-put ov 'game-state new-game-state)
+      ;; move the move just before
+      (setcar path (1- (car path)))
       ;; traverse to the same game state and display
-      (sgf-traverse (setcar path (1- (car path))) ov t))))
+      (sgf-traverse path ov t))))
 
 
 (defun sgf-toggle-svg-display (&optional beg end)
