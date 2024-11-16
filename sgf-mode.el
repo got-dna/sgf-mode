@@ -403,10 +403,15 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
 (defun sgf-prune-inclusive ()
   "Delete the current node and all its children."
   (interactive)
-  ;; update display
-  (sgf-backward-move)
-  (sgf-prune)
-  (sgf-update-display))
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (curr-lnode (aref game-state 0))
+         (prev-lnode (aref curr-lnode 0))
+         (lnodes (aref prev-lnode 2)))
+    (sgf-backward-move)
+    (aset prev-lnode 2 (delq curr-lnode lnodes))
+    (sgf-update-display)
+    (sgf-serialize-game-to-buffer ov)))
 
 
 ;; Game Info Properties
