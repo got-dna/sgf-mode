@@ -314,6 +314,17 @@ state converted from the SGF content of FILE."
          (w (car size)) (h (cdr size))
          (board-2d (sgf-board-create w h 'E))
          (turn (car (alist-get 'PL root-node))))
+    ;; if PL is not specified, check the first move to set the correct turn;
+    ;; if there is not any move, then set black to start the move.
+    (unless turn
+      (let* ((next-lnodes (aref root-lnode 2))
+             (next-lnode (car next-lnodes)))
+        (if next-lnode
+             (let* ((next-node (aref next-lnode 1))
+                    (move (sgf-process-move next-node))
+                    (stone (car move)))
+               (setq turn stone)))))
+
     (sgf-setup-board root-node board-2d)
     (sgf-show-comment root-node)
     (sgf-game-state root-lnode board-2d nil turn)))
