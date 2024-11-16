@@ -166,6 +166,12 @@ If neither \\='B nor \\='W is present, return nil."
     (_ nil)))                                 ;; If nothing found, return nil
 
 
+(defun sgf-show-comment (node)
+  "Show the comment of the move/node."
+  ;; if 'C' does not exist, it shows an empty str.
+  (message (mapconcat 'identity (alist-get 'C node) " ")))
+
+
 (define-inline sgf-root-p (lnode)
   "Check if LNODE is the root node."
   (inline-quote (null (aref ,lnode 0))))

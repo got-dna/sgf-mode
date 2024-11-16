@@ -315,6 +315,7 @@ state converted from the SGF content of FILE."
          (board-2d (sgf-board-create w h 'E))
          (turn (car (alist-get 'PL root-node))))
     (sgf-setup-board root-node board-2d)
+    (sgf-show-comment root-node)
     (sgf-game-state root-lnode board-2d nil turn)))
 
 

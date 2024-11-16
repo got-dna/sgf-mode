@@ -18,12 +18,6 @@
 (require 'sgf-svg)
 (require 'sgf-io)
 
-;; TODO check there is only one entity for every type of prop
-(defun sgf-show-comment (node)
-  "Show the comment of the move/node."
-  ;; if 'C' does not exist, it shows an empty str.
-  (message (mapconcat 'identity (alist-get 'C node) " ")))
-
 
 (defun sgf-push-undo (game-state change)
   "Push a game CHANGE to the undo stack in GAME-STATE."
