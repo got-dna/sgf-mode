@@ -375,15 +375,41 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
     (sgf-serialize-game-to-buffer ov)))
 
 
-;; todo igo-editor-move-mode-make-move-root
-(defun sgf-root-node ()
-  "Make the current node the root node.
-1. move all the nodes in between to the root node of setup.
-2. change B, W to AB, AW"
+(defun sgf-make-root ()
+  "Make all the nodes before and including the current node to the root node.
+
+It add all the stones on the board as setup stones and discards all the
+marks, labels, and comments of the moves."
   (interactive)
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
-         (curr-lnode (aref game-state 0)))
+         (curr-lnode (aref game-state 0))
+         (next-lnodes (aref curr-lnode 2))
+         (aw '()) (ab '())
+         prev-lnode)
+    (while (setq prev-lnode (aref curr-lnode 0))
+      (let* ((move (sgf-process-move (aref curr-lnode 1)))
+             (stone (car move))
+             (xy (cdr move)))
+        (if (eq stone 'B) (push xy ab) (push xy aw))
+        (setq curr-lnode prev-lnode)))
+    ;; now curr-lnode is the root lnode
+    ;; link root to the next node(s) and vice vesa
+    (aset curr-lnode 2 next-lnodes)
+    (dolist (next-lnode next-lnodes)
+      (aset next-lnode 0 curr-lnode))
+
+    (let ((node (aref curr-lnode 1)))
+      ;; append new AB and AW to the root node
+      (if ab
+        (setf (alist-get 'AB node) (nconc (alist-get 'AB node '()) ab)))
+      (if aw
+          (setf (alist-get 'AW node) (nconc (alist-get 'AW node '()) aw)))
+      (aset curr-lnode 1 node))
+    (aset game-state 0 curr-lnode)
+    (aset game-state 2 nil)             ; clear KO
+    (aset game-state 5 nil)             ; clear undo stack
+    (sgf-update-display ov nil nil nil)
     (sgf-serialize-game-to-buffer ov)))
 
 
@@ -1099,6 +1125,7 @@ It removes old overlays if there is any."
     (define-key map (kbd "s m") 'sgf-toggle-marks)
     (define-key map (kbd "s h") 'sgf-toggle-nexts)
     ;; modify functions
+    (define-key map (kbd "m r") 'sgf-make-root)
     (define-key map (kbd "m k") 'sgf-prune-inclusive) ; kill node
     (define-key map (kbd "m K") 'sgf-prune)
     (define-key map (kbd "m c") 'sgf-edit-comment)
