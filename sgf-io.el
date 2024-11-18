@@ -449,7 +449,8 @@ https://www.red-bean.com/sgf/sgf4.html#3.5.1
 See also `sgf-encode-prop-pos'."
   (let* ((positions (string-split val ":" t))
          (count (length positions)))
-    (cond ((= count 1)
+    (cond ((= count 0) nil)   ; no position letter exists - a pass. return nil
+          ((= count 1)
            (list (sgf-decode--prop-pos val beg end)))
           ((= count 2)
            (let* ((tl (sgf-decode--prop-pos (car positions) beg end)) ; top left
@@ -462,7 +463,7 @@ See also `sgf-encode-prop-pos'."
                     (mapcar (lambda (x)
                               (mapcar (lambda (y) (cons x y)) y-seq))
                             x-seq))))
-          (t (error "%sOnly one colon is allowed in compressed position value (%s)."
+          (t (error "%sOnly zero or one colon is allowed in compressed position value (%s)."
                     (sgf-io--format-location beg end) val)))))
 
 
