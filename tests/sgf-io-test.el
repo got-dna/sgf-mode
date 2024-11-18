@@ -137,4 +137,7 @@
         (erase-buffer)
         (insert sgf-str)
         (setq game-state (sgf-parse-buffer-to-game-state (point-min) (point-max)))
-        (should (string= (sgf-serialize-game-to-str (aref game-state 0))  sgf-str))))))
+        (should (string= sgf-str
+                         (replace-regexp-in-string
+                          "[[:space:]]" ""
+                          (sgf-serialize-game-to-str (aref game-state 0)))))))))

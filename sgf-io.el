@@ -614,7 +614,8 @@ where all positions in the rectangle are filled in coords."
   "Convert a game tree starting from LNODE to an SGF string."
   ;; Move to the root node
   (while (aref lnode 0) (setq lnode (aref lnode 0)))
-  (let ((stack '()) (output '()))
+  (let ((stack '()) (output '())
+        (indent 0))
     ;; Push the root node onto the stack
     (push (list lnode 0 nil) stack)
 
@@ -628,7 +629,9 @@ where all positions in the rectangle are filled in coords."
 
         ;; Handle the current node
         (when (= child-index 0)
-          (if is-branch (push "(" output))
+          (when is-branch
+            (setq indent (1+ indent))
+            (push (concat "\n" (make-string indent ?\s) "(") output))
           (push (sgf-encode-node (aref node 1)) output))
 
         ;; Process the children
@@ -639,7 +642,9 @@ where all positions in the rectangle are filled in coords."
               ;; Push the next child node onto the stack
               (push (list (nth child-index next-lnodes) 0 (> n 1)) stack))
           ;; No more children, close the branch if needed
-          (if is-branch (push ")" output)))))
+          (when is-branch
+            (setq indent (1- indent))
+            (push ")" output)))))
 
     ;; Return the final result as a concatenated string
     (format "(%s)" (apply #'concat (nreverse output)))))
