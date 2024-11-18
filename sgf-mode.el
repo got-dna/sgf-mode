@@ -917,9 +917,9 @@ The move number will be incremented."
 
 
 (defun sgf-buffer-update-hook (ov after beg end &optional _length)
-  ;; (message "--- beg: %d end: %d" beg end)
+  ;; (message "Before --- beg: %d end: %d" beg end)
   (when after                            ; after the text change
-    ;; (message "--- buffer %s" (buffer-substring beg end))
+    ;; (message "After --- buffer %s" (buffer-substring beg end))
     (let ((inhibit-modification-hooks nil)
           (path (sgf-lnode-path))
           (new-game-state (sgf-parse-buffer-to-game-state beg end)))
@@ -927,9 +927,9 @@ The move number will be incremented."
       ;; (message "--- path: %S" path)
       ;; (message "--- current buffer: %s" (buffer-substring-no-properties beg end))
       (overlay-put ov 'game-state new-game-state)
-      ;; move the move just before
+      ;; move to the move just before
       (setcar path (1- (car path)))
-      ;; traverse to the same game state and display
+      ;; traverse and display
       (sgf-traverse path ov t))))
 
 

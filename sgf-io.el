@@ -671,7 +671,8 @@ where all positions in the rectangle are filled in coords."
         ;; group the delete and insert operations into a single undo unit.
         (combine-change-calls beg end
           (delete-region beg end)
-          (insert (sgf-serialize-game-to-str lnode)))
+          (insert (sgf-serialize-game-to-str lnode))
+          (insert "\n"))
         (undo-boundary)))))
 
 
