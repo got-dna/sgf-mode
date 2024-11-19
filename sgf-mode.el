@@ -342,8 +342,8 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
       (aset lnode 1
             (if (string-empty-p new-comment)
                 node
-              (nconc node (list (list 'C new-comment))))))
-    (sgf-serialize-game-to-buffer ov)))
+              (nconc node (list (list 'C new-comment)))))
+      (sgf-serialize-game-to-buffer ov))))
 
 
 (defun sgf-edit-annotation (&optional lnode)
