@@ -283,6 +283,42 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
     (if interactive-call (sgf-update-display ov))))
 
 
+(defun sgf-merge-nodes (node-1 node-2)
+  "Merge two nodes NODE-1 and NODE-2."
+  (let ((result '()))
+    (dolist (item1 node-1)
+      (let* ((key (car item1))
+             (value1 (cdr item1))
+             (item2 (assoc key node-2))
+             (value2 (cdr item2)))
+        (cond
+         ((or (eq key 'B) (eq key 'W))) ; do nothing
+         ;; for comments, concatenate them.
+         ((eq key 'C)
+          (push (cons key (list (concat (car value1) " " (car value2)))) result))
+         ;; If key exists in both lists and assume values are both lists, append them.
+         (item2
+          (push (cons key (seq-uniq (append value1 value2))) result))
+         ;; Otherwise, use the value from LIST1.
+         (t (push item1 result)))))
+    ;; Add remaining items from LIST2 that were not in LIST1.
+    (dolist (item2 node-2)
+      (unless (assoc (car item2) node-1)
+        (push item2 result)))
+    ;; add key 'B or 'W back
+    (push (or (assoc 'B node-1) (assoc 'W node-1)) result)
+    ;; Return the merged result in the correct order.
+    (nreverse result)))
+
+
+(defun sgf-merge-branches (lnode)
+  "Merge the branches with the same moves."
+
+  (interactive)
+  
+  (let ((next-lnodes (aref 2 lnode))
+
+
 (defun sgf--toggle-layer (key)
   "Toggle the display of a give layer."
   (let* ((ov (sgf-get-overlay))

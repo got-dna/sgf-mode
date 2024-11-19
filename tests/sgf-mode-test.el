@@ -65,5 +65,13 @@
                    '((0 . 0) (0 . 1) (1 . 0))))))
 
 
+(ert-deftest sgf-merge-nodes ()
+  (let ((node-1 '((B (0 . 0)) (C "abc") (LB ((0 . 2) . "A")) (TR (4 . 16) (4 . 15))))
+        (node-2 '((B (0 . 0)) (C "efg") (LB ((0 . 2) . "A") ((0 . 3) . "B")) (TR (4 . 15) (5 . 16))))
+        (merged '((B (0 . 0)) (C "abc efg") (LB ((0 . 2) . "A") ((0 . 3) . "B")) (TR (4 . 16) (4 . 15) (5 . 16)))))
+    (should (equal (sort (sgf-merge-nodes node-1 node-2))
+                   (sort merged)))))
+
+
 (provide 'sgf-mode-test)
 ;;; sgf-mode-test.el ends here
