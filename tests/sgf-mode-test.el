@@ -65,12 +65,26 @@
                    '((0 . 0) (0 . 1) (1 . 0))))))
 
 
-(ert-deftest sgf-merge-nodes ()
+(ert-deftest sgf-merge-nodes-test ()
   (let ((node-1 '((B (0 . 0)) (C "abc") (LB ((0 . 2) . "A")) (TR (4 . 16) (4 . 15))))
         (node-2 '((B (0 . 0)) (C "efg") (LB ((0 . 2) . "A") ((0 . 3) . "B")) (TR (4 . 15) (5 . 16))))
         (merged '((B (0 . 0)) (C "abc efg") (LB ((0 . 2) . "A") ((0 . 3) . "B")) (TR (4 . 16) (4 . 15) (5 . 16)))))
-    (should (equal (sort (sgf-merge-nodes node-1 node-2))
+    (sgf-merge-nodes node-1 node-2)
+    (should (equal (sort node-1)
                    (sort merged)))))
+
+
+(ert-deftest sgf-merge-branches-test ()
+  (let* ((sgf "(;FF[4]GM[1]DT[2024-11-19]SZ[9]PL[B](;B[aa]TR[aa];W[bb];B[ba])(;B[aa]TR[ab];W[ba]))")
+         (tree (sgf-parse-str-to-tree sgf))
+         (lnode (sgf-tree-to-linked-nodes tree))
+         (sgf-exp "(;FF[4]GM[1]DT[2024-11-19]SZ[9]PL[B];B[aa]TR[aa:ab](;W[bb];B[ba])(;W[ba]))"))
+    (sgf--merge-branches lnode)
+    (should (string=
+             sgf-exp
+             (replace-regexp-in-string
+              "[[:space:]]+" ""
+              (sgf-serialize-game-to-str lnode))))))
 
 
 (provide 'sgf-mode-test)

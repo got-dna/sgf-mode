@@ -284,39 +284,63 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
 
 
 (defun sgf-merge-nodes (node-1 node-2)
-  "Merge two nodes NODE-1 and NODE-2."
-  (let ((result '()))
-    (dolist (item1 node-1)
-      (let* ((key (car item1))
-             (value1 (cdr item1))
-             (item2 (assoc key node-2))
-             (value2 (cdr item2)))
-        (cond
-         ((or (eq key 'B) (eq key 'W))) ; do nothing
-         ;; for comments, concatenate them.
-         ((eq key 'C)
-          (push (cons key (list (concat (car value1) " " (car value2)))) result))
-         ;; If key exists in both lists and assume values are both lists, append them.
-         (item2
-          (push (cons key (seq-uniq (append value1 value2))) result))
-         ;; Otherwise, use the value from LIST1.
-         (t (push item1 result)))))
-    ;; Add remaining items from LIST2 that were not in LIST1.
-    (dolist (item2 node-2)
-      (unless (assoc (car item2) node-1)
-        (push item2 result)))
-    ;; add key 'B or 'W back
-    (push (or (assoc 'B node-1) (assoc 'W node-1)) result)
-    ;; Return the merged result in the correct order.
-    (nreverse result)))
+  "Merge NODE-2 into NODE-1 in place.
+
+The NODE-1 will be updated with the merged result. The NODE-2 will
+remain unchanged."
+  (dolist (item1 node-1)
+    (let* ((key (car item1))
+           (value1 (cdr item1))
+           (item2 (assoc key node-2))
+           (value2 (cdr item2)))
+      (cond
+       ((or (eq key 'B) (eq key 'W))) ; do nothing
+       ;; for comments, concatenate them.
+       ((and (eq key 'C) item2)
+        (setcdr item1 (list (concat (car value1) " " (car value2)))))
+       ;; If key exists in both lists and assume values are both
+       ;; lists, append them and uniquefy them.
+       (item2
+        (setcdr item1 (seq-uniq (append value1 value2)))))))
+  ;; Add remaining items from LIST2 that were not in LIST1.
+  (dolist (item2 node-2)
+    (unless (assoc (car item2) node-1)
+      (push item2 node-1))))
 
 
-(defun sgf-merge-branches (lnode)
+(defun sgf--merge-branches (lnode)
   "Merge the branches with the same moves."
+  (let ((moves (make-hash-table :test 'equal))
+        (next-lnodes (aref lnode 2))
+        (new-next-lnodes '()))
+    (dolist (next-lnode next-lnodes)
+      (let* ((node (aref next-lnode 1))
+             (move (sgf-process-move node))
+             (exist-lnode (gethash move moves)))
+        (if exist-lnode
+            (progn (aset exist-lnode 2 (nconc (aref exist-lnode 2)
+                                              (aref next-lnode 2)))
+                   (sgf-merge-nodes (aref exist-lnode 1) node))
+          (puthash move next-lnode moves))))
+    (maphash (lambda (k v)
+               (aset v 0 lnode)
+               (push v new-next-lnodes)) moves)
+    (aset lnode 2 new-next-lnodes)))
 
+
+(defun sgf-merge-branches ()
+  "Merge the branches with the same moves.
+
+This function calls `sgf--merge-branches' to do the heavy-lifting work.
+It is useful to merge multiple game variations with same head moves into
+one game."
   (interactive)
-  
-  (let ((next-lnodes (aref 2 lnode))
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (lnode (aref game-state 0)))
+    (sgf--merge-branches lnode)
+    (sgf-update-display ov t t nil)
+    (sgf-serialize-game-to-buffer ov)))
 
 
 (defun sgf--toggle-layer (key)

@@ -233,9 +233,16 @@
         tree))))
 
 
+(defun sgf-parse-str-to-tree (str)
+  "Parse SGF string into syntax tree."
+  (with-temp-buffer
+    (insert str)
+    (sgf-parse-buffer-to-tree (point-min) (point-max))))
+
+
 (defun sgf-parse-file (file process-fn &optional name)
   "Read SGF content from FILE, process it with PROCESS-FN, and optionally
-output to and pop up a buffer named NAME. the result of PROCESS-FN."
+output to and pop up a buffer named NAME. Return the result of PROCESS-FN."
   (let ((result
          (with-temp-buffer
            (insert-file-contents-literally file)
@@ -266,15 +273,23 @@ state converted from the SGF content of FILE."
   (sgf-parse-file file 'sgf-parse-buffer-to-game-state name))
 
 
-(defun sgf-parse-buffer-to-game-state (beg end)
-  "Convert the SGF content of buffer to emacs lisp object of game state."
+(defun sgf-tree-to-linked-nodes (tree)
+  "Convert SGF syntax tree to doubly linked list of nodes.
+
+Return the root / head node."
   (let ((pre-root-lnode (vector nil nil nil))
-        (sgf-tree (sgf-parse-buffer-to-tree beg end))
         root-lnode)
-    (sgf-linkup-nodes pre-root-lnode sgf-tree)
+    (sgf-linkup-nodes pre-root-lnode tree)
     ;; remove pre-root-lnode
     (setq root-lnode (car (aref pre-root-lnode 2)))
     (aset root-lnode 0 nil)
+    root-lnode))
+
+
+(defun sgf-parse-buffer-to-game-state (beg end)
+  "Convert the SGF content of buffer to emacs lisp object of game state."
+  (let* ((sgf-tree (sgf-parse-buffer-to-tree beg end))
+         (root-lnode (sgf-tree-to-linked-nodes sgf-tree)))
     (sgf-init-game-state root-lnode)))
 
 
@@ -610,6 +625,16 @@ where all positions in the rectangle are filled in coords."
   (concat ";" (mapconcat (lambda (prop) (sgf-encode-prop prop)) node)))
 
 
+(defun sgf-serialize-game-to-str-no-branch (ov)
+  "Convert a game tree starting from current game state to an SGF string.
+
+It does not include other variations or branches that are not traversed
+to reach current game state."
+  (interactive)
+  (let ((lnode (overlay-get ov 'game-state)))
+    (sgf-serialize-game-to-str lnode)))
+
+
 (defun sgf-serialize-game-to-str (lnode)
   "Convert a game tree starting from LNODE to an SGF string."
   ;; Move to the root node
@@ -650,9 +675,10 @@ where all positions in the rectangle are filled in coords."
     (format "(%s)" (apply #'concat (nreverse output)))))
 
 
-(defun sgf-serialize-game-to-buffer (ov)
+(defun sgf-serialize-game-to-buffer (&optional ov)
   "Update the buffer region with the SGF string representation of game."
-  (let* ((buffer (overlay-buffer ov))
+  (let* ((ov (or ov (sgf-get-overlay)))
+         (buffer (overlay-buffer ov))
          (beg (overlay-start ov))
          (end (overlay-end ov))
          (game-state (overlay-get ov 'game-state))
@@ -661,7 +687,6 @@ where all positions in the rectangle are filled in coords."
          ;; modification hooks temporarily.
          (inhibit-modification-hooks t)
          (inhibit-read-only t))
-    ;; disable the hook temporarily
     (with-current-buffer buffer
       ;; (setq buffer-read-only nil)
       (save-excursion
