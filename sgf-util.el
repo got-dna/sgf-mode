@@ -177,38 +177,6 @@ If neither \\='B nor \\='W is present, return nil."
   (inline-quote (null (aref ,lnode 0))))
 
 
-(defun sgf-lnode-path (&optional lnode)
-  "Return the path in the form of `(steps branch-1 branch-2 ...)' to reach
-LNODE from the root.
-
-The return value can be passed to `sgf-traverse'."
-  (unless lnode
-    (let* ((ov (sgf-get-overlay))
-           (game-state (overlay-get ov 'game-state)))
-      (setq lnode (aref game-state 0))))
-
-  (let ((depth 0) (path '()))
-    (while (not (sgf-root-p lnode))
-      (let* ((prev-lnode (aref lnode 0))
-             (siblings (aref prev-lnode 2)))
-        (if (> (length siblings) 1)
-            ;; Find the index of the current lnode in sibling nodes and
-            ;; append to the end of path
-            (push (+ ?a (seq-position siblings lnode)) path))
-        (setq lnode prev-lnode
-              depth (1+ depth))))
-    (cons depth (nreverse path))))
-
-
-(defun sgf-lnode-depth (lnode)
-  "Return the depth of the LNODE from the root node."
-  (let ((depth 0))
-    (while (not (sgf-root-p lnode))
-      (setq lnode (aref lnode 0)
-            depth (1+ depth)))
-    depth))
-
-
 (defun sgf-lnode-move-number (lnode)
   "Return the move number for the LNODE.
 
