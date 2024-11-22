@@ -220,9 +220,9 @@ See also `sgf-forward-move'."
   (if interactive-call (sgf-update-display)))
 
 
-(defun sgf-get-path ()
+(defun sgf-show-path ()
   "Show the path in the form of `(steps branch-1 branch-2 ...)' to reach
-LNODE from the root.
+the current game state from the root.
 
 The return value can be passed to `sgf-traverse'. See also `sgf-lnode-depth'."
   (interactive)
@@ -319,6 +319,21 @@ one game."
          (lnode (aref game-state 0)))
     (sgf--merge-branches lnode)
     (sgf-update-display ov t t nil)
+    (sgf-serialize-game-to-buffer ov)))
+
+
+(defun sgf-remove-variations ()
+  "Remove all the variations before the current game state in the game tree."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (curr-lnode (aref game-state 0))
+         (prev-lnode (aref curr-lnode 0)))
+    (while prev-lnode
+      (if (> (length (aref prev-lnode 2)) 1)
+          (aset prev-lnode 2 (list curr-lnode))
+        (setq prev-lnode (aref prev-lnode 0))))
+    ;; (sgf-update-display ov t t nil)
     (sgf-serialize-game-to-buffer ov)))
 
 
@@ -993,9 +1008,19 @@ The move number will be incremented."
 (defun sgf-buffer-update-hook (ov after beg end &optional _length)
   ;; (message "Before --- beg: %d end: %d" beg end)
   (when after                            ; after the text change
-    ;; (message "After --- buffer %s" (buffer-substring beg end))
-    (let ((inhibit-modification-hooks nil))
-      (sgf-sync-buffer-to-game ov beg end t))))
+    (let* ((inhibit-modification-hooks nil)
+           (game-state (overlay-get ov 'game-state))
+           (lnode (aref game-state 0))
+           (path (sgf-lnode-path lnode))
+           (new-game-state (sgf-parse-buffer-to-game-state beg end)))
+      ;; (message "--- new game state\n: %S" new-game-state)
+      ;; (message "--- path: %S" path)
+      ;; (message "--- current buffer: %s" (buffer-substring-no-properties beg end))
+      (overlay-put ov 'game-state new-game-state)
+      ;; move to the move just before
+      (setcar path (1- (car path)))
+      ;; traverse and display
+      (sgf-traverse path ov t))))
 
 
 (defun sgf-toggle-svg-display (&optional beg end)
@@ -1205,6 +1230,8 @@ It removes old overlays if there is any."
     (define-key map (kbd "m w") 'sgf-edit-setup-white-stone)
     (define-key map (kbd "m i") 'sgf-edit-game-info)
     (define-key map (kbd "m h") 'sgf-edit-annotation) ; highlight
+    (define-key map (kbd "m m") 'sgf-merge-branches)
+    (define-key map (kbd "m v") 'sgf-remove-variations)
     (define-key map "z" 'sgf-export-image)
     (define-key map [hot-grid mouse-1] #'sgf-board-click-left)
     (define-key map [hot-grid mouse-3] #'sgf-board-click-right)
