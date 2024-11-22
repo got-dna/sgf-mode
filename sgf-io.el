@@ -625,20 +625,8 @@ where all positions in the rectangle are filled in coords."
   (concat ";" (mapconcat (lambda (prop) (sgf-encode-prop prop)) node)))
 
 
-(defun sgf-serialize-game-to-str-no-branch (ov)
-  "Convert a game tree starting from current game state to an SGF string.
-
-It does not include other variations or branches that are not traversed
-to reach current game state."
-  (interactive)
-  (let ((lnode (overlay-get ov 'game-state)))
-    (sgf-serialize-game-to-str lnode)))
-
-
-(defun sgf-serialize-game-to-str (lnode)
+(defun sgf-serialize-lnode (lnode)
   "Convert a game tree starting from LNODE to an SGF string."
-  ;; Move to the root node
-  (while (aref lnode 0) (setq lnode (aref lnode 0)))
   (let ((stack '()) (output '())
         (indent 0))
     ;; Push the root node onto the stack
@@ -672,11 +660,55 @@ to reach current game state."
             (push ")" output)))))
 
     ;; Return the final result as a concatenated string
-    (format "(%s)" (apply #'concat (nreverse output)))))
+     (apply #'concat (nreverse output))))
 
 
-(defun sgf-serialize-game-to-buffer (&optional ov)
-  "Update the buffer region with the SGF string representation of game."
+(defun sgf-serialize-game-to-str-since (lnode)
+  "Output the SGF string for each game variation after the LNODE.
+
+It keeps the moves leading to the LNODE and ignore any other variations before."
+  (let ((output '())
+        (flag t)
+        (prev-lnode (aref lnode 0)))
+    ;; serialize the nodes before lnode
+    (while flag
+      (push (sgf-encode-node (aref prev-lnode 1)) output)
+      (if (not (aref prev-lnode 0))
+          (setq flag nil)
+        (setq prev-lnode (aref prev-lnode 0))))
+    (format "(%s\n%s)" (apply #'concat output) (sgf-serialize-lnode lnode))))
+
+
+(defun sgf-serialize-game-to-str (lnode)
+  "Serialize the whole game to a string."
+  ;; Move to the root node
+  (while (aref lnode 0) (setq lnode (aref lnode 0)))
+  (format "(%s)" (sgf-serialize-lnode lnode)))
+
+
+(defun sgf-sync-buffer-to-game (ov beg end undo-p)
+  "Sync the buffer to the game state of the overlay OV."
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (lnode (aref game-state 0))
+         (path (sgf-lnode-path lnode))
+         (new-game-state (sgf-parse-buffer-to-game-state beg end)))
+    ;; (message "--- new game state\n: %S" new-game-state)
+    ;; (message "--- path: %S" path)
+    ;; (message "--- current buffer: %s" (buffer-substring-no-properties beg end))
+    (overlay-put ov 'game-state new-game-state)
+    ;; move to the move just before
+    (if undo-p (setcar path (1- (car path))))
+    ;; traverse and display
+    (sgf-traverse path ov t)))
+
+
+(defun sgf-serialize-game-to-buffer (&optional ov current-variaion)
+  "Update the buffer region with the SGF string representation of game.
+
+If OV is nil, it will use the overlay at point. If CURRENT-VARIATION is t,
+it will only serialize the current variation starting from the current node."
+  (interactive "i\np")
   (let* ((ov (or ov (sgf-get-overlay)))
          (buffer (overlay-buffer ov))
          (beg (overlay-start ov))
@@ -696,7 +728,13 @@ to reach current game state."
         ;; group the delete and insert operations into a single undo unit.
         (combine-change-calls beg end
           (delete-region beg end)
-          (insert (sgf-serialize-game-to-str lnode))
+          (if current-variaion
+              (progn (insert (sgf-serialize-game-to-str-since lnode))
+                     (sgf-sync-buffer-to-game ov
+                                              (overlay-start ov)
+                                              (overlay-end ov)
+                                              nil))
+            (insert (sgf-serialize-game-to-str lnode)))
           (insert "\n"))
         (undo-boundary)))))
 

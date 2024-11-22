@@ -220,39 +220,18 @@ See also `sgf-forward-move'."
   (if interactive-call (sgf-update-display)))
 
 
-(defun sgf-lnode-depth (lnode)
-  "Return the depth of the LNODE from the root node."
-  (let ((depth 0))
-    (while (not (sgf-root-p lnode))
-      (setq lnode (aref lnode 0)
-            depth (1+ depth)))
-    depth))
-
-
-(defun sgf-get-path (&optional lnode)
-  "Return the path in the form of `(steps branch-1 branch-2 ...)' to reach
+(defun sgf-get-path ()
+  "Show the path in the form of `(steps branch-1 branch-2 ...)' to reach
 LNODE from the root.
 
 The return value can be passed to `sgf-traverse'. See also `sgf-lnode-depth'."
   (interactive)
-  (unless lnode
-    (let* ((ov (sgf-get-overlay))
-           (game-state (overlay-get ov 'game-state)))
-      (setq lnode (aref game-state 0))))
-
-  (let ((depth 0) (branch-choices '()))
-    (while (not (sgf-root-p lnode))
-      (let* ((prev-lnode (aref lnode 0))
-             (siblings (aref prev-lnode 2)))
-        (if (> (length siblings) 1)
-            ;; Find the index of the current lnode in sibling nodes and
-            ;; append to the end of branch choices
-            (push (+ ?a (seq-position siblings lnode)) branch-choices))
-        (setq lnode prev-lnode
-              depth (1+ depth))))
-    (setq branch-choices (nreverse branch-choices))
-    (message "Path: (%d %s)" depth (mapconcat #'char-to-string branch-choices " "))
-    (cons depth branch-choices)))
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (lnode (aref game-state 0))
+         (path (sgf-lnode-path lnode))
+         (depth (pop path)))
+    (message "Path: (%d %s)" depth (mapconcat #'char-to-string path " "))))
 
 
 (defun sgf-traverse (path &optional ov interactive-call)
@@ -1015,17 +994,8 @@ The move number will be incremented."
   ;; (message "Before --- beg: %d end: %d" beg end)
   (when after                            ; after the text change
     ;; (message "After --- buffer %s" (buffer-substring beg end))
-    (let ((inhibit-modification-hooks nil)
-          (path (sgf-get-path))
-          (new-game-state (sgf-parse-buffer-to-game-state beg end)))
-      ;; (message "--- new game state\n: %S" new-game-state)
-      ;; (message "--- path: %S" path)
-      ;; (message "--- current buffer: %s" (buffer-substring-no-properties beg end))
-      (overlay-put ov 'game-state new-game-state)
-      ;; move to the move just before
-      (setcar path (1- (car path)))
-      ;; traverse and display
-      (sgf-traverse path ov t))))
+    (let ((inhibit-modification-hooks nil))
+      (sgf-sync-buffer-to-game ov beg end t))))
 
 
 (defun sgf-toggle-svg-display (&optional beg end)

@@ -176,6 +176,18 @@ If neither \\='B nor \\='W is present, return nil."
   "Check if LNODE is the root node."
   (inline-quote (null (aref ,lnode 0))))
 
+(define-inline sgf-get-root (lnode)
+  "Return the root lnode.")
+
+
+(defun sgf-lnode-depth (lnode)
+  "Return the depth of the LNODE from the root node."
+  (let ((depth 0))
+    (while (not (sgf-root-p lnode))
+      (setq lnode (aref lnode 0)
+            depth (1+ depth)))
+    depth))
+
 
 (defun sgf-lnode-move-number (lnode)
   "Return the move number for the LNODE.
@@ -190,6 +202,25 @@ See also `sgf-lnode-depth'."
                 (setq num (1+ num)))
       (setq lnode (aref lnode 0)))
     (+ (or mn-prop 0) num)))
+
+
+(defun sgf-lnode-path (lnode)
+  "Return the path in the form of `(steps branch-1 branch-2 ...)' to reach
+LNODE from the root.
+
+The return value can be passed to `sgf-traverse'. See also `sgf-lnode-depth'."
+  (let ((depth 0) (branch-choices '()))
+    (while (not (sgf-root-p lnode))
+      (let* ((prev-lnode (aref lnode 0))
+             (siblings (aref prev-lnode 2)))
+        (if (> (length siblings) 1)
+            ;; Find the index of the current lnode in sibling nodes and
+            ;; append to the end of branch choices
+            (push (+ ?a (seq-position siblings lnode)) branch-choices))
+        (setq lnode prev-lnode
+              depth (1+ depth))))
+    ;; (setq branch-choices (nreverse branch-choices))
+    (cons depth branch-choices)))
 
 
 (defun sgf-board-hoshi (w h)
