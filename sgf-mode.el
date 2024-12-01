@@ -370,23 +370,28 @@ one game."
 
 
 (defun sgf-export-image (&optional filename)
-  "Export the board to an SVG file or display it in a buffer."
+  "Export the board to an SVG file or display it in a buffer.
+
+It clones svg to a new object and removes the menu bar and move the
+status bar to the top instead."
   (interactive "FExport svg to file: ")
   (let* ((ov (sgf-get-overlay))
-         (svg (overlay-get ov 'svg)))
-    ;; todo clone svg and delete menu bar
-    ;; (svg-remove svg "menu-bar")
+         (svg (overlay-get ov 'svg))
+         (svg-new (copy-tree svg))
+         (status-bar (car (dom-by-id svg-new "status-bar"))))
+    (svg-remove svg-new "menu-bar")
+    (dom-set-attribute status-bar 'transform "translate(0, 0)")
     (if (or (not filename) (string-empty-p filename))
         ;; If no filename is given, display the SVG in a buffer
         (with-current-buffer (get-buffer-create "*SVG Image*")
           (erase-buffer)
-          (svg-print svg)
+          (svg-print svg-new)
           (display-buffer (current-buffer)))
       ;; Otherwise, write the SVG to the specified file
       (when (or (not (file-exists-p filename))
                 (y-or-n-p (format "The file '%s' already exists. Overwrite? " filename)))
         (with-temp-file filename
-          (svg-print svg))
+          (svg-print svg-new))
         (message "SVG exported to %s" filename)))))
 
 
