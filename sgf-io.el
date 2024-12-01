@@ -309,8 +309,8 @@ Return the root / head node."
   "Define game state object. The move number, board-2d, ko, prisoners are re-computed every time when traversing the moves."
   (vector linked-node                 ; 0 current node
           board-2d                    ; 1
-          ko                          ; 3 ko position
-          (or turn 'B)                        ; 2 move turn
+          ko                          ; 2 ko position
+          (or turn 'B)                ; 3 move turn
           ;; 4. accumulated number of prisoners (b . w)
           (or prisoners (cons 0 0))
           ;; 5. stack of changes. each change contains:
@@ -507,15 +507,23 @@ See also `sgf-encode-prop-pos'."
         (end (format "%s: " end))
         (t "")))
 
-;; todo: format and prettify text like comment str
+
 (defun sgf-io--prettify-text (txt)
+  "Format and prettify text like comment string."
   ;; Delete escaped line-break
   (setq txt (replace-regexp-in-string "\\\\\\(\n\r?\\|\r\n?\\)" "" txt))
-  ;; Escape character
+  ;; Convert escaped text back into its raw form.
+  ;; eg "This is a \\n test \\t string." -> "This is a n test t string."
   (setq txt (replace-regexp-in-string "\\\\\\(.\\)" "\\1" txt))
   ;; Convert Spaces
   (setq txt (replace-regexp-in-string "\t\\|\v\\|\n\r?\\|\r\n?" " " txt))
   txt)
+
+
+(defun sgf-io--escape-text (txt)
+  ;; see: https://www.red-bean.com/sgf/sgf4.html#text
+  ;; (replace-regexp-in-string "\\([]:\\\\]\\)" "\\\\\\1" text) ;;escape :
+  (replace-regexp-in-string "\\([]\\\\]\\)" "\\\\\\1" txt))
 
 
 ;; TODO remove quote for str values and escape [ ] etc
@@ -535,22 +543,16 @@ See also `sgf-encode-prop-pos'."
                                 (format "[%c%c:%s]"
                                         (sgf-encode-d2c (car (car prop-val)))
                                         (sgf-encode-d2c (cdr (car prop-val)))
-                                        (sgf-io-escape-text (cdr prop-val))))
+                                        (sgf-io--escape-text (cdr prop-val))))
                               prop-vals))
                   ((eq prop-key 'SZ)
                    (let ((x (caar prop-vals))
                          (y (cdar prop-vals)))
                      (if (= x y) (format "[%d]" x) (format "[%d:%d]" x y))))
                   ((eq prop-key 'C)
-                   (format "[%s]" (sgf-io-escape-text (car prop-vals))))
+                   (format "[%s]" (sgf-io--escape-text (car prop-vals))))
                   (t (format "[%s]" (car prop-vals))))))
     (format "%S%s" prop-key prop-val-str)))
-
-
-(defun sgf-io-escape-text (text)
-  ;; see: https://www.red-bean.com/sgf/sgf4.html#text
-  ;; (replace-regexp-in-string "\\([]:\\\\]\\)" "\\\\\\1" text) ;;escape :
-  (replace-regexp-in-string "\\([]\\\\]\\)" "\\\\\\1" text))
 
 
 (defun sgf-encode-prop-pos (xys)
@@ -668,23 +670,6 @@ where all positions in the rectangle are filled in coords."
   ;; Move to the root node
   (while (aref lnode 0) (setq lnode (aref lnode 0)))
   (format "(%s)" (sgf-serialize-lnode lnode)))
-
-
-(defun sgf-sync-buffer-to-game (ov beg end undo-p)
-  "Sync the buffer to the game state of the overlay OV."
-  (let* ((ov (sgf-get-overlay))
-         (game-state (overlay-get ov 'game-state))
-         (lnode (aref game-state 0))
-         (path (sgf-lnode-path lnode))
-         (new-game-state (sgf-parse-buffer-to-game-state beg end)))
-    ;; (message "--- new game state\n: %S" new-game-state)
-    ;; (message "--- path: %S" path)
-    ;; (message "--- current buffer: %s" (buffer-substring-no-properties beg end))
-    (overlay-put ov 'game-state new-game-state)
-    ;; move to the move just before
-    (if undo-p (setcar path (1- (car path))))
-    ;; traverse and display
-    (sgf-traverse path ov t)))
 
 
 (defun sgf-serialize-game-to-buffer (&optional ov)

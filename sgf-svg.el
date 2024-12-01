@@ -87,6 +87,7 @@ It is a reference for all other element sizes."
          idx)
     ;; Note that the order of svg elements matters
     (setq svg (svg-create board-w (+ sgf-svg-bar board-h sgf-svg-bar)
+                          :text-anchor "middle"
                           :font-family sgf-svg-font-family))
 
     ;; Stones' Gradient
@@ -118,11 +119,10 @@ It is a reference for all other element sizes."
       (svg-text grid idx :class "grid-idx"
                 :font-size (* sgf-svg-font-size idx-font-scale)
                 :x (* sgf-svg-interval n) :y (- sgf-svg-font-size)
-                :dominant-baseline "hanging" :text-anchor "middle")
+                :dominant-baseline "hanging")
       (svg-text grid idx :class "grid-idx"
                 :font-size (* sgf-svg-font-size idx-font-scale)
-                :x (* sgf-svg-interval n) :y (* sgf-svg-interval h)
-                :text-anchor "middle")
+                :x (* sgf-svg-interval n) :y (* sgf-svg-interval h))
       (svg-line grid (* sgf-svg-interval n) 0 (* sgf-svg-interval n) (* grid-h)
                 :stroke "black" :stroke-width line-width))
     (dotimes (n h)
@@ -148,13 +148,20 @@ It is a reference for all other element sizes."
 
     ;; Layers: different types of information on board
     (svg-node grid 'g :id sgf-svg--node-id-stones)
-    (svg-node grid 'g :id sgf-svg--node-id-mvnums)
-    (svg-node grid 'g :id sgf-svg--node-id-nexts)
-    (svg-node grid 'g :id sgf-svg--node-id-marks)
+    (svg-node grid 'g :id sgf-svg--node-id-mvnums
+              :font-size sgf-svg-font-size
+              :font-weight "bold")
+    (svg-node grid 'g :id sgf-svg--node-id-nexts
+              :font-size sgf-svg-font-size
+              :font-weight "bold")
+    (svg-node grid 'g :id sgf-svg--node-id-marks
+              :font-size sgf-svg-font-size
+              :font-weight "bold")
 
     ;; Status Bar
     (setq status-bar (svg-node svg 'g
                                :id "status-bar"
+                               :font-weight "bold" :font-family sgf-svg-font-family
                                :transform
                                (format "translate(%s, %s)" 0 (+ sgf-svg-bar board-h))))
     (svg-rectangle status-bar 0 0 board-w sgf-svg-bar :fill "gray")
@@ -172,17 +179,14 @@ It is a reference for all other element sizes."
     ;; show move number
     (svg-text status-bar "0" :x (/ board-w 2) :y sgf-svg-bar
               :id "status-n" :fill "white"
-              :font-family sgf-svg-font-family :font-weight "bold"
-              :text-anchor "middle" :dy "-0.5em")
+              :dy "-0.5em")
     ;; show prisoner number
     (svg-text status-bar "0" :x (* sgf-svg-interval 2) :y sgf-svg-bar
               :id "status-pb" :fill "white"
-              :font-weight "bold" :font-family sgf-svg-font-family
-              :text-anchor "middle" :dy "-0.5em")
+              :dy "-0.5em")
     (svg-text status-bar "0" :x (- board-w sgf-svg-interval sgf-svg-interval) :y sgf-svg-bar
               :id "status-pw" :fill "white"
-              :font-weight "bold" :font-family sgf-svg-font-family
-              :text-anchor "middle" :dy "-0.5em")
+              :dy "-0.5em")
 
     (cons svg hot-areas)))
 
@@ -210,7 +214,7 @@ SGF-SVG-BAR is the starting y coordinate for menu bar."
                 (svg-rectangle menu-bar x y width height :rx 3 :ry 3 :fill "#fff")
                 (svg-text menu-bar name
                           :x (+ x (/ width 2)) :y height
-                          :text-anchor "middle" :fill "#000")
+                          :fill "#000")
                 (setq hot-area (list (cons 'rect
                                            (cons (cons x 0)
                                                  (cons (+ x width)
@@ -313,14 +317,10 @@ It removes the old marks and adds the new marks."
   (apply #'svg-text svg text
          :x (* x sgf-svg-interval) :y (* y sgf-svg-interval)
          :fill color
-         :text-anchor "middle"
          :dy ".25em" ; or
          ;; :baseline-shift "-30%"
          ;; librsvg issue: https://github.com/lovell/sharp/issues/1996
          ;; :alignment-baseline "central"
-         :font-family sgf-svg-font-family
-         :font-size sgf-svg-font-size
-         :font-weight "bold"
          attributes))
 
 (defun sgf-svg-group-next (svg) (car (dom-by-id svg sgf-svg--node-id-nexts)))

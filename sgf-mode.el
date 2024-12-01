@@ -375,6 +375,7 @@ one game."
   (let* ((ov (sgf-get-overlay))
          (svg (overlay-get ov 'svg)))
     ;; todo clone svg and delete menu bar
+    ;; (svg-remove svg "menu-bar")
     (if (or (not filename) (string-empty-p filename))
         ;; If no filename is given, display the SVG in a buffer
         (with-current-buffer (get-buffer-create "*SVG Image*")
@@ -635,7 +636,7 @@ marks, labels, and comments of the moves."
         ;; (message "%S" prop-id)
         ;; convert value to string or nil
         (if (eq prop-type 'text)
-            (setq value (sgf-io-escape-text value)))
+            (setq value (sgf-io--escape-text value)))
         (if (and (stringp value) (string= value ""))
             (setq value nil))
         ;; set or delete property if changed
