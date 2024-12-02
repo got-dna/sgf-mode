@@ -1182,67 +1182,63 @@ The existing SGF content in the buffer will be erased."
     (popup-menu menu-keymap)))
 
 
-(defvar sgf-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-c") 'sgf-toggle-game-display) ; use the org babel evaluate binding
-    (define-key map (kbd "C-c s i") 'sgf-init-new-game)
-    (define-key map (kbd "C-c s r") 'sgf-remove-game-display)
-    map)
-  "Keymap for SGF major mode.")
+(defvar-keymap sgf-mode-map
+  :doc "Keymap for SGF major mode."
+  "C-c C-c" #'sgf-toggle-game-display ; use the org babel evaluate binding
+  "C-c s i" #'sgf-init-new-game
+  "C-c s r" #'sgf-remove-game-display)
 
 
-(defvar sgf-mode-graphical-map
-  (let ((map (make-sparse-keymap)))
-    ;; only the explicitly defined keys in your keymap will work. All
-    ;; other key presses that would normally insert characters will
-    ;; instead do nothing or produce an error message.
-    (suppress-keymap map)
-    (define-key map (kbd "C-c C-t") 'sgf-toggle-svg-display)
-    ;; navigation functions
-    (define-key map "f" 'sgf-forward-move)
-    (define-key map [hot-forward mouse-1] 'sgf-forward-move)
-    (define-key map (kbd "M-f") 'sgf-forward-fork)
-    (define-key map "b" 'sgf-backward-move)
-    (define-key map [hot-backward mouse-1] 'sgf-backward-move)
-    (define-key map (kbd "M-b") 'sgf-backward-fork)
-    (define-key map "a" 'sgf-first-move)
-    (define-key map [hot-first mouse-1] 'sgf-first-move)
-    (define-key map "e" 'sgf-last-move)
-    (define-key map [hot-last mouse-1] 'sgf-last-move)
-    (define-key map "j" 'sgf-jump-moves)
-    (define-key map "t" 'sgf-traverse)
-    ;; display/show functions
-    (define-key map (kbd "s n") 'sgf-toggle-numbers)
-    (define-key map (kbd "s m") 'sgf-toggle-marks)
-    (define-key map (kbd "s h") 'sgf-toggle-nexts)
-    ;; modify functions
-    (define-key map (kbd "m r") 'sgf-make-root)
-    (define-key map (kbd "m k") 'sgf-prune-inclusive) ; kill node
-    (define-key map (kbd "m K") 'sgf-prune)
-    (define-key map (kbd "m c") 'sgf-edit-comment)
-    (define-key map (kbd "m n") 'sgf-edit-move-number)
-    (define-key map (kbd "m a") 'sgf-edit-mark-triangle)
-    (define-key map (kbd "m d") 'sgf-edit-mark-square)
-    (define-key map (kbd "m o") 'sgf-edit-mark-circle)
-    (define-key map (kbd "m x") 'sgf-edit-mark-cross)
-    (define-key map (kbd "m l") 'sgf-edit-mark-label)
-    (define-key map (kbd "m -") 'sgf-delete-mark)
-    (define-key map (kbd "m b") 'sgf-edit-setup-black-stone)
-    (define-key map (kbd "m w") 'sgf-edit-setup-white-stone)
-    (define-key map (kbd "m i") 'sgf-edit-game-info)
-    (define-key map (kbd "m h") 'sgf-edit-annotation) ; highlight
-    (define-key map (kbd "m m") 'sgf-merge-branches)
-    (define-key map (kbd "m v") 'sgf-remove-variations)
-    (define-key map "z" 'sgf-export-image)
-    (define-key map [hot-grid mouse-1] #'sgf-board-click-left)
-    (define-key map [hot-grid mouse-3] #'sgf-board-click-right)
-    (define-key map [hot-del mouse-1] #'sgf-prune-inclusive)
-    (define-key map [hot-menu mouse-1] #'sgf-menu)
-    (define-key map [hot-pass mouse-1] #'sgf-pass)
-    (define-key map "p" 'sgf-pass)
-    map)
-  "Keymap set for the overlay svg display. It is set as overlay property
-and only activated when the overlay is displayed.")
+(defvar-keymap sgf-mode-graphical-map
+  :doc "Keymap set for the overlay svg display. It is set as overlay property and only activated when the overlay is displayed."
+  :parent sgf-mode-map
+  ;; only the explicitly defined keys in your keymap will work. All
+  ;; other key presses that would normally insert characters will
+  ;; instead do nothing or produce an error message.
+  :suppress t
+  "z" #'sgf-export-image
+  ;; navigation functions
+  "f" #'sgf-forward-move
+  "b" #'sgf-backward-move
+  [hot-forward mouse-1] #'sgf-forward-move
+  [hot-backward mouse-1] #'sgf-backward-move
+  "M-f" #'sgf-forward-fork
+  "M-b" #'sgf-backward-fork
+  "a" #'sgf-first-move
+  "e" #'sgf-last-move
+  [hot-first mouse-1] #'sgf-first-move
+  [hot-last mouse-1] #'sgf-last-move
+  "j" #'sgf-jump-moves
+  "t" #'sgf-traverse
+  ;; display/show functions
+  "s n" #'sgf-toggle-numbers
+  "s m" #'sgf-toggle-marks
+  "s h" #'sgf-toggle-nexts
+  ;; modify functions
+  "m r" #'sgf-make-root
+  "m k" #'sgf-prune-inclusive ; kill node
+  "m K" #'sgf-prune
+  "m c" #'sgf-edit-comment
+  "m n" #'sgf-edit-move-number
+  "m a" #'sgf-edit-mark-triangle
+  "m d" #'sgf-edit-mark-square
+  "m o" #'sgf-edit-mark-circle
+  "m x" #'sgf-edit-mark-cross
+  "m l" #'sgf-edit-mark-label
+  "m -" #'sgf-delete-mark
+  "m b" #'sgf-edit-setup-black-stone
+  "m w" #'sgf-edit-setup-white-stone
+  "m i" #'sgf-edit-game-info
+  "m h" #'sgf-edit-annotation ; highlight
+  "m m" #'sgf-merge-branches
+  "m v" #'sgf-remove-variations
+
+  [hot-grid mouse-1] #'sgf-board-click-left
+  [hot-grid mouse-3] #'sgf-board-click-right
+  [hot-del mouse-1] #'sgf-prune-inclusive
+  [hot-menu mouse-1] #'sgf-menu
+  [hot-pass mouse-1] #'sgf-pass
+  "p" #'sgf-pass)
 
 
 (defun sgf--scroll-map-areas (hot-areas keymap)
