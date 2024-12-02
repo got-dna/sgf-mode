@@ -99,8 +99,8 @@ This function is called by `org-babel-execute-src-block'"
             (sgf-update-game-plist game-plist key (read val)))))
     ;; (message "game-plist:\n%S" game-plist)
     ;; (message "begin-end: %S" beg-end)
-    ;; (sgf-setup-game (string= cache "no") (car beg-end) (cdr beg-end) game-plist)
-    (sgf-setup-game nil (car beg-end) (cdr beg-end) game-plist)))
+    ;; (sgf-setup-game-display (string= cache "no") (car beg-end) (cdr beg-end) game-plist)
+    (sgf-toggle-game-display (car beg-end) (cdr beg-end) game-plist)))
 
 (provide 'ob-sgf)
 

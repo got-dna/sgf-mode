@@ -1029,17 +1029,11 @@ The move number will be incremented."
       (sgf-traverse path ov t))))
 
 
-(defun sgf-toggle-svg-display (&optional beg end)
-  "Toggle graphical display. Overlay keeps unchanged.
-
-If BEG and END are nil, parse the whole buffer as SGF content."
+(defun sgf-remove-game-display ()
+  "Remove the overlay and turn off the game and display."
   (interactive)
-  (let* ((ov (sgf-get-overlay)))
-    (if ov
-        (if (overlay-get ov 'display)
-            (sgf--hide-svg ov)
-          (sgf--display-svg ov))
-      (sgf-setup-game t (or beg (point-min)) (or end (point-max))))))
+  (let ((ov (sgf-get-overlay)))
+    (delete-overlay ov)))
 
 
 (defun sgf--setup-overlay (ov game-state svg-hot-areas game-plist)
@@ -1067,33 +1061,49 @@ If BEG and END are nil, parse the whole buffer as SGF content."
     (sgf-update-display ov)
     ov))
 
-(defun sgf-setup-game (&optional new-game beg end game-plist)
-  "Setup a game overlay.
 
-If the prefix arg NEW-GAME is non-nil, initializes a new game with empty SGF content.
-Otherwise, starts the game from the current region (if active) or the whole buffer content.
+(defun sgf-toggle-game-display (&optional beg end game-plist)
+  "Toggle graphical display of the game.
 
-GAME-PLIST is primarily for header args of sgf block in org-mode."
+If the overlay is not created, it will create the SGF overlay with the
+region between BEG and END (when nil, the whole buffer is parsed as SGF
+content.
+
+If the overlay exists, it keeps unchanged."
+
   (interactive
    (if (use-region-p)
-       (list current-prefix-arg (region-beginning) (region-end))
-     (list current-prefix-arg (point-min) (point-max))))
-  ;; remove old ones; otherwise, it accumulates repetitive overlays
-  ;; over calls. it is safe to remove since game update should be
-  ;; reflected in buffer.
-  (remove-overlays beg end)
+       (list (region-beginning) (region-end))
+     (list (point-min) (point-max))))
 
-  (setq game-plist (or game-plist (sgf-default-game-plist)))
+  (let* ((ov (ignore-errors (sgf-get-overlay))))
+    (if ov
+        (if (overlay-get ov 'display)
+            (sgf--hide-svg ov)
+          (sgf--display-svg ov))
+      ;; set front- and rear-advance parameters to allow
+      ;; the overlay cover the whole buffer even if it is
+      ;; updated from game playing.
+      (let* ((ov (make-overlay beg end nil nil t))
+             (game-state (sgf-parse-buffer-to-game-state beg end))
+             (board-2d   (aref game-state 1))
+             (h (length board-2d))
+             (w (length (aref board-2d 0)))
+             (svg-hot-areas (sgf-svg-init w h)))
+        (unless game-plist (setq game-plist (sgf-default-game-plist)))
+        (sgf--setup-overlay ov game-state svg-hot-areas game-plist)))))
 
-  (if new-game
-      (sgf-setup-new-game beg end game-plist)
-    (sgf-start-the-game beg end game-plist)))
 
 
-(defun sgf-setup-new-game (beg end game-plist)
+(defun sgf-init-new-game (&optional beg end game-plist)
   "Initialize a new game and overlay with empty SGF content.
 
 The existing SGF content in the buffer will be erased."
+
+  (interactive
+   (if (use-region-p)
+       (list (region-beginning) (region-end))
+     (list (point-min) (point-max))))
 
   (let* ((w (read-number "board width: " 19))
          (h (read-number "board height: " 19))
@@ -1108,27 +1118,11 @@ The existing SGF content in the buffer will be erased."
          (game-state (sgf-init-game-state root-lnode))
          (svg-hot-areas (sgf-svg-init w h))
          (ov (make-overlay beg end nil nil t)))
+    (unless game-plist (setq game-plist (sgf-default-game-plist)))
     ;; update buffer content; otherwise, the *empty* overlay (empty
     ;; overlays are overlays cover no text) won't display.
     (sgf--setup-overlay ov game-state svg-hot-areas game-plist)
     (sgf-serialize-game-to-buffer ov)))
-
-
-(defun sgf-start-the-game (beg end game-plist)
-  "Create a fresh overlay and setup overlay properties.
-
-It removes old overlays if there is any."
-
-  ;; set front- and rear-advance parameters to allow
-  ;; the overlay cover the whole buffer even if it is
-  ;; updated from game playing.
-  (let* ((ov (make-overlay beg end nil nil t))
-         (game-state (sgf-parse-buffer-to-game-state beg end))
-         (board-2d   (aref game-state 1))
-         (h (length board-2d))
-         (w (length (aref board-2d 0)))
-         (svg-hot-areas (sgf-svg-init w h)))
-    (sgf--setup-overlay ov game-state svg-hot-areas game-plist)))
 
 
 (defun sgf--hide-svg (ov)
@@ -1153,7 +1147,7 @@ It removes old overlays if there is any."
          (menu-keymap
           ;; https://www.gnu.org/software/emacs/manual/html_node/elisp/Menu-Example.html
           `(keymap "Main Menu"
-                   (sgf-toggle-svg-display menu-item "Diable SVG Display" sgf-toggle-svg-display)
+                   (sgf-toggle-game-display menu-item "Diable SVG Display" sgf-toggle-game-display)
                    (sgf-toggle-allow-suicide-move
                     menu-item "Allow Suicide Move"
                     sgf-toggle-allow-suicide-move
@@ -1190,8 +1184,9 @@ It removes old overlays if there is any."
 
 (defvar sgf-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-c") 'sgf-setup-game) ; use the org babel evaluate binding
-    (define-key map (kbd "C-c C-t") 'sgf-toggle-svg-display)
+    (define-key map (kbd "C-c C-c") 'sgf-toggle-game-display) ; use the org babel evaluate binding
+    (define-key map (kbd "C-c s i") 'sgf-init-new-game)
+    (define-key map (kbd "C-c s r") 'sgf-remove-game-display)
     map)
   "Keymap for SGF major mode.")
 
