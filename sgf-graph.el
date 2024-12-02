@@ -55,7 +55,8 @@ LAST-PREFIX is the prefix for the last item in a branch."
   (let* ((node (aref lnode 1))
          (children (aref lnode 2))
          (comment (alist-get 'C node))
-         (result (format "%s%s\n" prefix (or comment "*"))))
+         (comment-suffix (if comment (concat ":" (car comment)) ""))
+         (result (format "%s%s\n" prefix comment-suffix)))
     (when children
       (let ((child-count (length children)))
         (dolist (child-index (number-sequence 0 (1- child-count)))
@@ -67,8 +68,8 @@ LAST-PREFIX is the prefix for the last item in a branch."
                    (if is-last "`" "|")
                    "-"
                    (if (> child-count 1)
-                       (format "%c:" (+ ?a child-index))
-                     "")))
+                       (format "%c" (+ ?a child-index))
+                     "*")))
                  (next-prefix
                   (concat
                    last-prefix
