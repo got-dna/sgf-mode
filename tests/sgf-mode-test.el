@@ -76,8 +76,7 @@
 
 (ert-deftest sgf-merge-branches-test ()
   (let* ((sgf "(;FF[4]GM[1]DT[2024-11-19]SZ[9]PL[B](;B[aa]TR[aa];W[bb];B[ba])(;B[aa]TR[ab];W[ba]))")
-         (tree (sgf-parse-str-to-tree sgf))
-         (lnode (sgf-tree-to-linked-nodes tree))
+         (lnode (sgf-parse-str-to-* sgf 'sgf-parse-buffer-to-linked-node))
          (sgf-exp "(;FF[4]GM[1]DT[2024-11-19]SZ[9]PL[B];B[aa]TR[aa:ab](;W[bb];B[ba])(;W[ba]))"))
     (sgf--merge-branches lnode)
     (should (string=

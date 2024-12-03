@@ -497,7 +497,7 @@ marks, labels, and comments of the moves."
     (let ((node (aref curr-lnode 1)))
       ;; append new AB and AW to the root node
       (if ab
-        (setf (alist-get 'AB node) (nconc (alist-get 'AB node '()) ab)))
+          (setf (alist-get 'AB node) (nconc (alist-get 'AB node '()) ab)))
       (if aw
           (setf (alist-get 'AW node) (nconc (alist-get 'AW node '()) aw)))
       (aset curr-lnode 1 node))
@@ -1115,7 +1115,7 @@ The existing SGF content in the buffer will be erased."
                       (SZ (,w . ,h))
                       (PL ,pl)))
          (root-lnode (sgf-linked-node nil root-node nil))
-         (game-state (sgf-init-game-state root-lnode))
+         (game-state (sgf-root-lnode-to-game-state root-lnode))
          (svg-hot-areas (sgf-svg-init w h))
          (ov (make-overlay beg end nil nil t)))
     (unless game-plist (setq game-plist (sgf-default-game-plist)))
@@ -1250,8 +1250,8 @@ It is set as overlay propertyand only activated when the overlay is displayed.")
   (require 'pixel-scroll)
   (dolist (area hot-areas)
     (let ((area-id (nth 1 area)))
-          (define-key keymap (vector area-id 'wheel-up) #'pixel-scroll-precision)
-          (define-key keymap (vector area-id 'wheel-down) #'pixel-scroll-precision))))
+      (define-key keymap (vector area-id 'wheel-up) #'pixel-scroll-precision)
+      (define-key keymap (vector area-id 'wheel-down) #'pixel-scroll-precision))))
 
 
 ;; Emacs automatically creates a hook for the mode (e.g.,

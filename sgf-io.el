@@ -220,7 +220,7 @@
     (vector begin-pos (concat (nreverse chars)) end-pos)))
 
 
-(defun sgf-parse-buffer-to-tree (beg end)
+(defun sgf-parse-buffer-to-syntax-tree (beg end)
   "Parse SGF content between BEGIN and END in current buffer into syntax tree."
   (save-excursion
     (save-restriction
@@ -233,51 +233,12 @@
         tree))))
 
 
-(defun sgf-parse-str-to-tree (str)
-  "Parse SGF string into syntax tree."
-  (with-temp-buffer
-    (insert str)
-    (sgf-parse-buffer-to-tree (point-min) (point-max))))
-
-
-(defun sgf-parse-file (file process-fn &optional name)
-  "Read SGF content from FILE, process it with PROCESS-FN, and optionally
-output to and pop up a buffer named NAME. Return the result of PROCESS-FN."
-  (let ((result
-         (with-temp-buffer
-           (insert-file-contents-literally file)
-           (funcall process-fn (point-min) (point-max))))) ;; Process the buffer
-    (if name
-        (let ((buffer (generate-new-buffer name)))
-          (with-current-buffer buffer
-            (insert (pp-to-string result))
-            (emacs-lisp-mode))  ;; Enable emacs-lisp-mode for syntax highlighting
-          (pop-to-buffer buffer)))
-    result))
-
-
-;;;###autoload
-(defun sgf-parse&display-tree (file name)
-  "Display in a popup buffer of NAME the pretty printed Emacs Lisp object
-of syntax tree converted from the SGF content of FILE."
-  (interactive "fRead SGF file: \nBOutput to buffer name: ")
-  (sgf-parse-file file 'sgf-parse-buffer-to-tree name))  ;; Call the helper with the parsing function
-
-;;; process syntax tree into linked node, board, and starting game state
-
-;;;###autoload
-(defun sgf-parse&display-game-state (file name)
-  "Display in a popup buffer the pretty printed Emacs Lisp object of game
-state converted from the SGF content of FILE."
-  (interactive "fRead SGF file: \nsOutput to buffer name: ")
-  (sgf-parse-file file 'sgf-parse-buffer-to-game-state name))
-
-
-(defun sgf-tree-to-linked-nodes (tree)
+(defun sgf-parse-buffer-to-linked-node (beg end)
   "Convert SGF syntax tree to doubly linked list of nodes.
 
-Return the root / head node."
-  (let ((pre-root-lnode (vector nil nil nil))
+Return the root / head of the linked node."
+  (let ((tree (sgf-parse-buffer-to-syntax-tree beg end))
+        (pre-root-lnode (vector nil nil nil))
         root-lnode)
     (sgf-linkup-nodes pre-root-lnode tree)
     ;; remove pre-root-lnode
@@ -286,11 +247,44 @@ Return the root / head node."
     root-lnode))
 
 
-(defun sgf-parse-buffer-to-game-state (beg end)
-  "Convert the SGF content of buffer to emacs lisp object of game state."
-  (let* ((sgf-tree (sgf-parse-buffer-to-tree beg end))
-         (root-lnode (sgf-tree-to-linked-nodes sgf-tree)))
-    (sgf-init-game-state root-lnode)))
+(defun sgf-parse-str-to-* (str fn)
+  "The str parsing version of the corresponding buffer parsing for SGF.
+
+See also `sgf-parse-file-to-*' and functions prefixed with `sgf-parse-buffer-to'."
+  (with-temp-buffer
+    (insert str)
+    (funcall fn (point-min) (point-max))))
+
+
+;;;###autoload
+(defun sgf-parse-file-to-* (file fn &optional name)
+  "The file parsing version of the corresponding buffer parsing for SGF.
+
+Either return the parsing result from function FN or pop up and display
+a buffer of NAME with the pretty printed Emacs Lisp object of syntax
+tree or game state parsed from the SGF content of FILE.
+
+See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'."
+  ;; (interactive "fRead SGF file: \naFunction to parse with: \nBOutput to buffer name: ")
+  (interactive
+   (list
+    (read-file-name "Read SGF file: ")
+    (intern (completing-read "Parse function: "
+                             '(sgf-parse-buffer-to-syntax-tree
+                               sgf-parse-buffer-to-linked-node
+                               sgf-parse-buffer-to-game-state)))
+    (read-buffer "Output buffer: " "*SGF Parsed*" 'confirm)))
+  (let ((result
+         (with-temp-buffer
+           (insert-file-contents-literally file)
+           (funcall fn (point-min) (point-max))))) ;; Process the buffer
+    (if name
+        (let ((buffer (generate-new-buffer name)))
+          (with-current-buffer buffer
+            (insert (pp-to-string result))
+            (emacs-lisp-mode))  ;; Enable emacs-lisp-mode for syntax highlighting
+          (pop-to-buffer buffer))
+      result)))
 
 
 ;;; Linked Node Object
@@ -322,8 +316,14 @@ Return the root / head node."
           undos))
 
 
-(defun sgf-init-game-state (root-lnode)
-  "Create a game state object from the root of linked nodes of the SGF tree."
+(defun sgf-parse-buffer-to-game-state (beg end)
+  "Parse the SGF content of buffer to emacs lisp object of game state."
+  (let* ((root-lnode (sgf-parse-buffer-to-linked-node beg end)))
+    (sgf-root-lnode-to-game-state root-lnode)))
+
+
+(defun sgf-root-lnode-to-game-state (root-lnode)
+  "Create a game state object from the root of linked nodes."
   (let* ((root-node (aref root-lnode 1))
          (size (car (alist-get 'SZ root-node)))
          (w (car size)) (h (cdr size))
@@ -340,21 +340,9 @@ Return the root / head node."
                     (stone (car move)))
                (setq turn stone)))))
 
-    (sgf-setup-board root-node board-2d)
+    (sgf-add-setup-stones root-node board-2d)
     (sgf-show-comment root-node)
     (sgf-game-state root-lnode board-2d nil turn)))
-
-
-(defun sgf-setup-board (root board-2d)
-  "Process root node to add setup stones."
-  (dolist (prop root)
-    (let* ((prop-key (car prop))
-           (prop-vals (cdr prop))
-           (setup-stone (cond ((eq prop-key 'AB) 'B)
-                              ((eq prop-key 'AW) 'W))))
-      (if setup-stone
-          (dolist (xy prop-vals)
-            (sgf-board-set xy setup-stone board-2d))))))
 
 
 (defun sgf-linkup-nodes (head-lnode sgf-tree)

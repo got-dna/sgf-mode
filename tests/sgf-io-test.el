@@ -91,7 +91,7 @@
          (test-dir "tests")
          (data-filename "test-13x15.sgf")
          (data-filepath (file-name-concat root-dir test-dir data-filename))
-         (obs (sgf-parse-file data-filepath 'sgf-parse-buffer-to-tree))
+         (obs (sgf-parse-file-to-* data-filepath 'sgf-parse-buffer-to-syntax-tree))
          (exp [1
                ([2
                  ([3 "FF" ([5 "4" 8]) 8] [8 "GM" ([10 "1" 13]) 13]

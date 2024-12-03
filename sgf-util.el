@@ -166,6 +166,18 @@ If neither \\='B nor \\='W is present, return nil."
     (_ nil)))                                 ;; If nothing found, return nil
 
 
+(defun sgf-add-setup-stones (node board-2d)
+  "Process node to add setup stones."
+  (dolist (prop node)
+    (let* ((prop-key (car prop))
+           (prop-vals (cdr prop))
+           (setup-stone (cond ((eq prop-key 'AB) 'B)
+                              ((eq prop-key 'AW) 'W))))
+      (if setup-stone
+          (dolist (xy prop-vals)
+            (sgf-board-set xy setup-stone board-2d))))))
+
+
 (defun sgf-show-comment (node)
   "Show the comment of the move/node."
   ;; if 'C' does not exist, it shows an empty str.
