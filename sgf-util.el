@@ -137,7 +137,7 @@ Update the global default variable value in the plist from GAME-PLIST.
              (pos    (posn-point mouse-pos))
              (window (posn-window mouse-pos))
              (buffer (window-buffer window)))
-        (set-window-point window pos)
+        ;; (set-window-point window pos)
         (with-current-buffer buffer
           (sgf-get-overlay-at pos)))
     (sgf-get-overlay-at)))

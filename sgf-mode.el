@@ -60,10 +60,15 @@ N is total number of branches. BRANCH is zero-based integer smaller than
 N, indicating your branch choice. If it is nil, it will prompt."
   (let ((prompt (format "Select a branch (a-%c): " (+ ?a (1- n)))))
     (if (null branch)
-        (setq branch (if (= n 1) 0 (- (read-char prompt) ?a))))
+        (setq branch
+              (if (= n 1)
+                  0
+                (- (read-char-choice prompt (number-sequence ?a (+ ?a (1- n))))
+                   ?a))))
     (if (and (>= branch 0) (< branch n))
         branch
       (error "Invalid branch selection: %c" (+ branch ?a)))))
+
 
 (defun sgf-forward-move (&optional branch interactive-call ov)
   "Move to the next move in the game tree and update board.
