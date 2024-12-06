@@ -23,28 +23,26 @@
 (ert-deftest sgf-graph-subtree-v-test-simple ()
   (let* ((lnode (create-test-lnode))
          (obs (sgf-graph-subtree-v lnode))
-         (exp
-"*
-`-*:b
-  |-a:c1
-  | |-a:d1
-  | |-b:d2
-  | `-c:d3
-  `-b
-"))
+         (exp (concat "*"
+                      "`-*:b"
+                      "  |-a:c1"
+                      "  | |-a:d1"
+                      "  | |-b:d2"
+                      "  | `-c:d3"
+                      "  `-b")))
     (should (equal obs exp))))
 
 
 (ert-deftest sgf-graph-subtree-h-test-simple ()
   (let* ((lnode (create-test-lnode))
-         (obs (sgf-graph-subtree-h lnode))
-         (exp
-          "*
--*-*-a-a
- | |-b-a
- | `-c
- `-b"))
-    (should (equal obs exp))))
+         (obs (with-temp-buffer
+                (sgf-graph-subtree-h lnode)
+                (buffer-string)))
+         (exp (concat "*-*-a-a"
+                      "  | |-b"
+                      "  | ‘-c"
+                      "  ‘-b")))
+  (should (equal obs exp))))
 
 
 (ert-deftest sgf-graph-tree-comment-test ()
