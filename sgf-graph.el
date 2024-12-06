@@ -91,38 +91,16 @@ See also `sgf-traverse' and `sgf-graph-pos-to-path'."
               (forward-char column))))))
 
 
-(defun sgf-graph-subtree-v (lnode prefix last-prefix)
-  "Recursively generate vertical ASCII tree representation from a doubly-linked node.
-
-The play move comment will be shown. PREFIX is the current indentation
-prefix. LAST-PREFIX is the prefix for the last item in a branch.
-TODO: is it more efficient to replace string with list for `result'?"
-  (let* ((children (aref lnode 2))
-         (node (aref lnode 1))
-         (comment (alist-get 'C node))
-         (comment-suffix (if comment (concat ":" (car comment)) "")))
-    (insert (format "%s%s\n" prefix comment-suffix))
-    (when children
-      (let* ((child-count (length children)))
-        (dotimes (i child-count)
-          (let* ((is-last (= i (1- child-count)))
-                 (child (nth i children))
-                 (label (if (= child-count 1) "*" (char-to-string (+ ?a i))))
-                 (branch-prefix (concat last-prefix (if is-last "`-" "|-") label))
-                 (next-prefix (concat last-prefix (if is-last "  " "| "))))
-            (sgf-graph-subtree-v child branch-prefix next-prefix)))))))
-
 (defun sgf-graph-subtree-v (root-lnode)
-  "Generate vertical ASCII tree representation from a doubly-linked node non-recursively.
-Matches the output of the recursive implementation."
+  "Generate vertical ASCII tree representation from a doubly-linked node.
 
-  (let ((stack (list (list root-lnode "" "")))) ;; Each element: (lnode prefix last-prefix)
-    (insert "*")
+The play move comment will be shown."
+  (let ((stack (list (list root-lnode "*" ""))))
     (while stack
       (let* ((current (pop stack))
              (lnode (nth 0 current))
-             (prefix (nth 1 current))
-             (last-prefix (nth 2 current))
+             (branch (nth 1 current))
+             (prefix (nth 2 current))
              (node (aref lnode 1))
              (comment (alist-get 'C node))
              (comment-suffix (if comment (concat ":" (car comment)) ""))
@@ -130,16 +108,17 @@ Matches the output of the recursive implementation."
              (child-count (length children))
              (i (1- child-count)))
         ;; Insert the current node representation
-        (insert (format "%s%s\n" prefix comment-suffix))
+        (insert (format "%s%s\n" branch comment-suffix))
         ;; Add children to the stack in reverse order for proper traversal
         (while (>= i 0)
           (let* ((is-last (= i (1- child-count)))
                  (child (nth i children))
                  (label (if (= child-count 1) "*" (char-to-string (+ ?a i))))
-                 (branch-prefix (concat last-prefix (if is-last "`-" "|-") label))
-                 (next-prefix (concat last-prefix (if is-last "  " "| "))))
-            (push (list child branch-prefix next-prefix) stack))
+                 (branch (concat prefix (if is-last "`-" "|-") label))
+                 (prefix (concat prefix (if is-last "  " "| "))))
+            (push (list child branch prefix) stack))
           (setq i (1- i)))))))
+
 
 (defun sgf-graph--transform-str (str size)
   "Transform STR by keeping '|', replacing '`' with '|', and converting all
@@ -156,7 +135,6 @@ other characters to spaces."
 (defun sgf-graph-subtree-h (root-lnode)
   "Generate ASCII tree representation for SGF subtree non-recursively.
 ROOT-NODE is the root node, BUFFER is the target buffer, LINE-N is the starting line."
-  (goto-char (point-min))
   (let ((stack (list (list root-lnode 1))))
     (insert "*") ; root
     (while stack
@@ -175,7 +153,7 @@ ROOT-NODE is the root node, BUFFER is the target buffer, LINE-N is the starting 
                (prefix (sgf-graph--transform-str
                         line
                         (- (current-column) 1))))
-          (message "  line: %s\nprefix: %s" line prefix)
+          ;; (message "  line: %s\nprefix: %s" line prefix)
           (dotimes (i child-count)
             (let* ((is-last (= i (1- child-count)))
                    (is-first (= i 0))
@@ -184,7 +162,10 @@ ROOT-NODE is the root node, BUFFER is the target buffer, LINE-N is the starting 
                           "-"
                         (concat "\n" prefix (if is-last "`-" "|-"))))
               (insert (if (= child-count 1) "*" (char-to-string (+ ?a i))))
-              (push (list child (+ i line-n)) stack))))))))
+              (push (list child (+ i line-n)) stack))))))
+    ;; add newline to the end of buffer
+    (goto-char (point-max))
+    (insert "\n")))
 
 
 (provide 'sgf-graph)
