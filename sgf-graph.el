@@ -44,8 +44,7 @@ is the name of the output buffer."
       (if direction
           (sgf-graph-subtree-h curr-lnode)
         (sgf-graph-subtree-v curr-lnode))
-      ;; (read-only-mode 1) ; make it read only
-      (view-mode 1) ; make it view mode
+      (sgf-graph-mode)
       (toggle-truncate-lines 1) ; do not wrap long lines
       (goto-char (point-min)))
     (pop-to-buffer output-buffer)))
@@ -200,6 +199,24 @@ ROOT-NODE is the root node."
     ;; add newline to the end of buffer
     (goto-char (point-max))
     (insert "\n")))
+
+
+(defun sgf-graph-sync-game ()
+  "Sync the game state to the current node in the graph tree."
+  (interactive))
+
+
+
+(defvar-keymap sgf-graph-mode-map
+  :doc "Keymap for SGF Graph mode."
+  "C-c p" 'sgf-graph-path-to-pos
+  "C-c P" 'sgf-graph-pos-to-path)
+
+
+(define-derived-mode sgf-graph-mode
+  view-mode "SGF Graph"
+  "Major mode for viewing SGF graph tree."
+  :keymap sgf-graph-mode-map)
 
 
 (provide 'sgf-graph)

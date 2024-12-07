@@ -17,6 +17,7 @@
 (require 'sgf-util)
 (require 'sgf-svg)
 (require 'sgf-io)
+(require 'sgf-graph)
 
 
 (defun sgf-push-undo (game-state change)
@@ -1201,7 +1202,7 @@ The existing SGF content in the buffer will be erased."
     ;; other key presses that would normally insert characters will
     ;; instead do nothing or produce an error message.
     (suppress-keymap map)
-    (define-key map (kbd "C-c C-t") 'sgf-toggle-svg-display)
+    (define-key map "g" 'sgf-graph-tree)
     ;; navigation functions
     (define-key map "f" 'sgf-forward-move)
     (define-key map "b" 'sgf-backward-move)
