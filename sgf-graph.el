@@ -1,4 +1,4 @@
-;;; sgf-graph.el --- visualize game in branch  -*- lexical-binding: t; -*-
+;;; sgf-graph.el --- visualize game in tree graph  -*- lexical-binding: t; -*-
 
 
 
@@ -10,7 +10,7 @@
 
 
 ;;; Commentary:
-;; Visualize the game in branch like this:
+
 
 ;;; Code:
 
@@ -25,16 +25,21 @@
 (defun sgf-graph-tree (&optional direction bname)
   "Generate an graph to show all game variations in a tree structure.
 
-DIRECTION is the direction of the tree structure. BNAME is the name of
-the output buffer."
+DIRECTION is the direction of the tree structure. By default, the tree
+is graphed in vertical direction. If prefix argument is provided or
+DIRECTION is t, the tree will be graphed in horizontal direction. BNAME
+is the name of the output buffer."
   (interactive
    (list
     current-prefix-arg ; Handle the direction as a numeric prefix argument
-    (read-buffer "Output buffer name: " "*SGF TREE*")))
+    (read-buffer "Output buffer name: " (if current-prefix-arg "*SGF TREE H*" "*SGF TREE V*"))))
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (output-buffer (generate-new-buffer bname)))
+    ;; move to the root-lnode
+    (while (aref curr-lnode 0)
+      (setq curr-lnode (aref curr-lnode 0)))
     (with-current-buffer output-buffer
       (if direction
           (sgf-graph-subtree-h curr-lnode)
@@ -46,49 +51,72 @@ the output buffer."
     (pop-to-buffer output-buffer)))
 
 
-(defun sgf-graph-pos-to-path ()
+(defun sgf-graph-valid-char-p (char)
+  "Check if CHAR is a valid character for a graph node.
+
+Allow `*', and a-z."
+  (or (eq char ?*)
+      (and (>= char ?a)
+           (<= char ?z))))
+
+
+(defun sgf-graph-pos-to-path (direction)
   "Generate a path based on the current position in an SGF graph.
 Each step in the path corresponds to the column and line traversals
 from the current position to the root of the graph.
 
-See also `sgf-traverse' and `sgf-graph-path-to-pos'."
-  (interactive)
-  (let ((path '())
-        (steps (/ (1+ (current-column)) 2))
-        column)
-    (save-excursion
-      (while (> (line-number-at-pos) 1)
-        (unless (eq ?* (char-after))
-          (push (char-after) path))
-        (forward-char -2)
-        ;; move to the same column of the previous line.
-        (setq column (current-column))
-        (forward-line -1)
-        (forward-char column)
-        (while (eq (char-after) ?|)
-          (forward-line -1)
-          (forward-char column)))))
-    (push steps path))
+DIRECTION is the prefix argument to specify whether the graph tree is
+vertical (default) or horizontal. See also `sgf-traverse' and
+`sgf-graph-path-to-pos'."
+  (interactive "P")
+  (if (sgf-graph-valid-char-p (char-after))
+      (let ((path '())
+            (steps (/ (1+ (current-column)) 2))
+            column)
+        (save-excursion
+          (while (> (point) 1)
+            (unless (eq ?* (char-after))
+              (push (char-after) path))
+            (forward-char -2)
+            ;; move to the same column of the previous line.
+            (setq column (current-column))
+            (unless direction
+              (forward-line -1)
+              (forward-char column))
+            (while (or (eq (char-after) ?|) ; for vertical graph
+                       (eq (char-after) ?`)); for horizontal graph
+              (forward-line -1)
+              (forward-char column))))
+        (push steps path)
+        (message "%S" path))
+    (message "It seems the cursor is not on the valid node in graph.")))
 
 
-(defun sgf-graph-path-to-pos (path)
-  "Move to the point in the graph buffer for the path.
+(defun sgf-graph-path-to-pos (direction path)
+  "Move to the point in the graph tree for the path.
 
-See also `sgf-traverse' and `sgf-graph-pos-to-path'."
-  (interactive "xTraverse path: ")
-  (let ((steps (pop path))
-        (column 0)
-        branch)
+DIRECTION is the prefix argument to specify whether the graph tree is
+vertical (default) or horizontal. See also `sgf-traverse' and
+`sgf-graph-pos-to-path'."
+  (interactive "P\nxTraverse path: ")
+  (let ((steps (pop path)) (column 0) char branch)
     (goto-char (point-min))
-    (dotimes (i steps)
+    (catch 'exit-loop
+      (dotimes (i steps)
         (setq column (+ column 2))
-        (forward-line 1)
-        (forward-char column)
-        (unless (eq (char-after) ?*)
+        (if direction
+            (forward-char 2)
+          (forward-line 1)
+          (forward-char column))
+        (setq char (char-after))
+        (unless (sgf-graph-valid-char-p char)
+          (message "Moved %d steps to invalid char %c." i char)
+          (throw 'exit-loop i))
+        (when (and path (/= char ?*))
           (setq branch (pop path))
           (while (not (eq branch (char-after)))
-              (forward-line)
-              (forward-char column))))))
+            (forward-line)
+            (forward-char column)))))))
 
 
 (defun sgf-graph-subtree-v (root-lnode)
@@ -133,13 +161,16 @@ other characters to spaces."
                 ?\s))))))
 
 (defun sgf-graph-subtree-h (root-lnode)
-  "Generate ASCII tree representation for SGF subtree non-recursively.
-ROOT-NODE is the root node, BUFFER is the target buffer, LINE-N is the starting line."
+  "Generate horizontal ASCII tree representation for SGF subtree non-recursively.
+
+ROOT-NODE is the root node."
   (let ((stack (list (list root-lnode 1))))
     (insert "*") ; root
     (while stack
       (let* ((current (pop stack))
              (lnode (car current))
+             (node (aref lnode 1))
+             (comment (alist-get 'C node))
              (line-n (cadr current))
              (children (aref lnode 2))
              (child-count (length children)))
@@ -162,6 +193,9 @@ ROOT-NODE is the root node, BUFFER is the target buffer, LINE-N is the starting 
                           "-"
                         (concat "\n" prefix (if is-last "`-" "|-"))))
               (insert (if (= child-count 1) "*" (char-to-string (+ ?a i))))
+              (if comment
+                  (add-text-properties (1- (point)) (point)
+                                       `(help-echo ,(car comment) face match)))
               (push (list child (+ i line-n)) stack))))))
     ;; add newline to the end of buffer
     (goto-char (point-max))
