@@ -19,8 +19,17 @@
 (require 'sgf-io)
 
 
+(defface sgf-graph-current-node
+  '((t :foreground "magenta" :weight bold))
+  "Face for the current node in the graph tree."
+  :group 'sgf-graph)
 
-;; todo:  "The current node will be highlighted in red."
+(defface sgf-graph-comment-node
+  '((t :inherit link))
+  "Face for the comment node in the graph tree."
+  :group 'sgf-graph)
+
+
 ;;;###autoload
 (defun sgf-graph-tree (&optional direction bname)
   "Generate an graph to show all game variations in a tree structure.
@@ -29,25 +38,37 @@ DIRECTION is the direction of the tree structure. By default, the tree
 is graphed in vertical direction. If prefix argument is provided or
 DIRECTION is t, the tree will be graphed in horizontal direction. BNAME
 is the name of the output buffer."
-  (interactive
-   (list
-    current-prefix-arg ; Handle the direction as a numeric prefix argument
-    (read-buffer "Output buffer name: " (if current-prefix-arg "*SGF TREE H*" "*SGF TREE V*"))))
+  (interactive "P")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
+         (graph-buffer (overlay-get ov 'graph-buffer))
          (curr-lnode (aref game-state 0))
-         (output-buffer (generate-new-buffer bname)))
+         (path (sgf-lnode-path curr-lnode)))
+    (unless (buffer-live-p graph-buffer)
+      (setq graph-buffer
+            (generate-new-buffer
+             (or bname
+                 (read-buffer "Output buffer name: "
+                              (if direction "*SGF TREE H*" "*SGF TREE V*"))))))
     ;; move to the root-lnode
     (while (aref curr-lnode 0)
       (setq curr-lnode (aref curr-lnode 0)))
-    (with-current-buffer output-buffer
-      (if direction
-          (sgf-graph-subtree-h curr-lnode)
-        (sgf-graph-subtree-v curr-lnode))
-      (sgf-graph-mode)
-      (toggle-truncate-lines 1) ; do not wrap long lines
-      (goto-char (point-min)))
-    (pop-to-buffer output-buffer)))
+    (with-current-buffer graph-buffer
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (if direction
+            (sgf-graph-subtree-h curr-lnode)
+          (sgf-graph-subtree-v curr-lnode))
+        ;; The game which the created graph tree buffer is associated.
+        (setq-local sgf-graph-which-game ov)
+        (setq-local sgf-graph-direction direction)
+        (toggle-truncate-lines 1) ; do not wrap long lines
+        (sgf-graph-path-to-pos direction path)
+        (add-face-text-property (point) (1+ (point)) 'sgf-graph-current-node t))
+      (sgf-graph-mode))
+    ;; put the graph buffer in the overlay
+    (overlay-put ov 'graph-buffer graph-buffer)
+    (display-buffer graph-buffer)))
 
 
 (defun sgf-graph-valid-char-p (char)
@@ -87,7 +108,8 @@ vertical (default) or horizontal. See also `sgf-traverse' and
               (forward-line -1)
               (forward-char column))))
         (push steps path)
-        (message "%S" path))
+        (message "%S" path)
+        path)
     (message "It seems the cursor is not on the valid node in graph.")))
 
 
@@ -194,7 +216,7 @@ ROOT-NODE is the root node."
               (insert (if (= child-count 1) "*" (char-to-string (+ ?a i))))
               (if comment
                   (add-text-properties (1- (point)) (point)
-                                       `(help-echo ,(car comment) face match)))
+                                       `(help-echo ,(car comment) face sgf-graph-comment-node)))
               (push (list child (+ i line-n)) stack))))))
     ;; add newline to the end of buffer
     (goto-char (point-max))
@@ -203,7 +225,12 @@ ROOT-NODE is the root node."
 
 (defun sgf-graph-sync-game ()
   "Sync the game state to the current node in the graph tree."
-  (interactive))
+  (interactive)
+  (let* ((ov sgf-graph-which-game)
+         (game-state (overlay-get ov 'game-state))
+         (path (sgf-graph-pos-to-path sgf-graph-direction)))
+      (sgf-traverse path ov t)
+      (message "Synced the game state to the current node in the graph tree.")))
 
 
 
@@ -213,10 +240,10 @@ ROOT-NODE is the root node."
   "C-c P" 'sgf-graph-pos-to-path)
 
 
-(define-derived-mode sgf-graph-mode
-  view-mode "SGF Graph"
+(define-derived-mode sgf-graph-mode fundamental-mode "SGF-Graph"
   "Major mode for viewing SGF graph tree."
-  :keymap sgf-graph-mode-map)
+  :keymap sgf-graph-mode-map
+  (view-mode 1))
 
 
 (provide 'sgf-graph)
