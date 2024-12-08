@@ -222,7 +222,7 @@ See also `sgf-forward-move'."
   (interactive "nMove _ plays forward (pos number) or backward (neg number): \np")
   (if (> n 0)
       (dotimes (_ n) (sgf-forward-move 0 nil ov))
-    (dotimes (_ (- n)) (sgf-backward-move)))
+    (dotimes (_ (- n)) (sgf-backward-move nil ov)))
   (if interactive-call (sgf-update-display)))
 
 
@@ -264,7 +264,7 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
                (sgf-forward-move (- branch ?a) nil ov))
              (setq diff (- steps (sgf-lnode-depth (aref game-state 0))))
              ;; if come across additional forks, pick the 1st branch
-             (sgf-jump-moves diff ov))))
+             (sgf-jump-moves diff nil ov))))
     (if interactive-call (sgf-update-display ov))))
 
 
@@ -1269,7 +1269,7 @@ It is set as overlay propertyand only activated when the overlay is displayed.")
   "Major mode for editing SGF files. The following commands are available:
 \\{sgf-mode-map}"
   :keymap sgf-mode-map)
-;; TODO  font-lock, use imenu
+
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.sgf\\'" . sgf-mode))

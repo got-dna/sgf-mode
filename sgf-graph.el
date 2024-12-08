@@ -51,24 +51,28 @@ is the name of the output buffer."
                  (read-buffer "Output buffer name: "
                               (if direction "*SGF TREE H*" "*SGF TREE V*"))))))
     ;; move to the root-lnode
-    (while (aref curr-lnode 0)
-      (setq curr-lnode (aref curr-lnode 0)))
+    (while (aref curr-lnode 0) (setq curr-lnode (aref curr-lnode 0)))
     (with-current-buffer graph-buffer
       (let ((inhibit-read-only t))
         (erase-buffer)
         (if direction
             (sgf-graph-subtree-h curr-lnode)
           (sgf-graph-subtree-v curr-lnode))
-        ;; The game which the created graph tree buffer is associated.
-        (setq-local sgf-graph-which-game ov)
-        (setq-local sgf-graph-direction direction)
-        (toggle-truncate-lines 1) ; do not wrap long lines
+        (setq truncate-lines t) ; do not wrap long lines
         (sgf-graph-path-to-pos direction path)
-        (add-face-text-property (point) (1+ (point)) 'sgf-graph-current-node t))
-      (sgf-graph-mode))
+        (add-face-text-property (point) (1+ (point)) 'sgf-graph-current-node))
+      (sgf-graph-mode)
+      ;; define and set local variables:
+      ;; 1. the game that the graph tree buffer is associated.
+      ;; 2. the direction of the graph
+      ;; This has to be done after the mode is enabled - major mode
+      ;; kills all local variables.
+      (setq-local sgf-graph-which-game ov)
+      (setq-local sgf-graph-direction direction))
     ;; put the graph buffer in the overlay
     (overlay-put ov 'graph-buffer graph-buffer)
-    (display-buffer graph-buffer)))
+    (display-buffer graph-buffer)
+    (message "Graph tree is generated in buffer %s." graph-buffer)))
 
 
 (defun sgf-graph-valid-char-p (char)
@@ -198,7 +202,10 @@ ROOT-NODE is the root node."
         ;; move to the end of line line-n
         (goto-char 0)
         (end-of-line line-n)
-        ;; Get the next line and transform it
+        (if comment
+            (add-text-properties (1- (point)) (point)
+                                 `(help-echo ,(car comment) face sgf-graph-comment-node)))
+        ;; Get the next line and transform it to the prefix
         (let* ((line (buffer-substring-no-properties
                       (line-beginning-position 2)
                       (line-end-position 2)))
@@ -214,9 +221,6 @@ ROOT-NODE is the root node."
                           "-"
                         (concat "\n" prefix (if is-last "`-" "|-"))))
               (insert (if (= child-count 1) "*" (char-to-string (+ ?a i))))
-              (if comment
-                  (add-text-properties (1- (point)) (point)
-                                       `(help-echo ,(car comment) face sgf-graph-comment-node)))
               (push (list child (+ i line-n)) stack))))))
     ;; add newline to the end of buffer
     (goto-char (point-max))
@@ -226,21 +230,21 @@ ROOT-NODE is the root node."
 (defun sgf-graph-sync-game ()
   "Sync the game state to the current node in the graph tree."
   (interactive)
-  (let* ((ov sgf-graph-which-game)
-         (game-state (overlay-get ov 'game-state))
-         (path (sgf-graph-pos-to-path sgf-graph-direction)))
-      (sgf-traverse path ov t)
-      (message "Synced the game state to the current node in the graph tree.")))
-
+  (let ((ov sgf-graph-which-game)
+        (path (sgf-graph-pos-to-path sgf-graph-direction)))
+    (sgf-first-move nil ov)
+    (sgf-traverse path ov t)
+    (message "Synced the game state to the current node in the graph tree.")))
 
 
 (defvar-keymap sgf-graph-mode-map
   :doc "Keymap for SGF Graph mode."
   "C-c p" 'sgf-graph-path-to-pos
-  "C-c P" 'sgf-graph-pos-to-path)
+  "C-c P" 'sgf-graph-pos-to-path
+  "C-c s" 'sgf-graph-sync-game)
 
 
-(define-derived-mode sgf-graph-mode fundamental-mode "SGF-Graph"
+(define-derived-mode sgf-graph-mode nil "SGF-Graph"
   "Major mode for viewing SGF graph tree."
   :keymap sgf-graph-mode-map
   (view-mode 1))
