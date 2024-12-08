@@ -53,7 +53,7 @@
   (should (equal obs exp))))
 
 
-(ert-deftest sgf-graph-tree-comment-test ()
+(ert-deftest sgf-graph-tree-test ()
   (require 'project)
   ;; TODO any better alternatives to get tests dir?
   (let* ((root-dir (project-root (project-current)))
@@ -62,14 +62,28 @@
          (data-filepath (file-name-concat root-dir test-dir data-filename))
          (game-state (sgf-parse-file-to-* data-filepath 'sgf-parse-buffer-to-game-state))
          (lnode (aref game-state 0))
-         (obs (sgf-graph-subtree-v lnode))
-         (exp "*
-`-*
-  `-*
-    |-a:comment@[foo]
-    | `-*
-    |   `-*
-    |     `-*
-    `-b
-"))
-    (should (equal obs exp))))
+         (obs-h (with-temp-buffer
+                  (sgf-graph-subtree-h lnode)
+                  (buffer-string)))
+         (exp-h (mapconcat 'identity
+                           '("*-*-*-a-*-*-*"
+                             "    `-b"
+                             "")
+                           "\n"))
+         (obs-v (with-temp-buffer
+                  (sgf-graph-subtree-v lnode)
+                  (buffer-string)))
+         (exp-v (mapconcat 'identity
+                           '("*"
+                             "`-*"
+                             "  `-*"
+                             "    |-a:comment@[foo]"
+                             "    | `-*"
+                             "    |   `-*"
+                             "    |     `-*"
+                             "    `-b"
+                             "")
+                           "\n")))
+    (add-text-properties 6 7 '(face sgf-graph-comment-node help-echo "comment@[foo]") exp-h)
+    (should (equal-including-properties obs-h exp-h))
+    (should (equal obs-v exp-v))))

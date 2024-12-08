@@ -8,4 +8,4 @@ test:
 	@printf "\n------- Byte-Compiling elisp files...\n"
 	${EMACS} -Q --batch -L . -f batch-byte-compile *.el
 	@printf "\n------- Testing...\n"
-	${EMACS} -Q --batch -L . -L tests -l ert -l sgf-io-test.el -l sgf-mode-test.el -f ert-run-tests-batch-and-exit
+	${EMACS} -Q --batch -L . -L tests -l ert -l sgf-graph-test.el -l sgf-io-test.el -l sgf-mode-test.el -f ert-run-tests-batch-and-exit
