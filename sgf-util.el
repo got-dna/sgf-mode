@@ -63,6 +63,7 @@ See also `sgf-traverse'."
 
 
 (defun sgf-default-game-plist ()
+  "Return the global default game property list."
   `(:show-next ,sgf-show-next
                :show-number ,sgf-show-number
                :show-mark ,sgf-show-mark
@@ -73,7 +74,7 @@ See also `sgf-traverse'."
 (defun sgf-update-game-plist (input-plist &rest plist)
   "Create a property list for the game.
 
-Update the global default variable value in the plist from GAME-PLIST.
+Update the global default variable value in the plist from PLIST.
 
  Examples:
 (sgf-update-game-plist (sgf-default-game-plist) :foo 1 :editable nil)
@@ -88,13 +89,14 @@ Update the global default variable value in the plist from GAME-PLIST.
 
 
 (defun sgf-game-plist-get (key &optional ov)
-  "Return game property of KEY"
+  "Return game property of KEY for the overlay."
   (let* ((ov (or ov (sgf-get-overlay)))
          (game-plist (overlay-get ov 'game-plist)))
     (plist-get game-plist key)))
 
 
 (defun sgf-game-plist-set (key value &optional ov)
+  "Set game property of KEY for the overlay."
   (let* ((ov (or ov (sgf-get-overlay)))
          (game-plist (overlay-get ov 'game-plist)))
     (plist-put game-plist key value)))
@@ -107,18 +109,22 @@ Update the global default variable value in the plist from GAME-PLIST.
     (sgf-game-plist-set key (not (plist-get game-plist key)) ov)))
 
 
-(defun sgf-toggle (current &optional true-or-false)
-  "Toggle the CURRENT boolean option."
-  (cond ((null true-or-false) (not current)) ; toggle
+(defun sgf-toggle (flag &optional true-or-false)
+  "Toggle the FLAG boolean option.
+
+Examples: (sgf-toggle t) => nil
+          (sgf-toggle t 'true) => t
+          (sgf-toggle nil) => t
+          (sgf-toggle nil 'false) => nil"
+  (cond ((null true-or-false) (not flag)) ; toggle
         ((eq true-or-false 'true) t)
         ((eq true-or-false 'false) nil)
-        (t current)))
+        (t flag)))
 
 
-(defun sgf-get-overlay-at (&optional pos)
+(defun sgf-get-overlay-at (pos)
   "Return the SGF overlay at POS position in the current buffer."
-  (let* ((pos (or pos (point)))
-         (ovs (overlays-in (1- pos) (1+ pos)))
+  (let ((ovs (overlays-in (1- pos) (1+ pos)))
          sgf-ov)
     (while (and ovs (not sgf-ov))
       (let ((ov (pop ovs)))
@@ -137,10 +143,10 @@ Update the global default variable value in the plist from GAME-PLIST.
              (pos    (posn-point mouse-pos))
              (window (posn-window mouse-pos))
              (buffer (window-buffer window)))
-        ;; (set-window-point window pos)
+        (set-window-point window pos)
         (with-current-buffer buffer
           (sgf-get-overlay-at pos)))
-    (sgf-get-overlay-at)))
+    (sgf-get-overlay-at (point))))
 
 
 ;; Alternative implementation
@@ -167,7 +173,7 @@ If neither \\='B nor \\='W is present, return nil."
 
 
 (defun sgf-add-setup-stones (node board-2d)
-  "Process node to add setup stones."
+  "Process NODE to add setup stones to BOARD-2D."
   (dolist (prop node)
     (let* ((prop-key (car prop))
            (prop-vals (cdr prop))
@@ -186,12 +192,38 @@ If neither \\='B nor \\='W is present, return nil."
             (mapconcat 'identity (alist-get 'C node) " "))))
 
 
+(define-inline sgf-get-lnode-from-ov (ov)
+  "Return the lnode of the overlay OV."
+  (inline-quote (aref (overlay-get ,ov 'game-state) 0)))
+
+(define-inline sgf-get-parent (lnode)
+  "Return the parent node of LNODE."
+  (inline-quote (aref ,lnode 0)))
+
+(define-inline sgf-get-children (lnode)
+  "Return the children nodes of LNODE."
+  (inline-quote (aref ,lnode 2)))
+
+(define-inline sgf-get-siblings (lnode)
+  "Return the sibling nodes of LNODE.
+
+Return nil if LNODE is the root node."
+  (inline-quote (let ((parent (sgf-get-parent ,lnode)))
+                  (aref parent 2))))
+
+(define-inline sgf-node-data (lnode)
+  "Return the node of LNODE."
+  (inline-quote (aref ,lnode 1)))
+
 (define-inline sgf-root-p (lnode)
   "Check if LNODE is the root node."
-  (inline-quote (null (aref ,lnode 0))))
+  (inline-quote (null (sgf-get-parent ,lnode))))
 
-(define-inline sgf-get-root (lnode)
-  "Return the root lnode.")
+(define-inline sgf-path-to-str (path)
+  "Return the path in the form of `(steps branch-1 branch-2 ...)' to reach"
+  (inline-quote (format "(%d %s)"
+                        (car ,path)
+                        (mapconcat #'char-to-string (nthcdr 1 ,path) " "))))
 
 
 (defun sgf-lnode-depth (lnode)
@@ -225,13 +257,13 @@ LNODE from the root.
 The return value can be passed to `sgf-traverse'. See also `sgf-lnode-depth'."
   (let ((depth 0) (branch-choices '()))
     (while (not (sgf-root-p lnode))
-      (let* ((prev-lnode (aref lnode 0))
-             (siblings (aref prev-lnode 2)))
+      (let* ((parent (aref lnode 0))
+             (siblings (aref parent 2)))
         (if (> (length siblings) 1)
             ;; Find the index of the current lnode in sibling nodes and
             ;; append to the end of branch choices
             (push (+ ?a (seq-position siblings lnode)) branch-choices))
-        (setq lnode prev-lnode
+        (setq lnode parent
               depth (1+ depth))))
     ;; (setq branch-choices (nreverse branch-choices))
     (cons depth branch-choices)))
@@ -277,7 +309,6 @@ The return value can be passed to `sgf-traverse'. See also `sgf-lnode-depth'."
 
 
 (defun sgf-board-set (xy v board-2d)
-  "Do nothing if xy is nil"
   (aset (aref board-2d (cdr xy)) (car xy) v))
 
 
@@ -288,7 +319,7 @@ The return value can be passed to `sgf-traverse'. See also `sgf-lnode-depth'."
 
 (defun sgf-valid-stone-p (stone)
   "Check if STONE is a valid color."
-  (or (equal stone 'B) (equal stone 'W)))
+  (or (eq stone 'B) (eq stone 'W)))
 
 
 (defun sgf-xy-on-board-p (xy board-2d)

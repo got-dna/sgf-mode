@@ -34,16 +34,16 @@
 (defun sgf-graph-tree (&optional direction bname)
   "Generate an graph to show all game variations in a tree structure.
 
-DIRECTION is the direction of the tree structure. By default, the tree
-is graphed in vertical direction. If prefix argument is provided or
-DIRECTION is t, the tree will be graphed in horizontal direction. BNAME
-is the name of the output buffer."
+The prefix argument DIRECTION specifies the direction of the tree
+structure. By default, the tree is graphed in vertical direction. If
+prefix argument is provided or DIRECTION is t, the tree will be graphed
+in horizontal direction. BNAME is the name of the output buffer."
   (interactive "P")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (graph-buffer (overlay-get ov 'graph-buffer))
-         (curr-lnode (aref game-state 0))
-         (path (sgf-lnode-path curr-lnode)))
+         (lnode (aref game-state 0))
+         (path (sgf-lnode-path lnode)))
     (unless (buffer-live-p graph-buffer)
       (setq graph-buffer
             (generate-new-buffer
@@ -51,13 +51,13 @@ is the name of the output buffer."
                  (read-buffer "Output buffer name: "
                               (if direction "*SGF TREE H*" "*SGF TREE V*"))))))
     ;; move to the root-lnode
-    (while (aref curr-lnode 0) (setq curr-lnode (aref curr-lnode 0)))
+    (while (aref lnode 0) (setq lnode (aref lnode 0)))
     (with-current-buffer graph-buffer
       (let ((inhibit-read-only t))
         (erase-buffer)
         (if direction
-            (sgf-graph-subtree-h curr-lnode)
-          (sgf-graph-subtree-v curr-lnode))
+            (sgf-graph-subtree-h lnode)
+          (sgf-graph-subtree-v lnode))
         (setq truncate-lines t) ; do not wrap long lines
         (sgf-graph-path-to-pos direction path)
         (add-face-text-property (point) (1+ (point)) 'sgf-graph-current-node))
@@ -112,7 +112,7 @@ vertical (default) or horizontal. See also `sgf-traverse' and
               (forward-line -1)
               (forward-char column))))
         (push steps path)
-        (message "%S" path)
+        (message "%s" (sgf-path-to-str path))
         path)
     (message "It seems the cursor is not on the valid node in graph.")))
 

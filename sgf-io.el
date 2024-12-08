@@ -660,6 +660,26 @@ where all positions in the rectangle are filled in coords."
   (format "(%s)" (sgf-serialize-lnode lnode)))
 
 
+(defun sgf-serialize-game-to-str-no-variation ()
+  "Output the SGF string for each game variation after the LNODE.
+
+It keeps the moves leading to the LNODE and ignore any other variations
+before that. See also `sgf-remove-variations'. This function is normally
+not used and kept for reference."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (curr-lnode (aref game-state 0))
+         (output '())
+         (prev-lnode (aref curr-lnode 0)))
+    ;; serialize the nodes before lnode
+    (while (not (sgf-root-p prev-lnode))
+      (push (sgf-encode-node (aref prev-lnode 1)) output)
+      (setq prev-lnode (aref prev-lnode 0)))
+    (push (sgf-encode-node (aref prev-lnode 1)) output)
+    (message "(%s\n%s)" (apply #'concat output) (sgf-serialize-lnode curr-lnode))))
+
+
 (defun sgf-serialize-game-to-buffer (&optional ov)
   "Update the buffer region with the SGF string representation of game.
 

@@ -332,20 +332,6 @@ It removes the old marks and adds the new marks."
 (defun sgf-svg-mvnum-id (x y) (format "mvnum-%s-%s" x y))
 
 
-;; (defun sgf-svg-remove-last-move (svg-group)
-;;   (svg-remove svg-group "last-move"))
-
-
-;; (defun sgf-svg-mark-last-move (svg curr-node)
-;;   "Highlight the last move on the board."
-;;   (let* ((svg-group (sgf-svg-group-stones svg))
-;;          (xy (cdr (sgf-process-move curr-node))))
-;;     (sgf-svg-remove-last-move svg-group)
-;;     (if xy
-;;         (sgf-svg-add-square svg-group (car xy) (cdr xy) :id "last-move" :fill "red"))))
-
-
-
 (defun sgf-svg-add-stones (svg game-state)
   "Add stones to the board."
   (let ((svg-group (sgf-svg-group-stones svg))
@@ -363,7 +349,7 @@ It removes the old marks and adds the new marks."
         (cy (* y sgf-svg-interval))
         (r (* sgf-svg-interval 0.48)))
     (svg-circle svg-group cx cy r
-                :id (sgf-svg-stone-id x y)
+                ;;:id (sgf-svg-stone-id x y)
                 :gradient stone)))
 
 (defun sgf-svg-add-mvants (svg game-state)

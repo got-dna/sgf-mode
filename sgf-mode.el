@@ -84,23 +84,23 @@ See also `sgf-branch-selection'."
   ;; it is 1
   (interactive "i\np")
   (let* ((ov   (or ov (sgf-get-overlay)))
-         (game-state  (overlay-get ov 'game-state))
-         (curr-lnode  (aref game-state 0))
-         (next-lnodes (aref curr-lnode 2))
-         (n           (length next-lnodes))
-         next-lnode next-node)
+         (game-state (overlay-get ov 'game-state))
+         (lnode    (aref game-state 0))
+         (children (aref lnode 2))
+         (n        (length children))
+         child node)
     (if (= n 0)
         ;; make sure to return nil if there is no next move.
         (progn (message "No more next move.") nil)
       (setq branch (sgf-branch-selection n branch))
-      (setq next-lnode (nth branch next-lnodes))
-      (setq next-node  (aref next-lnode 1))
-      (sgf-apply-node next-node game-state (sgf-game-plist-get :suicide-move ov))
-      (aset game-state 0 next-lnode)
+      (setq child (nth branch children))
+      (setq node  (aref child 1))
+      (sgf-apply-node node game-state (sgf-game-plist-get :suicide-move ov))
+      (aset game-state 0 child)
       ;; return t if it is a noninteractive call, to indicate a
       ;; successful forward move.
       (if interactive-call
-          (progn (sgf-show-comment next-node)
+          (progn (sgf-show-comment node)
                  (sgf-update-display ov))
         t))))
 
@@ -112,9 +112,9 @@ See also `sgf-branch-selection'."
          (game-state (overlay-get ov 'game-state))
          (continue t))
     (while continue
-      (let* ((curr-lnode (aref game-state 0))
-             (lnodes (aref curr-lnode 2))
-             (n (length lnodes)))
+      (let* ((lnode (aref game-state 0))
+             (children (aref lnode 2))
+             (n (length children)))
         (if (= n 1)
             (sgf-forward-move 0 nil ov)
           (setq continue nil))))
@@ -128,14 +128,14 @@ See also `sgf-forward-move'."
   (interactive "p")
   (let* ((ov  (or ov (sgf-get-overlay)))
          (game-state  (overlay-get ov 'game-state))
-         (curr-lnode  (aref game-state 0))
-         (prev-lnode  (aref curr-lnode 0)))
-    (if (sgf-root-p curr-lnode)
+         (lnode  (aref game-state 0))
+         (parent (aref lnode 0)))
+    (if (sgf-root-p lnode)
         ;; make sure to return nil if it is the root node.
         (progn (message "No more previous move.") nil)
-      (if interactive-call (sgf-show-comment (aref prev-lnode 1)))
+      (if interactive-call (sgf-show-comment (aref parent 1)))
       (sgf-revert-undo game-state)
-      (aset game-state 0 prev-lnode)
+      (aset game-state 0 parent)
       (if interactive-call (sgf-update-display ov) t))))
 
 
@@ -146,11 +146,9 @@ See also `sgf-forward-move'."
          (game-state (overlay-get ov 'game-state))
          (continue t))
     (while continue
-      (let* ((curr-lnode (aref game-state 0))
-             (prev-lnode (aref curr-lnode 0))
-             siblings)
-        (if prev-lnode
-            (setq siblings (aref prev-lnode 2)))
+      (let* ((lnode (aref game-state 0))
+             (parent (aref lnode 0))
+             (siblings (if parent (aref parent 2) nil)))
         (sgf-backward-move nil ov)
         (if (/= (length siblings) 1)
             (setq continue nil))))
@@ -235,9 +233,8 @@ The return value can be passed to `sgf-traverse'. See also `sgf-lnode-depth'."
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (lnode (aref game-state 0))
-         (path (sgf-lnode-path lnode))
-         (depth (pop path)))
-    (message "Path: (%d %s)" depth (mapconcat #'char-to-string path " "))))
+         (path (sgf-lnode-path lnode)))
+    (message "Path: %s" (sgf-path-to-str path))))
 
 
 (defun sgf-traverse (path &optional ov interactive-call)
@@ -296,25 +293,25 @@ remain unchanged."
 (defun sgf--merge-branches (lnode)
   "Merge the branches with the same moves."
   (let ((moves (make-hash-table :test 'equal))
-        (next-lnodes (aref lnode 2))
-        (new-next-lnodes '()))
-    (dolist (next-lnode next-lnodes)
-      (let* ((node (aref next-lnode 1))
+        (children (aref lnode 2))
+        (new-children '()))
+    (dolist (child children)
+      (let* ((node (aref child 1))
              (move (sgf-process-move node))
              (exist-lnode (gethash move moves)))
         (if exist-lnode
             (progn (aset exist-lnode 2 (nconc (aref exist-lnode 2)
-                                              (aref next-lnode 2)))
+                                              (aref child 2)))
                    (sgf-merge-nodes (aref exist-lnode 1) node))
-          (puthash move next-lnode moves))))
+          (puthash move child moves))))
     (maphash (lambda (k v)
                (aset v 0 lnode)
-               (push v new-next-lnodes)) moves)
-    (aset lnode 2 new-next-lnodes)))
+               (push v new-children)) moves)
+    (aset lnode 2 new-children)))
 
 
 (defun sgf-merge-branches ()
-  "Merge the branches with the same moves.
+  "Merge the branches with the same next moves of current node.
 
 This function calls `sgf--merge-branches' to do the heavy-lifting work.
 It is useful to merge multiple game variations with same head moves into
@@ -332,14 +329,13 @@ one game."
   "Remove all the variations before the current game state in the game tree."
   (interactive)
   (let* ((ov (sgf-get-overlay))
-         (game-state (overlay-get ov 'game-state))
-         (curr-lnode (aref game-state 0))
-         (prev-lnode (aref curr-lnode 0)))
-    (while prev-lnode
-      (if (> (length (aref prev-lnode 2)) 1)
-          (aset prev-lnode 2 (list curr-lnode))
-        (setq prev-lnode (aref prev-lnode 0))))
-    ;; (sgf-update-display ov t t nil)
+         (curr-lnode (sgf-get-lnode-from-ov ov))
+         (parent (aref curr-lnode 0)))
+    (while parent
+      (if (> (length (aref parent 2)) 1)
+          (aset parent 2 (list curr-lnode)))
+      (setq curr-lnode parent)
+      (setq parent (aref parent 0)))
     (sgf-serialize-game-to-buffer ov)))
 
 
@@ -405,8 +401,7 @@ status bar to the top instead."
   "Edit the move number of the given node or current node."
   (interactive)
   (let* ((ov (sgf-get-overlay))
-         (game-state (overlay-get ov 'game-state))
-         (lnode (or lnode (aref game-state 0)))
+         (lnode (or lnode (sgf-get-lnode-from-ov ov)))
          (node  (aref lnode 1))
          (old-mvnum  (car (alist-get 'MN node)))
          new-mvnum)
@@ -421,7 +416,6 @@ status bar to the top instead."
               (sgf-update-display ov t nil t)
             (message "Move number was not displayed. Enable its display.")
             (sgf-toggle-numbers))
-
           (sgf-serialize-game-to-buffer ov))
       (message "Invalid move number %S. Please enter an integer." new-mvnum))))
 
@@ -430,8 +424,7 @@ status bar to the top instead."
   "Edit the comment of the given node or current node."
   (interactive)
   (let* ((ov (sgf-get-overlay))
-         (game-state (overlay-get ov 'game-state))
-         (lnode (or lnode (aref game-state 0)))
+         (lnode (or lnode (sgf-get-lnode-from-ov ov)))
          (node (aref lnode 1))
          ;; C[foo][spam] -> "foo spam"
          (old-comment (mapconcat 'identity (alist-get 'C node) " "))
@@ -451,8 +444,7 @@ status bar to the top instead."
   "Add or delete move annotation."
   (interactive)
   (let* ((ov (sgf-get-overlay))
-         (game-state (overlay-get ov 'game-state))
-         (lnode (or lnode (aref game-state 0)))
+         (lnode (or lnode (sgf-get-lnode-from-ov ov)))
          (node (aref lnode 1))
          ;; C[foo][spam] -> "foo spam"
          (old-annt (seq-find (lambda (i) (alist-get i node))
@@ -464,7 +456,7 @@ status bar to the top instead."
                                               (?t "TE" "tesuji move")
                                               (?n "nil" "delete annotation"))))
          (new-annt (intern (cadr annt-choice))))
-    ;; only update if the comment is changed
+    ;; only update if the annotation is changed
     (unless (eq old-annt new-annt)
       ;; delete the old comment property
       (setq node (assq-delete-all old-annt node))
@@ -485,16 +477,16 @@ marks, labels, and comments of the moves."
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
-         (next-lnodes (aref curr-lnode 2))
-         (aw '()) (ab '())
-         prev-lnode)
-    (while (setq prev-lnode (aref curr-lnode 0))
-      (let* ((move (sgf-process-move (aref curr-lnode 1)))
+         (lnode (or lnode curr-lnode))
+         (children (aref lnode 2))
+         (aw '()) (ab '()))
+    (while (not (sgf-root-p lnode))
+      (let* ((move (sgf-process-move (aref lnode 1)))
              (stone (car move))
              (xy (cdr move)))
         (if (eq stone 'B) (push xy ab) (push xy aw))
-        (setq curr-lnode prev-lnode)))
-    ;; now curr-lnode is the root lnode
+        (setq lnode (aref lnode 0))))
+    ;; now lnode is the root lnode
     ;; link root to the next node(s) and vice vesa
     (aset curr-lnode 2 next-lnodes)
     (dolist (next-lnode next-lnodes)
@@ -502,11 +494,9 @@ marks, labels, and comments of the moves."
 
     (let ((node (aref curr-lnode 1)))
       ;; append new AB and AW to the root node
-      (if ab
-          (setf (alist-get 'AB node) (nconc (alist-get 'AB node '()) ab)))
-      (if aw
-          (setf (alist-get 'AW node) (nconc (alist-get 'AW node '()) aw)))
-      (aset curr-lnode 1 node))
+      (if ab (setf (alist-get 'AB node) (nconc (alist-get 'AB node '()) ab)))
+      (if aw (setf (alist-get 'AW node) (nconc (alist-get 'AW node '()) aw)))
+      (aset lnode 1 node))
     (aset game-state 0 curr-lnode)
     (aset game-state 2 nil)             ; clear KO
     (aset game-state 5 nil)             ; clear undo stack
@@ -533,10 +523,10 @@ marks, labels, and comments of the moves."
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
-         (prev-lnode (aref curr-lnode 0))
-         (lnodes (aref prev-lnode 2)))
+         (parent (aref curr-lnode 0))
+         (siblings (aref parent 2)))
     (sgf-backward-move)
-    (aset prev-lnode 2 (delq curr-lnode lnodes))
+    (aset parent 2 (delq curr-lnode siblings))
     (sgf-update-display)
     (sgf-serialize-game-to-buffer ov)))
 
@@ -686,11 +676,9 @@ Cases:
          (ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
-         (board-2d   (aref game-state 1))
-         (ko   (aref game-state 2))
          (turn (aref game-state 3))
-         (next-lnodes (aref curr-lnode 2))
-         (next-xys (mapcar (lambda (node) (cdr (sgf-process-move (aref node 1)))) next-lnodes))
+         (children (aref curr-lnode 2))
+         (next-xys (mapcar (lambda (lnode) (cdr (sgf-process-move (aref lnode 1)))) children))
          (found (car (seq-positions next-xys xy))))
     (if found
         ;; Case 1: Clicked on one of the next move position
@@ -700,7 +688,7 @@ Cases:
              (new-lnode (sgf-linked-node curr-lnode new-node)))
         (sgf-apply-node new-node game-state (sgf-game-plist-get :suicide-move ov))
         ;; add the new node as the last branch
-        (aset curr-lnode 2 (nconc next-lnodes (list new-lnode)))
+        (aset curr-lnode 2 (nconc children (list new-lnode)))
         (aset game-state 0 new-lnode)
         (sgf-update-display ov)
         (sgf-serialize-game-to-buffer ov)))))
@@ -730,8 +718,8 @@ Cases:
                  ["Prune to This Move"
                   ,(lambda () (interactive) (sgf-goto-back-lnode clicked-lnode) (sgf-prune))
                   :enable ,(not (sgf-root-p clicked-lnode))] ; not root node
-                 ["Put as Setup"
-                  ,(lambda () (interactive) (sgf-root-node))
+                 ["Put the Stone and Before as Setup"
+                  ,(lambda () (interactive) (sgf-make-root clicked-lnode))
                   :enable ,(not (sgf-root-p clicked-lnode))])))
     (popup-menu menu)))
 
@@ -757,18 +745,18 @@ the same position during the whole game; this function finds the closest
 one to the current game state.
 
 Returns linked node found or nil if not. The game-state remains unchanged."
-  (let* ((board-2d  (aref game-state 1))  ;; Extract the current board
-         (stone (sgf-board-get xy board-2d))  ;; Get the stone at the XY position
+  (let* ((board-2d  (aref game-state 1))
+         (stone (sgf-board-get xy board-2d))
          (curr-lnode (aref game-state 0))
          found-lnode)
     (while (not found-lnode)  ;; Loop until node is found or root is reached
-      (let* ((curr-node (aref curr-lnode 1))  ;; Extract the SGF node data
-             (play (sgf-process-move curr-node))  ;; Process the current move
-             (stone-i (car play))  ;; Stone placed in this node
-             (xy-i (cdr play)))  ;; Coordinates of the move
+      (let* ((curr-node (aref curr-lnode 1))
+             (play (sgf-process-move curr-node))
+             (stone-i (car play))
+             (xy-i (cdr play)))
         (if (and (eq stone-i stone) (equal xy-i xy))  ;; Check if it's the node we're looking for
             (setq found-lnode curr-lnode)  ;; Node found
-          (if (null (aref curr-lnode 0))  ;; If we reach the root node, stop the loop
+          (if (sgf-root-p curr-lnode)  ;; If we reach the root node, stop the loop
               (error "No move is found at position %S." xy)
             (setq curr-lnode (aref curr-lnode 0))))))  ;; Move to the previous node
     found-lnode))  ;; Return the found node, or nil if not found
@@ -781,10 +769,11 @@ The move number will be incremented."
   (interactive)
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
+         (turn (aref game-state 3))
          (curr-lnode (aref game-state 0))
          (next-lnodes (aref curr-lnode 2))
          (n (length next-lnodes))
-         (new-lnode (sgf-linked-node curr-lnode '((W)))))
+         (new-lnode (sgf-linked-node curr-lnode `((,turn)))))
     (aset curr-lnode 2 (nconc next-lnodes (list new-lnode)))
     (sgf-forward-move n)
     (sgf-serialize-game-to-buffer ov)
@@ -1050,8 +1039,8 @@ The move number will be incremented."
     (overlay-put ov 'game-state game-state)
     (overlay-put ov 'svg svg)
     (overlay-put ov 'hot-areas hot-areas)
-    (overlay-put ov 'keymap sgf-mode-graphical-map)
-    (sgf--scroll-map-areas hot-areas sgf-mode-graphical-map)
+    (overlay-put ov 'keymap sgf-mode-display-map)
+    (sgf--scroll-map-areas hot-areas sgf-mode-display-map)
     (overlay-put ov 'insert-behind-hooks '(sgf-buffer-update-hook))
     ;; Traverse to the specified game state and update display
     (sgf-traverse (plist-get game-plist :traverse-path) ov)
@@ -1068,6 +1057,21 @@ The move number will be incremented."
     ov))
 
 
+(defun sgf--display-svg (ov)
+  "Display SVG in the overlay (as well as setting up keyboard)."
+  (let ((svg (overlay-get ov 'svg))
+        (hot-areas (overlay-get ov 'hot-areas)))
+    (unless (and svg hot-areas)
+      (error "Overlay %S does not have 'svg' or 'hot-areas' properties" ov))
+    (overlay-put ov 'keymap sgf-mode-display-map)
+    (overlay-put ov 'display (svg-image svg :map hot-areas))))
+
+
+(defun sgf--hide-svg (ov)
+  (overlay-put ov 'display nil)
+  (overlay-put ov 'keymap nil))
+
+
 (defun sgf-toggle-game-display (&optional beg end game-plist)
   "Toggle graphical display of the game.
 
@@ -1077,16 +1081,13 @@ content.
 
 If the overlay exists, it keeps unchanged."
 
-  (interactive
-   (if (use-region-p)
-       (list (region-beginning) (region-end))
-     (list (point-min) (point-max))))
+  (interactive (if (use-region-p)
+                   (list (region-beginning) (region-end))
+                 (list (point-min) (point-max))))
 
   (let* ((ov (ignore-errors (sgf-get-overlay))))
     (if ov
-        (if (overlay-get ov 'display)
-            (sgf--hide-svg ov)
-          (sgf--display-svg ov))
+        (if (overlay-get ov 'display) (sgf--hide-svg ov) (sgf--display-svg ov))
       ;; set front- and rear-advance parameters to allow
       ;; the overlay cover the whole buffer even if it is
       ;; updated from game playing.
@@ -1100,16 +1101,14 @@ If the overlay exists, it keeps unchanged."
         (sgf--setup-overlay ov game-state svg-hot-areas game-plist)))))
 
 
-
 (defun sgf-init-new-game (&optional beg end game-plist)
   "Initialize a new game and overlay with empty SGF content.
 
 The existing SGF content in the buffer will be erased."
 
-  (interactive
-   (if (use-region-p)
-       (list (region-beginning) (region-end))
-     (list (point-min) (point-max))))
+  (interactive (if (use-region-p)
+                   (list (region-beginning) (region-end))
+                 (list (point-min) (point-max))))
 
   (let* ((w (read-number "board width: " 19))
          (h (read-number "board height: " 19))
@@ -1131,20 +1130,6 @@ The existing SGF content in the buffer will be erased."
     (sgf-serialize-game-to-buffer ov)))
 
 
-(defun sgf--hide-svg (ov)
-  (overlay-put ov 'display nil)
-  (overlay-put ov 'keymap nil))
-
-
-(defun sgf--display-svg (ov)
-  "Display SVG in the overlay (as well as setting up keyboard)."
-  (let ((svg (overlay-get ov 'svg))
-        (hot-areas (overlay-get ov 'hot-areas)))
-    (unless (and svg hot-areas)
-      (error "Overlay %S does not have 'svg' or 'hot-areas' properties" ov))
-    (overlay-put ov 'keymap sgf-mode-graphical-map)
-    (overlay-put ov 'display (svg-image svg :map hot-areas))))
-
 
 (defun sgf-menu ()
   "Show the main menu for the SGF mode."
@@ -1158,6 +1143,7 @@ The existing SGF content in the buffer will be erased."
                     menu-item "Allow Suicide Move"
                     sgf-toggle-allow-suicide-move
                     :button (:toggle . (sgf-game-plist-get :suicide-move ,ov)))
+                   (seperator-1 menu-item "--")
                    (sgf-toggle-numbers ; key symbol
                     menu-item "Show Move Number"
                     sgf-toggle-numbers
@@ -1170,7 +1156,6 @@ The existing SGF content in the buffer will be erased."
                     menu-item "Show Marks"
                     sgf-toggle-marks
                     :button (:toggle . (sgf-game-plist-get :show-mark ,ov)))
-                   (seperator-1 menu-item "--")
                    (seperator-2 menu-item "--")
                    (sgf-edit-move-number menu-item "Edit Move Number" sgf-edit-move-number)
                    (sgf-edit-comment menu-item "Edit Comment" sgf-edit-comment)
@@ -1195,7 +1180,7 @@ The existing SGF content in the buffer will be erased."
   "C-c s r" #'sgf-remove-game-display)
 
 
-(defvar sgf-mode-graphical-map
+(defvar sgf-mode-display-map
   (let ((map (make-sparse-keymap)))
     ;; (set-keymap-parent map sgf-mode-map)
     ;; only the explicitly defined keys in your keymap will work. All
@@ -1255,7 +1240,8 @@ It is set as overlay propertyand only activated when the overlay is displayed.")
   "Allow scrolling for all the map areas on the board."
   (require 'pixel-scroll)
   (dolist (area hot-areas)
-    (let ((area-id (nth 1 area)))
+    ;; area example: ((rect (30 . 55) . (80 . 80)) hot-grid (pointer hand))
+    (let ((area-id (cadr area)))
       (define-key keymap (vector area-id 'wheel-up) #'pixel-scroll-precision)
       (define-key keymap (vector area-id 'wheel-down) #'pixel-scroll-precision))))
 
@@ -1264,8 +1250,7 @@ It is set as overlay propertyand only activated when the overlay is displayed.")
 ;; sgf-mode-hook), and this hook will be run every time the mode is
 ;; enabled.
 ;;;###autoload
-(define-derived-mode sgf-mode
-  text-mode "SGF"
+(define-derived-mode sgf-mode nil "SGF"
   "Major mode for editing SGF files. The following commands are available:
 \\{sgf-mode-map}"
   :keymap sgf-mode-map)

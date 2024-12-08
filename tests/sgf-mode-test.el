@@ -86,5 +86,23 @@
               (sgf-serialize-game-to-str lnode))))))
 
 
+(ert-deftest sgf-path-cycle-test ()
+  "Move according to a given path and then check if we can get the correct path back.
+It tests for `sgf-traverse' and `sgf-lnode-path'."
+  (let* ((sgf "(;FF[4]GM[1]DT[2024-11-19]SZ[9]PL[B](;B[aa]TR[aa];W[bb];B[ba])(;B[aa]TR[ab];W[ba]))")
+         (paths '((2 ?b)
+                  (3 ?a))))
+    (dolist (path paths)
+      ;; sgf-toggle-game-display requires a graphic display
+      (if (display-graphic-p)
+          (should (equal path (with-temp-buffer
+                                (insert sgf)
+                                (sgf-toggle-game-display (point-min) (point-max))
+                                (sgf-traverse path)
+                                (let* ((ov (sgf-get-overlay))
+                                       (lnode (sgf-get-lnode-from-ov ov)))
+                                  (sgf-lnode-path lnode)))))))))
+
+
 (provide 'sgf-mode-test)
 ;;; sgf-mode-test.el ends here
