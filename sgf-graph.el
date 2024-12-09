@@ -31,13 +31,13 @@
 
 
 ;;;###autoload
-(defun sgf-graph-tree (&optional direction bname)
+(defun sgf-graph-tree (&optional vertical bname)
   "Generate an graph to show all game variations in a tree structure.
 
-The prefix argument DIRECTION specifies the direction of the tree
-structure. By default, the tree is graphed in vertical direction. If
-prefix argument is provided or DIRECTION is t, the tree will be graphed
-in horizontal direction. BNAME is the name of the output buffer."
+The prefix argument VERTICAL specifies the direction of the tree
+structure. By default, the tree is graphed in horizontal direction. If
+prefix argument is provided or VERTICAL is t, the tree will be graphed
+in vertical direction. BNAME is the name of the output buffer."
   (interactive "P")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
@@ -49,17 +49,17 @@ in horizontal direction. BNAME is the name of the output buffer."
             (generate-new-buffer
              (or bname
                  (read-buffer "Output buffer name: "
-                              (if direction "*SGF TREE H*" "*SGF TREE V*"))))))
+                              (if vertical "*SGF TREE V*" "*SGF TREE H*"))))))
     ;; move to the root-lnode
     (while (aref lnode 0) (setq lnode (aref lnode 0)))
     (with-current-buffer graph-buffer
       (let ((inhibit-read-only t))
         (erase-buffer)
-        (if direction
-            (sgf-graph-subtree-h lnode)
-          (sgf-graph-subtree-v lnode))
+        (if vertical
+            (sgf-graph-subtree-v lnode)
+          (sgf-graph-subtree-h lnode))
         (setq truncate-lines t) ; do not wrap long lines
-        (sgf-graph-path-to-pos direction path)
+        (sgf-graph-path-to-pos vertical path)
         (add-face-text-property (point) (1+ (point)) 'sgf-graph-current-node))
       (sgf-graph-mode)
       ;; define and set local variables:
@@ -68,7 +68,7 @@ in horizontal direction. BNAME is the name of the output buffer."
       ;; This has to be done after the mode is enabled - major mode
       ;; kills all local variables.
       (setq-local sgf-graph-which-game ov)
-      (setq-local sgf-graph-direction direction))
+      (setq-local sgf-graph-vertical vertical))
     ;; put the graph buffer in the overlay
     (overlay-put ov 'graph-buffer graph-buffer)
     (display-buffer graph-buffer)
@@ -84,13 +84,13 @@ Allow `*', and a-z."
            (<= char ?z))))
 
 
-(defun sgf-graph-pos-to-path (direction)
+(defun sgf-graph-pos-to-path (vertical)
   "Generate a path based on the current position in an SGF graph.
 Each step in the path corresponds to the column and line traversals
 from the current position to the root of the graph.
 
-DIRECTION is the prefix argument to specify whether the graph tree is
-vertical (default) or horizontal. See also `sgf-traverse' and
+VERTICAL is the prefix argument to specify whether the graph tree is
+vertical or horizontal (default). See also `sgf-traverse' and
 `sgf-graph-path-to-pos'."
   (interactive "P")
   (if (sgf-graph-valid-char-p (char-after))
@@ -104,7 +104,7 @@ vertical (default) or horizontal. See also `sgf-traverse' and
             (forward-char -2)
             ;; move to the same column of the previous line.
             (setq column (current-column))
-            (unless direction
+            (when vertical
               (forward-line -1)
               (forward-char column))
             (while (or (eq (char-after) ?|) ; for vertical graph
@@ -117,11 +117,11 @@ vertical (default) or horizontal. See also `sgf-traverse' and
     (message "It seems the cursor is not on the valid node in graph.")))
 
 
-(defun sgf-graph-path-to-pos (direction path)
+(defun sgf-graph-path-to-pos (vertical path)
   "Move to the point in the graph tree for the path.
 
-DIRECTION is the prefix argument to specify whether the graph tree is
-vertical (default) or horizontal. See also `sgf-traverse' and
+VERTICAL is the prefix argument to specify whether the graph tree is
+vertical or horizontal (default). See also `sgf-traverse' and
 `sgf-graph-pos-to-path'."
   (interactive "P\nxTraverse path: ")
   (let ((steps (pop path)) (column 0) char branch)
@@ -129,10 +129,10 @@ vertical (default) or horizontal. See also `sgf-traverse' and
     (catch 'exit-loop
       (dotimes (i steps)
         (setq column (+ column 2))
-        (if direction
-            (forward-char 2)
-          (forward-line 1)
-          (forward-char column))
+        (if vertical
+            (progn (forward-line 1)
+                   (forward-char column))
+          (forward-char 2))
         (setq char (char-after))
         (unless (sgf-graph-valid-char-p char)
           (message "Moved %d steps to invalid char %c." i char)
@@ -231,9 +231,10 @@ ROOT-NODE is the root node."
   "Sync the game state to the current node in the graph tree."
   (interactive)
   (let ((ov sgf-graph-which-game)
-        (path (sgf-graph-pos-to-path sgf-graph-direction)))
+        (path (sgf-graph-pos-to-path sgf-graph-vertical)))
     (sgf-first-move nil ov)
     (sgf-traverse path ov t)
+    (display-buffer (overlay-buffer ov))
     (message "Synced the game state to the current node in the graph tree.")))
 
 
