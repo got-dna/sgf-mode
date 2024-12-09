@@ -31,7 +31,7 @@
 
 
 ;;;###autoload
-(defun sgf-graph-tree (&optional vertical bname)
+(defun sgf-graph-tree (&optional vertical bname ov)
   "Generate an graph to show all game variations in a tree structure.
 
 The prefix argument VERTICAL specifies the direction of the tree
@@ -39,7 +39,7 @@ structure. By default, the tree is graphed in horizontal direction. If
 prefix argument is provided or VERTICAL is t, the tree will be graphed
 in vertical direction. BNAME is the name of the output buffer."
   (interactive "P")
-  (let* ((ov (sgf-get-overlay))
+  (let* ((ov (or ov (sgf-get-overlay)))
          (game-state (overlay-get ov 'game-state))
          (graph-buffer (overlay-get ov 'graph-buffer))
          (lnode (aref game-state 0))
@@ -71,8 +71,7 @@ in vertical direction. BNAME is the name of the output buffer."
       (setq-local sgf-graph-vertical vertical))
     ;; put the graph buffer in the overlay
     (overlay-put ov 'graph-buffer graph-buffer)
-    (display-buffer graph-buffer)
-    (message "Graph tree is generated in buffer %s." graph-buffer)))
+    (display-buffer graph-buffer)))
 
 
 (defun sgf-graph-valid-char-p (char)

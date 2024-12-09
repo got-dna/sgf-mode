@@ -995,6 +995,8 @@ The move number will be incremented."
          (pcounts    (aref game-state 4))
          (curr-lnode (aref game-state 0))
          (curr-node  (aref curr-lnode 1)))
+    ;; update and display tree graph
+    (sgf-graph-tree nil nil ov)
     (unless no-move
       (sgf-svg-add-stones svg game-state)
       (sgf-svg-add-mvants svg game-state)
