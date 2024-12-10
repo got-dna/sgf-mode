@@ -83,7 +83,7 @@ Update the global default variable value in the plist from PLIST.
     (let* ((key (pop plist))
            (value (pop plist)))
       (if (plist-member input-plist key)
-          ;; only update/add if it is a defined customizable variable
+          ;; update only existing customizable property
           (plist-put input-plist key value))))
   input-plist)
 
@@ -220,15 +220,6 @@ Return nil if LNODE is the root node."
   (inline-quote (format "(%d %s)"
                         (car ,path)
                         (mapconcat #'char-to-string (nthcdr 1 ,path) " "))))
-
-
-(defun sgf-lnode-depth (lnode)
-  "Return the depth of the LNODE from the root node."
-  (let ((depth 0))
-    (while (not (sgf-root-p lnode))
-      (setq lnode (aref lnode 0)
-            depth (1+ depth)))
-    depth))
 
 
 (defun sgf-lnode-move-number (lnode)

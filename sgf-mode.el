@@ -254,24 +254,24 @@ For example, (sgf-traverse \\='(9 ?b ?a)) will move forward 9 steps and
 pick branch b and a in the 1st and 2nd forks (if come across forks),
  respectively. See also `sgf-traverse-path'."
   (interactive "xTraverse path: \ni\np")
-  (let* ((ov (or ov (sgf-get-overlay)))
-         (game-state (overlay-get ov 'game-state)))
+  (let* ((ov (or ov (sgf-get-overlay))))
     (cond ((null path) nil) ; do nothing
-          ((eq path t) (sgf-last-move nil ov)) ; pick the first branch at all forks
+          ;; path is `t': go to the last move and pick the first branch at all forks.
+          ((eq path t) (sgf-last-move nil ov))
+          ;; path is an integer: jump forward or backward by PATH steps.
           ((integerp path)
            (cond ((> path 0) (sgf-jump-moves path ov))
                  ;; if it is negative, jump to end and move back PATH steps.
                  ((< path 0) (sgf-last-move nil ov) (sgf-jump-moves path ov))))
-          ((listp path) ; eg (9 ?b ?a)
-           (let ((steps (car path))
-                 (branches (cdr path))
-                 (diff 0))
-             (dolist (branch branches)
-               (sgf-forward-fork nil ov)
-               (sgf-forward-move (- branch ?a) nil ov))
-             (setq diff (- steps (sgf-lnode-depth (aref game-state 0))))
+          ;; path is a list. eg (9 ?b ?a)
+          ((listp path)
+           (dolist (branch (cdr path))
+             (sgf-forward-fork nil ov)
+             (sgf-forward-move (- branch ?a) nil ov))
+           (let ((depth 0) (steps (car path)) (lnode (sgf-get-lnode ov)))
+             (while (setq lnode (aref lnode 0)) (setq depth (1+ depth)))
              ;; if come across additional forks, pick the 1st branch
-             (sgf-jump-moves diff nil ov))))
+             (sgf-jump-moves (- steps depth) nil ov))))
     (if interactive-call (sgf-update-display ov))))
 
 
