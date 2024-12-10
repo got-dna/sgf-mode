@@ -173,15 +173,17 @@ If neither \\='B nor \\='W is present, return nil."
 
 
 (defun sgf-add-setup-stones (node board-2d)
-  "Process NODE to add setup stones to BOARD-2D."
-  (dolist (prop node)
-    (let* ((prop-key (car prop))
-           (prop-vals (cdr prop))
-           (setup-stone (cond ((eq prop-key 'AB) 'B)
-                              ((eq prop-key 'AW) 'W))))
-      (if setup-stone
-          (dolist (xy prop-vals)
-            (sgf-board-set xy setup-stone board-2d))))))
+  "Process NODE to add setup stones to BOARD-2D.
+
+Return a cons cell of the form (B-XYS . W-XYS) where B-XYS and W-XYS are
+lists of black and white stones respectively. Return nil if no setup stones."
+  (let ((b-xys (alist-get 'AB node))
+        (w-xys (alist-get 'AW node)));; return nil if 'AB does not exist
+    (dolist (xy b-xys)
+      (sgf-board-set xy 'B board-2d))
+    (dolist (xy w-xys)
+      (sgf-board-set xy 'W board-2d))
+    (cons b-xys w-xys)))
 
 
 (defun sgf-show-comment (node)

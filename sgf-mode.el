@@ -165,14 +165,18 @@ See also `sgf-forward-move'."
          (turn-new (sgf-enemy-stone turn-old))
          (ko-old (aref game-state 2))
          (pcounts (aref game-state 4))
-         ko-new prisoners
-         black-xys white-xys empty-xys)
+         ;; for the non-root node that has AW or AB, get setup stones
+         ;; and add them to the board
+         (setup-stones (sgf-add-setup-stones node board-2d))
+         (empty-xys (nconc (car setup-stones) (cdr setup-stones)))
+         black-xys white-xys
+         ko-new prisoners)
     (when xy   ; node is not a pass
       ;; check it is legal move before make any change to game state
       (unless (sgf-valid-move-p xy stone board-2d ko-old)
         (error "Invalid move of %S at %S!" stone xy))
       (if (eq (sgf-board-get xy board-2d) 'E)
-          (setq empty-xys (list xy)))
+          (setq empty-xys (nconc empty-xys (list xy))))
       (sgf-board-set xy stone board-2d)
       (setq prisoners (sgf-capture-stones xy board-2d))
       ;; Remove captured stones
