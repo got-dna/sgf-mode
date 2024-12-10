@@ -468,17 +468,21 @@ status bar to the top instead."
     (sgf-serialize-game-to-buffer ov)))
 
 
-(defun sgf-make-root ()
+(defun sgf-make-root (&optional lnode)
   "Make all the nodes before and including the current node to the root node.
 
-It add all the stones on the board as setup stones and discards all the
-marks, labels, and comments of the moves."
+It add the stones as setup stones. Note that it discards all the
+marks, labels, and comments of the moves except the last one."
   (interactive)
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
+         (undos (aref game-state 5))
          (curr-lnode (aref game-state 0))
          (lnode (or lnode curr-lnode))
+         (node (aref lnode 1))
+         (same (eq curr-lnode lnode))
          (children (aref lnode 2))
+         (depth 0)
          (aw '()) (ab '()))
     (while (not (sgf-root-p lnode))
       (let* ((move (sgf-process-move (aref lnode 1)))
@@ -488,18 +492,16 @@ marks, labels, and comments of the moves."
         (setq lnode (aref lnode 0))))
     ;; now lnode is the root lnode
     ;; link root to the next node(s) and vice vesa
-    (aset curr-lnode 2 next-lnodes)
-    (dolist (next-lnode next-lnodes)
-      (aset next-lnode 0 curr-lnode))
-
-    (let ((node (aref curr-lnode 1)))
+    (aset lnode 2 children)
+    (dolist (child children) (aset child 0 lnode))
+    (let ((root (aref lnode 1)))
       ;; append new AB and AW to the root node
-      (if ab (setf (alist-get 'AB node) (nconc (alist-get 'AB node '()) ab)))
-      (if aw (setf (alist-get 'AW node) (nconc (alist-get 'AW node '()) aw)))
-      (aset lnode 1 node))
-    (aset game-state 0 curr-lnode)
+      (if ab (setf (alist-get 'AB root) (nconc (alist-get 'AB root '()) ab)))
+      (if aw (setf (alist-get 'AW root) (nconc (alist-get 'AW root '()) aw)))
+      (aset lnode 1 (sgf-merge-nodes root node)))
+    (aset game-state 0 (if same lnode curr-lnode))
     (aset game-state 2 nil)             ; clear KO
-    (aset game-state 5 nil)             ; clear undo stack
+    (aset game-state 5 (nthcdr depth undos))  ; clear undos before lnode
     (sgf-update-display ov nil nil nil)
     (sgf-serialize-game-to-buffer ov)))
 
