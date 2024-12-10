@@ -186,17 +186,11 @@ lists of black and white stones respectively. Return nil if no setup stones."
     (cons b-xys w-xys)))
 
 
-(defun sgf-show-comment (node)
-  "Show the comment of the move/node."
-  ;; if 'C' does not exist, it shows an empty str.
-  (message (replace-regexp-in-string
-            "%" "%%" ; Escape '%' in the comment str
-            (mapconcat 'identity (alist-get 'C node) " "))))
-
-
-(define-inline sgf-get-lnode-from-ov (ov)
+(define-inline sgf-get-lnode (&optional ov)
   "Return the lnode of the overlay OV."
-  (inline-quote (aref (overlay-get ,ov 'game-state) 0)))
+  (inline-quote (let* ((ov (or ,ov (sgf-get-overlay)))
+                       (game-state (overlay-get ov 'game-state)))
+                  (aref game-state 0))))
 
 (define-inline sgf-get-parent (lnode)
   "Return the parent node of LNODE."

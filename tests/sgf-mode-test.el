@@ -99,8 +99,7 @@ It tests for `sgf-traverse' and `sgf-lnode-path'."
                                 (insert sgf)
                                 (sgf-toggle-game-display (point-min) (point-max))
                                 (sgf-traverse path)
-                                (let* ((ov (sgf-get-overlay))
-                                       (lnode (sgf-get-lnode-from-ov ov)))
+                                (let* ((lnode (sgf-get-lnode)))
                                   (sgf-lnode-path lnode)))))))))
 
 

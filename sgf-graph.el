@@ -40,11 +40,10 @@ prefix argument is provided or VERTICAL is t, the tree will be graphed
 in vertical direction. BNAME is the name of the output buffer."
   (interactive "P")
   (let* ((ov (or ov (sgf-get-overlay)))
-         (game-state (overlay-get ov 'game-state))
+         (lnode (sgf-get-lnode ov))
+         (path (sgf-lnode-path lnode))
          ;; get the existing graph buffer or create a new one
-         (graph-buffer (overlay-get ov 'graph-buffer))
-         (lnode (aref game-state 0))
-         (path (sgf-lnode-path lnode)))
+         (graph-buffer (overlay-get ov 'graph-buffer)))
     (unless (buffer-live-p graph-buffer)
       (setq graph-buffer
             (generate-new-buffer

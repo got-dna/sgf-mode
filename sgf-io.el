@@ -341,7 +341,7 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
                (setq turn stone)))))
 
     (sgf-add-setup-stones root-node board-2d)
-    (sgf-show-comment root-node)
+    (sgf-show-comment root-lnode)
     (sgf-game-state root-lnode board-2d nil turn)))
 
 
