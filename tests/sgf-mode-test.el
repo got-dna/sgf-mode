@@ -65,6 +65,28 @@
                    '((0 . 0) (0 . 1) (1 . 0))))))
 
 
+(ert-deftest sgf-get-ko-test ()
+  ;; Setup a simple 3x3 board with a potential KO scenario.
+  (let ((board-2d [[E B W]
+                   [B W E]
+                   [E E E]]))
+    ;; Placed a black stone at (1 . 0) and captured (0 . 0), creating a KO at (0 . 0).
+    (should (equal '(0 . 0) (sgf-get-ko '(1 . 0) 'B board-2d '((0 . 0))))))
+
+  ;; Test case where more than one stone is captured, so no KO should be created.
+  (let ((board-2d [[E B W]
+                   [E B W]
+                   [B E E]]))
+    (should-not (sgf-get-ko '(0 . 2) 'B board-2d '((0 . 0) (0 . 1)))))
+
+  ;; Test case where no stone is captured, so no KO.
+  (let ((board-2d [[E W E]
+                   [B E E]
+                   [E E E]]))
+    ;; Place a black stone at (0 . 1), no stones are captured.
+    (should-not (sgf-get-ko '(0 . 1) 'B board-2d nil))))
+
+
 (ert-deftest sgf-merge-nodes-test ()
   (let ((node-1 '((B (0 . 0)) (C "abc") (LB ((0 . 2) . "A")) (TR (4 . 16) (4 . 15))))
         (node-2 '((B (0 . 0)) (C "efg") (LB ((0 . 2) . "A") ((0 . 3) . "B")) (TR (4 . 15) (5 . 16))))

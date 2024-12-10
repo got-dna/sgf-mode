@@ -410,12 +410,13 @@ If XY is nil (for a move of pass), it returns nil."
 
 
 (defun sgf-get-ko (xy stone board-2d captured-xys)
-  "Check if any neighbor of XY is a KO position *after* putting STONE at
-XY on BOARD-2D and possibly captured enemy stones at positions
-CAPTURED-XYS (which is a list of cons cells indicating captured
-positions).
+  "Check if any neighbor of XY is a KO position.
 
-Returns nil or (x . y) for KO position. "
+The previous move has put STONE at XY on BOARD-2D and possibly captured
+enemy stones at positions CAPTURED-XYS (which is a list of cons cells
+indicating captured positions).
+
+Returns nil or KO position in the form of (x . y). "
 
   (when (and (memq stone '(B W)) (= 1 (length captured-xys)))
     ;; not a KO if more than 1 stones were captured after the move at XY.
