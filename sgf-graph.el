@@ -73,7 +73,7 @@ in vertical direction. BNAME is the name of the output buffer."
       ;; define and set local variables:
       ;; 1. the game that the graph tree buffer is associated.
       ;; 2. the direction of the graph
-      ;; This has to be done after the mode is enabled - major mode
+      ;; This has to be done after the mode is enabled - major mode enabling
       ;; kills all local variables.
       (setq-local sgf-graph-which-game ov)
       (setq-local sgf-graph-vertical vertical))))
@@ -244,9 +244,9 @@ ROOT-NODE is the root node."
 
 (defvar-keymap sgf-graph-mode-map
   :doc "Keymap for SGF Graph mode."
-  "C-c p" 'sgf-graph-path-to-pos
-  "C-c P" 'sgf-graph-pos-to-path
-  "C-c s" 'sgf-graph-sync-game)
+  "C-c p" #'sgf-graph-path-to-pos
+  "C-c P" #'sgf-graph-pos-to-path
+  "C-c s" #'sgf-graph-sync-game)
 
 
 (define-derived-mode sgf-graph-mode nil "SGF-Graph"
