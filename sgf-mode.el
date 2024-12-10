@@ -110,15 +110,11 @@ See also `sgf-branch-selection'."
   "Move to the step just before the next fork."
   (interactive "p")
   (let* ((ov (or ov (sgf-get-overlay)))
-         (game-state (overlay-get ov 'game-state))
-         (continue t))
-    (while continue
-      (let* ((lnode (aref game-state 0))
-             (children (aref lnode 2))
-             (n (length children)))
-        (if (= n 1)
-            (sgf-forward-move 0 nil ov)
-          (setq continue nil))))
+         (game-state (overlay-get ov 'game-state)))
+    ;; Continue advancing as long as there is exactly one child.
+    (while (= (length (aref (aref game-state 0) 2)) 1)
+      (sgf-forward-move 0 nil ov))
+    ;; Update display if called interactively.
     (if interactive-call (sgf-update-display ov))))
 
 
@@ -144,15 +140,14 @@ See also `sgf-forward-move'."
   "Move to the step before the previous fork."
   (interactive "p")
   (let* ((ov (sgf-get-overlay))
-         (game-state (overlay-get ov 'game-state))
-         (continue t))
-    (while continue
-      (let* ((lnode (aref game-state 0))
-             (parent (aref lnode 0))
-             (siblings (if parent (aref parent 2) nil)))
-        (sgf-backward-move nil ov)
-        (if (/= (length siblings) 1)
-            (setq continue nil))))
+         (game-state (overlay-get ov 'game-state)))
+    ;; Continue moving backward until there is more than one sibling.
+    (while (let* ((lnode (aref game-state 0))
+                  (parent (aref lnode 0))
+                  (siblings (and parent (aref parent 2))))
+             (sgf-backward-move nil ov)
+             (and siblings (= (length siblings) 1))))
+    ;; Update display if called interactively.
     (if interactive-call (sgf-update-display ov))))
 
 
@@ -170,17 +165,15 @@ See also `sgf-forward-move'."
          ;; and add them to the board
          (setup-stones (sgf-add-setup-stones node board-2d))
          (empty-xys (nconc (car setup-stones) (cdr setup-stones)))
-         black-xys white-xys
-         ko-new prisoners)
+         black-xys white-xys ko-new prisoners)
     (when xy   ; node is not a pass
-      ;; check it is legal move before make any change to game state
+      ;; Validate the move before make any change to game state.
       (unless (sgf-valid-move-p xy stone board-2d ko-old)
         (error "Invalid move of %S at %S!" stone xy))
-      (if (eq (sgf-board-get xy board-2d) 'E)
-          (setq empty-xys (nconc empty-xys (list xy))))
+      (if (eq (sgf-board-get xy board-2d) 'E) (push xy empty-xys))
       (sgf-board-set xy stone board-2d)
+      ;; Handle captured stones
       (setq prisoners (sgf-capture-stones xy board-2d))
-      ;; Remove captured stones
       (dolist (xy prisoners) (sgf-board-set xy 'E board-2d))
       ;; Check for suicide after removing captured stones
       (when (and (not allow-suicide) (sgf-suicide-stones xy board-2d))
@@ -188,16 +181,19 @@ See also `sgf-forward-move'."
         (dolist (xy prisoners) (sgf-board-set xy (sgf-enemy-stone stone) board-2d))
         (sgf-board-set xy 'E board-2d)
         (error "Suicide move at %S is not allowed!" xy))
-      ;; Check for KO: this code needs to be put after prisoners are removed.
+      ;; Determine KO status after captures: this code needs to be put after prisoners are removed.
       (setq ko-new (sgf-get-ko xy stone board-2d prisoners))
       (aset game-state 2 ko-new)
-      (when (eq stone 'B)
-        (setcdr pcounts (+ (length prisoners) (cdr pcounts)))
-        (setq white-xys prisoners))
-      (when (eq stone 'W)
-        (setcar pcounts (+ (length prisoners) (car pcounts)))
-        (setq black-xys prisoners)))
+      ;; Update prisoner counts and store captured positions.
+      (cond ((eq stone 'B)
+             (setcdr pcounts (+ (length prisoners) (cdr pcounts)))
+             (setq white-xys prisoners))
+            ((eq stone 'W)
+             (setcar pcounts (+ (length prisoners) (car pcounts)))
+             (setq black-xys prisoners))))
+    ;; Update the game state with the next turn.
     (aset game-state 3 turn-new)
+    ;; Save undo state.
     (sgf-push-undo game-state (vector black-xys white-xys empty-xys ko-old turn-old))))
 
 
