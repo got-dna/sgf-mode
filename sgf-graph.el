@@ -41,6 +41,7 @@ in vertical direction. BNAME is the name of the output buffer."
   (interactive "P")
   (let* ((ov (or ov (sgf-get-overlay)))
          (game-state (overlay-get ov 'game-state))
+         ;; get the existing graph buffer or create a new one
          (graph-buffer (overlay-get ov 'graph-buffer))
          (lnode (aref game-state 0))
          (path (sgf-lnode-path lnode)))
@@ -50,6 +51,10 @@ in vertical direction. BNAME is the name of the output buffer."
              (or bname
                  (read-buffer "Output buffer name: "
                               (if vertical "*SGF TREE V*" "*SGF TREE H*"))))))
+    ;; display the graph buffer before `recenter'
+    (display-buffer graph-buffer)
+    ;; put the graph buffer in the overlay
+    (overlay-put ov 'graph-buffer graph-buffer)
     ;; move to the root-lnode
     (while (aref lnode 0) (setq lnode (aref lnode 0)))
     (with-current-buffer graph-buffer
@@ -59,8 +64,12 @@ in vertical direction. BNAME is the name of the output buffer."
             (sgf-graph-subtree-v lnode)
           (sgf-graph-subtree-h lnode))
         (setq truncate-lines t) ; do not wrap long lines
-        (sgf-graph-path-to-pos vertical path)
-        (add-face-text-property (point) (1+ (point)) 'sgf-graph-current-node))
+        ;; it seems `recenter' only works in the active window
+        (with-selected-window (get-buffer-window graph-buffer)
+          ;; highlight the current node of the game
+          (sgf-graph-path-to-pos vertical path)
+          (add-face-text-property (point) (1+ (point)) 'sgf-graph-current-node)
+          (recenter -1)))
       (sgf-graph-mode)
       ;; define and set local variables:
       ;; 1. the game that the graph tree buffer is associated.
@@ -68,10 +77,7 @@ in vertical direction. BNAME is the name of the output buffer."
       ;; This has to be done after the mode is enabled - major mode
       ;; kills all local variables.
       (setq-local sgf-graph-which-game ov)
-      (setq-local sgf-graph-vertical vertical))
-    ;; put the graph buffer in the overlay
-    (overlay-put ov 'graph-buffer graph-buffer)
-    (display-buffer graph-buffer)))
+      (setq-local sgf-graph-vertical vertical))))
 
 
 (defun sgf-graph-valid-char-p (char)
