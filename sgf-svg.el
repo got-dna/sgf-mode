@@ -388,31 +388,34 @@ For the move annotation, add circle ring of color to the stone on the board."
          (curr-lnode (aref game-state 0))
          (mvnum (sgf-lnode-move-number curr-lnode))
          (numbered-xys (make-hash-table :test 'equal))
-         color)
+         (last-move-p t))
     (sgf-svg-update-status-mvnum svg mvnum)
     (sgf-svg-clear-node-content svg-group)
     (while (not (sgf-root-p curr-lnode))
       (let* ((node (aref curr-lnode 1))
              (move (sgf-process-move node))
              (xy    (cdr move))
-             (stone (car move)))
-        (unless (or (null xy) (gethash xy numbered-xys))
-          (let ((xy-state (sgf-board-get xy board-2d)))
-            (if color
-                (setq color (if (eq xy-state 'E)
-                                (sgf-svg-set-color (sgf-enemy-stone stone))
-                              (sgf-svg-set-color xy-state)))
-              (setq color "red"))
-            ;; add move number only if it does not already have a number.
-            (sgf-svg-add-mvnum svg-group (car xy) (cdr xy) mvnum color)
-            (puthash xy t numbered-xys)))
+             (stone (car move))
+             (last-color (when last-move-p
+                           ;; first iteration (ie last move) is red
+                           (setq last-move-p nil) "red")))
+        (if (and xy (not (gethash xy numbered-xys)))
+            (let* ((xy-state (sgf-board-get xy board-2d))
+                   (actual-color (or last-color
+                                     (sgf-svg-set-color (if (eq xy-state 'E)
+                                                     ;; this is a removed, captured stone
+                                                            (sgf-enemy-stone stone)
+                                                          xy-state)))))
+              ;; add move number only if it does not already have a number.
+              (sgf-svg-add-mvnum svg-group (car xy) (cdr xy) mvnum actual-color)
+              (puthash xy t numbered-xys)))
         ;; move to the previous node
         (setq curr-lnode (aref curr-lnode 0))
-        ;; decrement move number for the previous node, or re-calculate we just passed thru a node with MN
-        (setq mvnum
-              (if (alist-get 'MN node)
-                  (sgf-lnode-move-number curr-lnode)
-                (1- mvnum)))))))
+        ;; decrement move number for the previous node, or
+        ;; re-calculate we just passed thru a node with MN
+        (setq mvnum (if (alist-get 'MN node)
+                        (sgf-lnode-move-number curr-lnode)
+                      (1- mvnum)))))))
 
 
 (defun sgf-svg-add-mvnum (svg-group x y mvnum color)
