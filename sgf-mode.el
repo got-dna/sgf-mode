@@ -662,6 +662,29 @@ marks, labels, and comments of the moves except the last one."
     (message "Game information saved.")
     (kill-buffer)))
 
+(defun sgf--move-to-existing-or-new-next-node (ov xy)
+  "It check if the move of TURN color at position XY (note that XY could be
+nil for a pass) exist in the next moves. If yes, move forward to it;
+otherwise, create a new linked node and move the game state to it."
+  (let* ((game-state (overlay-get ov 'game-state))
+         (turn (aref game-state 3))
+         (curr-lnode (aref game-state 0))
+         (children (aref curr-lnode 2))
+         (next-xys (mapcar (lambda (lnode) (cdr (sgf-process-move (aref lnode 1)))) children))
+         (found (car (seq-positions next-xys xy))))
+    (if found
+        ;; Case 1: Clicked on one of the next move position
+        (sgf-forward-move found t)
+      ;; Case 2: Clicked on an empty position not equal to ko
+      (let* ((new-node (if xy `((,turn ,xy)) `((,turn))))
+             (new-lnode (sgf-linked-node curr-lnode new-node)))
+        (sgf-apply-node new-node game-state (sgf-game-plist-get :suicide-move ov))
+        ;; add the new node as the last branch
+        (aset curr-lnode 2 (nconc children (list new-lnode)))
+        (aset game-state 0 new-lnode)
+        (sgf-update-display ov)
+        (sgf-serialize-game-to-buffer ov)))))
+
 
 (defun sgf-mouse-event-to-xy (event)
   "Convert a mouse click to a board position (X . Y)."
@@ -682,25 +705,8 @@ Cases:
   (interactive "@e")
   ;; mouse-1 event for the left click
   (let* ((xy (sgf-mouse-event-to-xy event))
-         (ov (sgf-get-overlay))
-         (game-state (overlay-get ov 'game-state))
-         (curr-lnode (aref game-state 0))
-         (turn (aref game-state 3))
-         (children (aref curr-lnode 2))
-         (next-xys (mapcar (lambda (lnode) (cdr (sgf-process-move (aref lnode 1)))) children))
-         (found (car (seq-positions next-xys xy))))
-    (if found
-        ;; Case 1: Clicked on one of the next move position
-        (sgf-forward-move found t)
-      ;; Case 2: Clicked on an empty position not equal to ko
-      (let* ((new-node `((,turn ,xy)))
-             (new-lnode (sgf-linked-node curr-lnode new-node)))
-        (sgf-apply-node new-node game-state (sgf-game-plist-get :suicide-move ov))
-        ;; add the new node as the last branch
-        (aset curr-lnode 2 (nconc children (list new-lnode)))
-        (aset game-state 0 new-lnode)
-        (sgf-update-display ov)
-        (sgf-serialize-game-to-buffer ov)))))
+         (ov (sgf-get-overlay)))
+    (sgf--move-to-existing-or-new-next-node ov xy)))
 
 
 (defun sgf-board-click-right (event)
@@ -776,17 +782,9 @@ Returns linked node found or nil if not. The game-state remains unchanged."
 
 The move number will be incremented."
   (interactive)
-  (let* ((ov (sgf-get-overlay))
-         (game-state (overlay-get ov 'game-state))
-         (turn (aref game-state 3))
-         (curr-lnode (aref game-state 0))
-         (next-lnodes (aref curr-lnode 2))
-         (n (length next-lnodes))
-         (new-lnode (sgf-linked-node curr-lnode `((,turn)))))
-    (aset curr-lnode 2 (nconc next-lnodes (list new-lnode)))
-    (sgf-forward-move n)
-    (sgf-serialize-game-to-buffer ov)
-    (sgf-update-display ov)))
+  (let* ((ov (sgf-get-overlay)))
+    (sgf--move-to-existing-or-new-next-node ov nil)))
+
 
 
 (defun sgf--handle-mouse-input (action-fn message-text)
