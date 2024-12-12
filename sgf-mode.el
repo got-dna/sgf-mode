@@ -278,8 +278,8 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
 (defun sgf-merge-nodes (node-1 node-2)
   "Merge NODE-2 into NODE-1 in place.
 
-The NODE-1 will be updated with the merged result. The NODE-2 will
-remain unchanged."
+The NODE-1 will be updated with the merged result. The NODE-2 may
+remain unmodified."
   (dolist (item1 node-1)
     (let* ((key (car item1))
            (value1 (cdr item1))
@@ -294,10 +294,12 @@ remain unchanged."
        ;; lists, append them and uniquefy them.
        (item2
         (setcdr item1 (seq-uniq (append value1 value2)))))))
-  ;; Add remaining items from LIST2 that were not in LIST1.
+  ;; Add items from NODE-2 that were not in NODE-1.
   (dolist (item2 node-2)
-    (unless (assoc (car item2) node-1)
-      (push item2 node-1))))
+    (let* ((key (car item2)))
+      (unless (or (eq key 'B) (eq key 'W) (assoc key node-1))
+        (push item2 node-1))))
+  node-1)
 
 
 (defun sgf--merge-branches (lnode)
