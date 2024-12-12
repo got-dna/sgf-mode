@@ -249,7 +249,10 @@ The return value can be passed to `sgf-traverse'. See also `sgf-lnode-depth'."
         (if (> (length siblings) 1)
             ;; Find the index of the current lnode in sibling nodes and
             ;; append to the end of branch choices
-            (push (+ ?a (seq-position siblings lnode)) branch-choices))
+            (let ((pos (seq-position siblings lnode)))
+              (if pos
+                  (push (+ ?a pos) branch-choices)
+                (error "Current lnode not found in siblings: %S" (aref lnode 1)))))
         (setq lnode parent
               depth (1+ depth))))
     ;; (setq branch-choices (nreverse branch-choices))
