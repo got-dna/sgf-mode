@@ -67,7 +67,7 @@ in vertical direction. BNAME is the name of the output buffer."
         (with-selected-window (get-buffer-window graph-buffer)
           ;; highlight the current node of the game
           (sgf-graph-path-to-pos vertical path)
-          (add-face-text-property (point) (1+ (point)) 'sgf-graph-current-node)
+          (add-face-text-property (1- (point)) (point) 'sgf-graph-current-node)
           (recenter -1)))
       (sgf-graph-mode)
       ;; enable cursor intangible mode to allow cursor to move only on nodes
@@ -99,28 +99,32 @@ VERTICAL is the prefix argument to specify whether the graph tree is
 vertical or horizontal (default). See also `sgf-traverse' and
 `sgf-graph-path-to-pos'."
   (interactive "P")
-  (if (sgf-graph-valid-char-p (char-after))
-      (let ((path '())
-            (steps (/ (1+ (current-column)) 2))
-            column)
-        (save-excursion
-          (while (> (point) 1)
-            (unless (eq ?* (char-after))
-              (push (char-after) path))
-            (forward-char -2)
-            ;; move to the same column of the previous line.
-            (setq column (current-column))
-            (when vertical
-              (forward-line -1)
-              (forward-char column))
-            (while (or (eq (char-after) ?|) ; for vertical graph
-                       (eq (char-after) ?`)); for horizontal graph
-              (forward-line -1)
-              (forward-char column))))
-        (push steps path)
-        (message "%s" (sgf-path-to-str path))
-        path)
-    (message "It seems the cursor is not on the valid node in graph.")))
+  (unwind-protect
+      (if (sgf-graph-valid-char-p (char-before))
+          (let ((path '())
+                (steps (/ (1- (current-column)) 2))
+                column)
+            (cursor-intangible-mode -1)
+            (save-excursion
+              (forward-char -1)
+              (while (> (point) 1)
+                (unless (eq ?* (char-after))
+                  (push (char-after) path))
+                (forward-char -2)
+                ;; move to the same column of the previous line.
+                (setq column (current-column))
+                (when vertical
+                  (forward-line -1)
+                  (forward-char column))
+                (while (or (eq (char-after) ?|) ; for vertical graph
+                           (eq (char-after) ?`)); for horizontal graph
+                  (forward-line -1)
+                  (forward-char column))))
+            (push steps path)
+            (message "%s" (sgf-path-to-str path))
+            path)
+        (message "It seems the cursor is not on the valid node in graph."))
+    (cursor-intangible-mode 1)))
 
 
 (defun sgf-graph-path-to-pos (vertical path)
@@ -130,24 +134,28 @@ VERTICAL is the prefix argument to specify whether the graph tree is
 vertical or horizontal (default). See also `sgf-traverse' and
 `sgf-graph-pos-to-path'."
   (interactive "P\nxTraverse path: ")
-  (let ((steps (pop path)) (column 0) char branch)
-    (goto-char (point-min))
-    (catch 'exit-loop
-      (dotimes (i steps)
-        (setq column (+ column 2))
-        (if vertical
-            (progn (forward-line 1)
-                   (forward-char column))
-          (forward-char 2))
-        (setq char (char-after))
-        (unless (sgf-graph-valid-char-p char)
-          (message "Moved %d steps to invalid char %c." i char)
-          (throw 'exit-loop i))
-        (when (and path (/= char ?*))
-          (setq branch (pop path))
-          (while (not (eq branch (char-after)))
-            (forward-line)
-            (forward-char column)))))))
+  (unwind-protect
+      (let ((steps (pop path)) (column 0) char branch)
+        (cursor-intangible-mode -1)
+        (goto-char 1)
+        (catch 'exit-loop
+          (dotimes (i steps)
+            (setq column (+ column 2))
+            (if vertical
+                (progn (forward-line 1)
+                       (forward-char column))
+              (forward-char 2))
+            (setq char (char-after))
+            (unless (sgf-graph-valid-char-p char)
+              (message "Moved %d steps to invalid char %c." i char)
+              (throw 'exit-loop i))
+            (when (and path (/= char ?*))
+              (setq branch (pop path))
+              (while (not (eq branch (char-after)))
+                (forward-line)
+                (forward-char column))))
+          (forward-char)))
+    (cursor-intangible-mode 1)))
 
 
 (defun sgf-graph-subtree-v (root-lnode)

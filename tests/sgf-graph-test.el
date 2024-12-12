@@ -84,6 +84,7 @@
                              "    `-b"
                              "")
                            "\n")))
+    (remove-text-properties 0 (length obs-h) '(cursor-intangible) obs-h)
     (add-text-properties 6 7 '(face sgf-graph-comment-node help-echo "comment@[foo]") exp-h)
     (should (equal-including-properties obs-h exp-h))
     (should (equal obs-v exp-v))))
