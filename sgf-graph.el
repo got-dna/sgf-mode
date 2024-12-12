@@ -154,34 +154,31 @@ vertical or horizontal (default). See also `sgf-traverse' and
   "Generate vertical ASCII tree representation from a doubly-linked node.
 
 The play move comment will be shown."
-  (let ((stack (list (list root-lnode "*" ""))))
+  (let ((stack (list (list root-lnode "*" "" ""))))
     (while stack
       (let* ((current (pop stack))
              (lnode (nth 0 current))
-             (branch (nth 1 current))
-             (prefix (nth 2 current))
+             (branch-label (nth 1 current))
+             (branch-prefix (nth 2 current))
+             (prefix (nth 3 current))
              (node (aref lnode 1))
              (comment (alist-get 'C node))
-             (comment-suffix (if comment (concat ":" (car comment)) ""))
+             (comment-suffix (if comment (format ":%s\n" (car comment)) "\n"))
              (children (aref lnode 2))
              (child-count (length children))
-             (i (1- child-count))
-             (pos (point)))
+             (i (1- child-count)))
         ;; Insert the current node representation
-        (insert branch)
-        (put-text-property pos (max 1 (- (point) 2)) 'cursor-intangible t)
-        (setq pos (1- (point)))
-        (insert comment-suffix)
-        (insert "\n")
-        (put-text-property pos (point) 'cursor-intangible t)
+        (insert (propertize branch-prefix 'cursor-intangible t))
+        (insert branch-label)
+        (insert (propertize comment-suffix 'cursor-intangible t))
         ;; Add children to the stack in reverse order for proper traversal
         (while (>= i 0)
           (let* ((is-last (= i (1- child-count)))
                  (child (nth i children))
-                 (label (if (= child-count 1) "*" (char-to-string (+ ?a i))))
-                 (branch (concat prefix (if is-last "`-" "|-") label))
+                 (branch-label (if (= child-count 1) "*" (char-to-string (+ ?a i))))
+                 (branch-prefix (concat prefix (if is-last "`-" "|-")))
                  (prefix (concat prefix (if is-last "  " "| "))))
-            (push (list child branch prefix) stack))
+            (push (list child branch-label branch-prefix prefix) stack))
           (setq i (1- i)))))))
 
 
@@ -229,9 +226,11 @@ ROOT-NODE is the root node."
             (let* ((is-last (= i (1- child-count)))
                    (is-first (= i 0))
                    (child (nth i children)))
-              (insert (if is-first
-                          "-"
-                        (concat "\n" prefix (if is-last "`-" "|-"))))
+              (insert (propertize
+                       (if is-first
+                           "-"
+                         (concat "\n" prefix (if is-last "`-" "|-")))
+                       'cursor-intangible t))
               (insert (if (= child-count 1) "*" (char-to-string (+ ?a i))))
               (push (list child (+ i line-n)) stack))))))
     ;; add newline to the end of buffer
