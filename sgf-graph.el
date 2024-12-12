@@ -70,6 +70,8 @@ in vertical direction. BNAME is the name of the output buffer."
           (add-face-text-property (point) (1+ (point)) 'sgf-graph-current-node)
           (recenter -1)))
       (sgf-graph-mode)
+      ;; enable cursor intangible mode to allow cursor to move only on nodes
+      (cursor-intangible-mode 1)
       ;; define and set local variables:
       ;; 1. the game that the graph tree buffer is associated.
       ;; 2. the direction of the graph
@@ -163,9 +165,15 @@ The play move comment will be shown."
              (comment-suffix (if comment (concat ":" (car comment)) ""))
              (children (aref lnode 2))
              (child-count (length children))
-             (i (1- child-count)))
+             (i (1- child-count))
+             (pos (point)))
         ;; Insert the current node representation
-        (insert (format "%s%s\n" branch comment-suffix))
+        (insert branch)
+        (put-text-property pos (max 1 (- (point) 2)) 'cursor-intangible t)
+        (setq pos (1- (point)))
+        (insert comment-suffix)
+        (insert "\n")
+        (put-text-property pos (point) 'cursor-intangible t)
         ;; Add children to the stack in reverse order for proper traversal
         (while (>= i 0)
           (let* ((is-last (= i (1- child-count)))
