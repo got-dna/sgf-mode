@@ -97,11 +97,12 @@ VERTICAL is the prefix argument to specify whether the graph tree is
 vertical or horizontal (default). See also `sgf-traverse' and
 `sgf-graph-path-to-pos'."
   (interactive "P")
-  (if (sgf-graph-valid-char-p (char-after))
+  (if (sgf-graph-valid-char-p (char-before))
       (let ((path '())
-            (steps (/ (1+ (current-column)) 2))
+            (steps (/ (1- (current-column)) 2))
             column)
         (save-excursion
+          (backward-char)
           (while (> (point) 1)
             (unless (eq ?* (char-after))
               (push (char-after) path))
