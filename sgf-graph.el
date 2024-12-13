@@ -67,7 +67,6 @@ in vertical direction. BNAME is the name of the output buffer."
         (with-selected-window (get-buffer-window graph-buffer)
           ;; highlight the current node of the game
           (sgf-graph-path-to-pos vertical path)
-          (add-face-text-property (point) (1+ (point)) 'sgf-graph-current-node)
           (recenter -1)))
       (sgf-graph-mode)
       ;; define and set local variables:
@@ -83,9 +82,10 @@ in vertical direction. BNAME is the name of the output buffer."
   "Check if CHAR is a valid character for a graph node.
 
 Allow `*', and a-z."
-  (or (eq char ?*)
-      (and (>= char ?a)
-           (<= char ?z))))
+  (and (integerp char)
+       (or (eq char ?*)
+           (and (>= char ?a)
+                (<= char ?z)))))
 
 
 (defun sgf-graph-pos-to-path (vertical)
@@ -145,7 +145,8 @@ vertical or horizontal (default). See also `sgf-traverse' and
           (setq branch (pop path))
           (while (not (eq branch (char-after)))
             (forward-line)
-            (forward-char column)))))))
+            (forward-char column)))))
+    (forward-char 1)))
 
 
 (defun sgf-graph-subtree-v (root-lnode)
@@ -242,20 +243,50 @@ ROOT-NODE is the root node."
     (message "Synced the game state to the current node in the graph tree.")))
 
 
+(defun sgf-forward-char ()
+  "Custom forward character movement, putting cursor only after a node."
+  (interactive)
+  (unless (eobp) (forward-char 1))
+  (while (and (not (eobp))
+              (not (eq (char-before) ?-)))
+    (forward-char 1))
+  (unless (eobp) (forward-char 1)))
+
+
+(defun sgf-backward-char ()
+  "Custom backward character movement, putting cursor only after a node."
+  (interactive)
+  (if (> (point) 2) (backward-char 2))
+  (while (and (not (bobp))
+              (not (eq (char-before) ?-)))
+    (backward-char 1))
+  (forward-char 1))
+
+
+(defun sgf-graph-hl-before-cursor ()
+  "Highlight the valid character before the cursor."
+  (remove-overlays nil nil)
+  (if (sgf-graph-valid-char-p (char-before))
+      (let ((ov (make-overlay (1- (point)) (point))))
+        (overlay-put ov 'face 'sgf-graph-current-node)
+        (overlay-put ov 'priority 100))))
+
+
 (defvar-keymap sgf-graph-mode-map
   :doc "Keymap for SGF Graph mode."
   :suppress t
-  "f" #'forward-char
-  "b" #'backward-char
+  "f" #'sgf-forward-char
+  "b" #'sgf-backward-char
   "p" #'sgf-graph-pos-to-path
-  "q" #'sgf-graph-path-to-pos
+  "P" #'sgf-graph-path-to-pos
   "s" #'sgf-graph-sync-game)
 
 
 (define-derived-mode sgf-graph-mode nil "SGF-Graph"
   "Major mode for viewing SGF graph tree."
   :keymap sgf-graph-mode-map
-  (setq buffer-read-only t))
+  (setq buffer-read-only t)
+  (add-hook 'post-command-hook #'sgf-graph-hl-before-cursor t t))
 
 
 (provide 'sgf-graph)
