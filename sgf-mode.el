@@ -336,22 +336,40 @@ one game."
     (sgf-serialize-game-to-buffer ov)))
 
 
-(defun sgf-swap-branches ()
-  "Swap current branch to the front of the siblings"
-  (interactive)
+(defun sgf-swap-branches (b front)
+  "Swap the child branch B to front or back.
+
+Swap the chosen branch to back by default; if prefix argument is non
+nil, swap to front. If there is only one branch, it will not swap."
+  (interactive "i\nP")
+
   (let* ((ov (sgf-get-overlay))
-         (lnode-i (sgf-get-lnode ov))
-         (parent (aref lnode-i 0))
-         (siblings (aref parent 2))
-         (n (length siblings)))
-    (if (> n 1)
-        (let* ((i (seq-position siblings lnode-i))
-               (j (1- i))
-               (lnode-j (nth j siblings)))
+         (lnode (sgf-get-lnode ov))
+         (children (aref lnode 2))
+         (n-1 (1- (length children))))
+    (if (> n-1 0)
+        (let* ((last (+ ?a n-1))
+               (b (or b
+                      (read-char-choice
+                       (format "Swap the branch _ to %s (choose a-%c): "
+                               (if front "front" "back") last)
+                       (number-sequence ?a last))))
+               (i (- b ?a))
+               (j (if front
+                      (if (> i 0)
+                          (1- i)
+                        (error "The branch %c is already in the front." b))
+                    (if (< i n-1)
+                        (1+ i)
+                      (error "The branch %c is already in the back." b))))
+               (child-i (nth i children))
+               (child-j (nth j children)))
           ;; swap in place
-          (setf (nth i siblings) lnode-j)
-          (setf (nth j siblings) lnode-i)
-          (sgf-serialize-game-to-buffer ov)))))
+          (setf (nth i children) child-j)
+          (setf (nth j children) child-i)
+          (sgf-update-display ov t t nil)
+          (sgf-serialize-game-to-buffer ov))
+      (message "There is only one branch - no swap."))))
 
 
 (defun sgf-remove-variations ()
