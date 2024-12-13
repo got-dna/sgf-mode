@@ -259,15 +259,18 @@ ROOT-NODE is the root node."
 
 (defvar-keymap sgf-graph-mode-map
   :doc "Keymap for SGF Graph mode."
-  "C-c p" #'sgf-graph-path-to-pos
-  "C-c P" #'sgf-graph-pos-to-path
-  "C-c s" #'sgf-graph-sync-game)
+  :suppress t
+  "f" #'forward-char
+  "b" #'backward-char
+  "p" #'sgf-graph-pos-to-path
+  "q" #'sgf-graph-path-to-pos
+  "s" #'sgf-graph-sync-game)
 
 
 (define-derived-mode sgf-graph-mode nil "SGF-Graph"
   "Major mode for viewing SGF graph tree."
   :keymap sgf-graph-mode-map
-  (view-mode 1))
+  (setq buffer-read-only t))
 
 
 (provide 'sgf-graph)
