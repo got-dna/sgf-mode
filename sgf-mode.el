@@ -336,6 +336,24 @@ one game."
     (sgf-serialize-game-to-buffer ov)))
 
 
+(defun sgf-swap-branches ()
+  "Swap current branch to the front of the siblings"
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (lnode-i (sgf-get-lnode ov))
+         (parent (aref lnode-i 0))
+         (siblings (aref parent 2))
+         (n (length siblings)))
+    (if (> n 1)
+        (let* ((i (seq-position siblings lnode-i))
+               (j (1- i))
+               (lnode-j (nth j siblings)))
+          ;; swap in place
+          (setf (nth i siblings) lnode-j)
+          (setf (nth j siblings) lnode-i)
+          (sgf-serialize-game-to-buffer ov)))))
+
+
 (defun sgf-remove-variations ()
   "Remove all the variations before the current game state in the game tree."
   (interactive)
@@ -1224,6 +1242,7 @@ It is set as overlay property and only activated when the overlay is displayed."
   "m i" #'sgf-edit-game-info
   "m h" #'sgf-edit-annotation ; highlight
   "m m" #'sgf-merge-branches
+  "m s" #'sgf-swap-branches
   "m v" #'sgf-remove-variations
   "<hot-grid> <mouse-1>" #'sgf-board-click-left
   "<hot-grid> <mouse-3>" #'sgf-board-click-right
