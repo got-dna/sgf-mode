@@ -265,7 +265,7 @@ PRISONERS is a cons cell of black and white prisoner counts."
     (setcar (nthcdr 2 status-pw) (number-to-string pw))))
 
 
-(defun sgf-svg-add-marks (svg node board-2d)
+(defun sgf-svg-update-marks (svg node board-2d)
   "Process and update the marks on the board for a node.
 
 It removes the old marks and adds the new marks."
@@ -294,7 +294,7 @@ It removes the old marks and adds the new marks."
               (sgf-svg-add-text marks-group x y label color)))))))
 
 
-(defun sgf-svg-add-nexts (svg curr-lnode)
+(defun sgf-svg-update-nexts (svg curr-lnode)
   "Update and show branches/next move(s) on board svg."
   (let* ((next-lnodes (aref curr-lnode 2))
          (branch-count (length next-lnodes))
@@ -332,7 +332,7 @@ It removes the old marks and adds the new marks."
 (defun sgf-svg-mvnum-id (x y) (format "mvnum-%s-%s" x y))
 
 
-(defun sgf-svg-add-stones (svg game-state)
+(defun sgf-svg-update-stones (svg game-state)
   "Add stones to the board."
   (let ((svg-group (sgf-svg-group-stones svg))
         (board-2d (aref game-state 1)))
@@ -381,7 +381,7 @@ For the move annotation, add circle ring of color to the stone on the board."
         (setq curr-lnode (aref curr-lnode 0))))))
 
 
-(defun sgf-svg-add-mvnums (svg game-state)
+(defun sgf-svg-update-mvnums (svg game-state)
   "Add move numbers to the board."
   (let* ((svg-group (sgf-svg-group-mvnums svg))
          (board-2d (aref game-state 1))

@@ -59,12 +59,13 @@
 
 N is total number of branches. BRANCH is zero-based integer smaller than
 N, indicating your branch choice. If it is nil, it will prompt."
-  (let ((prompt (format "Select a branch (a-%c): " (+ ?a (1- n)))))
+  (let* ((last (+ ?a (1- n)))
+         (prompt (format "Select a branch (a-%c): " last)))
     (if (null branch)
         (setq branch
               (if (= n 1)
                   0
-                (- (read-char-choice prompt (number-sequence ?a (+ ?a (1- n))))
+                (- (read-char-choice prompt (number-sequence ?a last))
                    ?a))))
     (if (and (>= branch 0) (< branch n))
         branch
@@ -130,10 +131,12 @@ See also `sgf-forward-move'."
     (if (sgf-root-p lnode)
         ;; make sure to return nil if it is the root node.
         (progn (message "No more previous move.") nil)
-      (if interactive-call (sgf-show-comment parent))
       (sgf-revert-undo game-state)
       (aset game-state 0 parent)
-      (if interactive-call (sgf-update-display ov) t))))
+      (when interactive-call
+        (sgf-show-comment parent)
+        (sgf-update-display ov))
+      t)))
 
 
 (defun sgf-backward-fork (&optional interactive-call)
@@ -332,6 +335,7 @@ one game."
   (let* ((ov (sgf-get-overlay))
          (lnode (sgf-get-lnode ov)))
     (sgf--merge-branches lnode)
+    (sgf-graph-tree nil nil ov)
     (sgf-update-display ov t t nil)
     (sgf-serialize-game-to-buffer ov)))
 
@@ -721,6 +725,7 @@ otherwise, create a new linked node and move the game state to it."
         (aset curr-lnode 2 (nconc children (list new-lnode)))
         (aset game-state 0 new-lnode)
         (sgf-update-display ov)
+        (sgf-graph-tree nil nil ov)
         (sgf-serialize-game-to-buffer ov)))))
 
 
@@ -1035,18 +1040,16 @@ The move number will be incremented."
          (pcounts    (aref game-state 4))
          (curr-lnode (aref game-state 0))
          (curr-node  (aref curr-lnode 1)))
-    ;; update and display tree graph
-    (sgf-graph-tree nil nil ov)
     (unless no-move
-      (sgf-svg-add-stones svg game-state)
+      (sgf-svg-update-stones svg game-state)
       (sgf-svg-add-mvants svg game-state)
       (sgf-svg-update-status-prisoners svg pcounts)
       (sgf-svg-update-status-turn svg turn))
     (unless no-number
-      (sgf-svg-add-mvnums svg game-state))
+      (sgf-svg-update-mvnums svg game-state))
     (unless no-hint
-      (sgf-svg-add-nexts svg curr-lnode)
-      (sgf-svg-add-marks svg curr-node board-2d))
+      (sgf-svg-update-nexts svg curr-lnode)
+      (sgf-svg-update-marks svg curr-node board-2d))
     (overlay-put ov 'display (svg-image svg :map hot-areas))))
 
 
