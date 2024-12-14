@@ -29,53 +29,61 @@
   "Face for the comment node in the graph tree."
   :group 'sgf-graph)
 
+(defvar-local sgf-graph--game nil
+  "The game overlay the sgf tree graph is associated with.")
+
+(defvar-local sgf-graph--vertical nil
+  "The direction of the sgf tree graph is oriented.")
 
 ;;;###autoload
-(defun sgf-graph-tree (&optional vertical bname ov)
+(defun sgf-graph-tree (&optional ov bname vertical interactive-call)
   "Generate an graph to show all game variations in a tree structure.
 
 The prefix argument VERTICAL specifies the direction of the tree
 structure. By default, the tree is graphed in horizontal direction. If
 prefix argument is provided or VERTICAL is t, the tree will be graphed
 in vertical direction. BNAME is the name of the output buffer."
-  (interactive "P")
+  (interactive "i\ni\nP\np")
   (let* ((ov (or ov (sgf-get-overlay)))
-         (lnode (sgf-get-lnode ov))
-         (path (sgf-lnode-path lnode))
          ;; get the existing graph buffer or create a new one
-         (graph-buffer (overlay-get ov 'graph-buffer)))
-    (unless (buffer-live-p graph-buffer)
-      (setq graph-buffer
-            (generate-new-buffer
-             (or bname
-                 (read-buffer "Output buffer name: "
-                              (if vertical "*SGF TREE V*" "*SGF TREE H*"))))))
-    ;; display the graph buffer before `recenter'
-    (display-buffer graph-buffer)
-    ;; put the graph buffer in the overlay
-    (overlay-put ov 'graph-buffer graph-buffer)
-    ;; move to the root-lnode
-    (while (aref lnode 0) (setq lnode (aref lnode 0)))
-    (with-current-buffer graph-buffer
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (if vertical
-            (sgf-graph-subtree-v lnode)
-          (sgf-graph-subtree-h lnode))
-        (setq truncate-lines t) ; do not wrap long lines
-        ;; it seems `recenter' only works in the active window
-        (with-selected-window (get-buffer-window graph-buffer)
-          ;; highlight the current node of the game
-          (sgf-graph-path-to-pos vertical path)
-          (recenter -1)))
-      (sgf-graph-mode)
-      ;; define and set local variables:
-      ;; 1. the game that the graph tree buffer is associated.
-      ;; 2. the direction of the graph
-      ;; This has to be done after the mode is enabled - major mode enabling
-      ;; kills all local variables.
-      (setq-local sgf-graph-which-game ov)
-      (setq-local sgf-graph-vertical vertical))))
+         (graph-buffer (overlay-get ov 'graph-buffer))
+         (exist-p (buffer-live-p graph-buffer)))
+    (when (or interactive-call exist-p)
+      (unless exist-p
+        (setq graph-buffer
+              (get-buffer-create
+               (or bname
+                   (read-buffer "Output buffer name: "
+                                (if vertical "*SGF TREE V*" "*SGF TREE H*")))))
+        ;; put the graph buffer in the overlay
+        (overlay-put ov 'graph-buffer graph-buffer))
+      ;; display the graph buffer before `recenter'
+      (display-buffer graph-buffer)
+      (with-current-buffer graph-buffer
+        (let* ((lnode (sgf-get-lnode ov))
+               (path (sgf-lnode-path lnode))
+               (inhibit-read-only t)
+               (vertical (or vertical sgf-graph--vertical)))
+          ;; move to the root-lnode
+          (while (aref lnode 0) (setq lnode (aref lnode 0)))
+          (erase-buffer)
+          (if vertical
+              (sgf-graph-subtree-v lnode)
+            (sgf-graph-subtree-h lnode))
+          (setq truncate-lines t) ; do not wrap long lines
+          ;; it seems `recenter' only works in the active window
+          (with-selected-window (get-buffer-window graph-buffer)
+            ;; move to the current node of the game
+            (sgf-graph-path-to-pos vertical path)
+            (sgf-graph-hl-before-cursor))
+          (unless (eq major-mode 'sgf-graph-mode) (sgf-graph-mode))
+          ;; set local variables:
+          ;; 1. the game that the graph tree buffer is associated.
+          ;; 2. the direction of the graph
+          ;; This has to be done after the mode is enabled - major mode enabling
+          ;; kills all local variables.
+          (setq sgf-graph--game ov)
+          (setq sgf-graph--vertical vertical))))))
 
 
 (defun sgf-graph-valid-char-p (char)
@@ -88,7 +96,7 @@ Allow `*', and a-z."
                 (<= char ?z)))))
 
 
-(defun sgf-graph-pos-to-path (vertical)
+(defun sgf-graph-pos-to-path (vertical &optional interactival-call)
   "Generate a path based on the current position in an SGF graph.
 Each step in the path corresponds to the column and line traversals
 from the current position to the root of the graph.
@@ -96,7 +104,7 @@ from the current position to the root of the graph.
 VERTICAL is the prefix argument to specify whether the graph tree is
 vertical or horizontal (default). See also `sgf-traverse' and
 `sgf-graph-path-to-pos'."
-  (interactive "P")
+  (interactive "P\np")
   (if (sgf-graph-valid-char-p (char-before))
       (let ((path '())
             (steps (/ (1- (current-column)) 2))
@@ -117,9 +125,11 @@ vertical or horizontal (default). See also `sgf-traverse' and
               (forward-line -1)
               (forward-char column))))
         (push steps path)
-        (message "%s" (sgf-path-to-str path))
+        (if interactival-call (message "%s" (sgf-path-to-str path)))
         path)
-    (message "It seems the cursor is not on the valid node in graph.")))
+    (message "It seems the cursor is not on the valid node in graph.")
+    ;; return nil if failed to get path
+    nil))
 
 
 (defun sgf-graph-path-to-pos (vertical path)
@@ -233,15 +243,17 @@ ROOT-NODE is the root node."
     (insert "\n")))
 
 
-(defun sgf-graph-sync-game ()
+(defun sgf-graph-sync-game (&optional interactive-call)
   "Sync the game state to the current node in the graph tree."
-  (interactive)
-  (let ((ov sgf-graph-which-game)
-        (path (sgf-graph-pos-to-path sgf-graph-vertical)))
-    (sgf-first-move nil ov)
-    (sgf-traverse path ov t)
-    (display-buffer (overlay-buffer ov))
-    (message "Synced the game state to the current node in the graph tree.")))
+  (interactive "p")
+  (let ((ov sgf-graph--game)
+        (path (sgf-graph-pos-to-path sgf-graph--vertical)))
+    (when path
+      (sgf-first-move ov)
+      (sgf-traverse path ov t)
+      (when interactive-call
+        (pop-to-buffer (overlay-buffer ov))
+        (message "Synced the game state to the current node in the graph tree.")))))
 
 
 (defun sgf-forward-char ()
