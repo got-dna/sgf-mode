@@ -542,6 +542,7 @@ status bar to the top instead."
             (if (null new-annt)
                 node
               (nconc node (list (list new-annt "1")))))
+      (sgf-graph-tree ov)
       (sgf-update-display ov nil t t))
     (sgf-serialize-game-to-buffer ov)))
 
@@ -567,21 +568,25 @@ marks, labels, and comments of the moves except the last one."
              (stone (car move))
              (xy (cdr move)))
         (if (eq stone 'B) (push xy ab) (push xy aw))
+        (setq depth (1+ depth))
         (setq lnode (aref lnode 0))))
-    ;; now lnode is the root lnode
-    ;; link root to the next node(s) and vice vesa
-    (aset lnode 2 children)
-    (dolist (child children) (aset child 0 lnode))
-    (let ((root (aref lnode 1)))
-      ;; append new AB and AW to the root node
-      (if ab (setf (alist-get 'AB root) (nconc (alist-get 'AB root '()) ab)))
-      (if aw (setf (alist-get 'AW root) (nconc (alist-get 'AW root '()) aw)))
-      (aset lnode 1 (sgf-merge-nodes root node)))
-    (aset game-state 0 (if same lnode curr-lnode))
-    (aset game-state 2 nil)             ; clear KO
-    (aset game-state 5 (nthcdr depth undos))  ; clear undos before lnode
-    (sgf-update-display ov nil nil nil)
-    (sgf-serialize-game-to-buffer ov)))
+    (if (= depth 0) ; skip if it was at root node.
+        (message "It is at root node. skip...")
+      ;; now lnode is the root lnode
+      ;; link root to the next node(s) and vice vesa
+      (aset lnode 2 children)
+      (dolist (child children) (aset child 0 lnode))
+      (let ((root (aref lnode 1)))
+        ;; append new AB and AW to the root node
+        (if ab (setf (alist-get 'AB root) (nconc (alist-get 'AB root '()) ab)))
+        (if aw (setf (alist-get 'AW root) (nconc (alist-get 'AW root '()) aw)))
+        (aset lnode 1 (sgf-merge-nodes root node)))
+      (aset game-state 0 (if same lnode curr-lnode))
+      (aset game-state 2 nil)             ; clear KO
+      (aset game-state 5 (nthcdr depth undos))  ; clear undos before lnode
+      (sgf-graph-tree ov)
+      (sgf-update-display ov)
+      (sgf-serialize-game-to-buffer ov))))
 
 
 (defun sgf-prune (&optional interactive-call)
