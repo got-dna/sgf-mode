@@ -222,12 +222,8 @@ ROOT-NODE is the root node."
             (add-text-properties (1- (point)) (point)
                                  `(help-echo ,(car comment) face sgf-graph-comment-node)))
         ;; Get the next line and transform it to the prefix
-        (let* ((line (buffer-substring-no-properties
-                      (line-beginning-position 2)
-                      (line-end-position 2)))
-               (prefix (sgf-graph--transform-str
-                        line
-                        (- (current-column) 1))))
+        (let* ((line (buffer-substring-no-properties (pos-bol 2) (pos-eol 2)))
+               (prefix (sgf-graph--transform-str line (- (current-column) 1))))
           ;; (message "  line: %s\nprefix: %s" line prefix)
           (dotimes (i child-count)
             (let* ((is-last (= i (1- child-count)))
@@ -277,7 +273,7 @@ ROOT-NODE is the root node."
 
 
 (defun sgf-graph-hl-before-cursor ()
-  "Highlight the valid character before the cursor."
+  "Highlight char before the cursor if it is a valid node character."
   (remove-overlays nil nil)
   (if (sgf-graph-valid-char-p (char-before))
       (let ((ov (make-overlay (1- (point)) (point))))
@@ -285,11 +281,33 @@ ROOT-NODE is the root node."
         (overlay-put ov 'priority 100))))
 
 
+(defun sgf-graph-forward-comment ()
+  "Forward to the next node with comment."
+  (interactive)
+  (sgf-forward-char)
+  (while (not (get-text-property (1- (point)) 'help-echo))
+    (sgf-forward-char))
+  (sgf-graph-sync-game))
+
+
+(defun sgf-graph-backward-comment ()
+  "Forward to the previous node with comment."
+  (interactive)
+  (sgf-backward-char)
+  (while (not (get-text-property (1- (point)) 'help-echo))
+    (sgf-backward-char))
+  (sgf-graph-sync-game))
+
+
 (defvar-keymap sgf-graph-mode-map
   :doc "Keymap for SGF Graph mode."
   :suppress t
   "f" #'sgf-forward-char
   "b" #'sgf-backward-char
+  "F" #'sgf-graph-forward-comment
+  "B" #'sgf-graph-backward-comment
+  ;; "M-f" is forward-word, ie forward to next branch char;
+  ;; "M-b" is likewise.
   "p" #'sgf-graph-pos-to-path
   "P" #'sgf-graph-path-to-pos
   "s" #'sgf-graph-sync-game)
