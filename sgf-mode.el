@@ -72,7 +72,7 @@ N, indicating your branch choice. If it is nil, it will prompt."
       (error "Invalid branch selection: %c" (+ branch ?a)))))
 
 
-(defun sgf-forward-move (&optional branch interactive-call ov)
+(defun sgf-forward-move (&optional branch ov interactive-call)
   "Move to the next move in the game tree and update board.
 
 See also `sgf-branch-selection'."
@@ -83,7 +83,7 @@ See also `sgf-branch-selection'."
   ;; Use code `p' to check if the function is call interactively. When
   ;; called non-interactively, interactive-call will be nil; otherwise
   ;; it is 1
-  (interactive "i\np")
+  (interactive "i\ni\np")
   (let* ((ov   (or ov (sgf-get-overlay)))
          (game-state (overlay-get ov 'game-state))
          (lnode    (aref game-state 0))
@@ -92,7 +92,7 @@ See also `sgf-branch-selection'."
          child)
     (if (= n 0)
         ;; make sure to return nil if there is no next move.
-        (progn (message "No more next move.") nil)
+        (when interactive-call (message "No more next move.") nil)
       (setq branch (sgf-branch-selection n branch))
       (setq child (nth branch children))
       (sgf-apply-node (aref child 1)
@@ -103,38 +103,52 @@ See also `sgf-branch-selection'."
       ;; successful forward move.
       (when interactive-call
         (sgf-show-comment child)
+        (sgf-graph-tree ov)
         (sgf-update-display ov))
       t)))
 
 
-(defun sgf-forward-fork (&optional interactive-call ov)
+;; (defun sgf-update-buffer-adv (f &rest args)
+;;   (let ((ov (sgf-get-overlay)))
+;;     (apply f args)
+;;     (if (overlay-get ov 'update-buffer)
+;;         (sgf-serialize-game-to-buffer ov))
+;;     (if (and (called-interactively-p 'interactive)
+;;              (overlay-get ov 'update-display))
+;;         (sgf-update-display ov))))
+
+
+(defun sgf-forward-fork (&optional ov interactive-call)
   "Move to the step just before the next fork."
-  (interactive "p")
+  (interactive "i\np")
   (let* ((ov (or ov (sgf-get-overlay)))
          (game-state (overlay-get ov 'game-state)))
     ;; Continue advancing as long as there is exactly one child.
     (while (= (length (aref (aref game-state 0) 2)) 1)
-      (sgf-forward-move 0 nil ov))
+      (sgf-forward-move 0 ov))
     ;; Update display if called interactively.
-    (if interactive-call (sgf-update-display ov))))
+    (when interactive-call
+      (sgf-graph-tree ov)
+      (sgf-update-display ov))))
 
 
-(defun sgf-backward-move (&optional interactive-call ov)
+(defun sgf-backward-move (&optional ov interactive-call)
   "Move to the previous move in the game tree and update board.
 
 See also `sgf-forward-move'."
-  (interactive "p")
+  (interactive "i\np")
   (let* ((ov  (or ov (sgf-get-overlay)))
          (game-state  (overlay-get ov 'game-state))
          (lnode  (aref game-state 0))
          (parent (aref lnode 0)))
     (if (sgf-root-p lnode)
         ;; make sure to return nil if it is the root node.
-        (progn (message "No more previous move.") nil)
+        (when interactive-call (message "No more previous move.") nil)
       (sgf-revert-undo game-state)
       (aset game-state 0 parent)
       (when interactive-call
         (sgf-show-comment parent)
+        (sgf-graph-tree ov)
         (sgf-update-display ov))
       t)))
 
@@ -148,10 +162,12 @@ See also `sgf-forward-move'."
     (while (let* ((lnode (aref game-state 0))
                   (parent (aref lnode 0))
                   (siblings (and parent (aref parent 2))))
-             (sgf-backward-move nil ov)
+             (sgf-backward-move ov)
              (and siblings (= (length siblings) 1))))
     ;; Update display if called interactively.
-    (if interactive-call (sgf-update-display ov))))
+    (when interactive-call
+      (sgf-graph-tree ov)
+      (sgf-update-display ov))))
 
 
 (defun sgf-apply-node (node game-state allow-suicide)
@@ -200,32 +216,38 @@ See also `sgf-forward-move'."
     (sgf-push-undo game-state (vector black-xys white-xys empty-xys ko-old turn-old))))
 
 
-(defun sgf-first-move (&optional interactive-call ov)
+(defun sgf-first-move (&optional ov interactive-call)
   "Move to the first node in the game tree."
-  (interactive "p")
-  (while (sgf-backward-move nil ov))
-  (if interactive-call (sgf-update-display)))
+  (interactive "i\np")
+  (while (sgf-backward-move ov))
+  (when interactive-call
+    (sgf-graph-tree ov)
+    (sgf-update-display ov)))
 
 
-(defun sgf-last-move (&optional interactival-call ov)
+(defun sgf-last-move (&optional ov interactival-call)
   "Move to the last node in the game tree.
 
 Always pick the 1st branch upon fork. See also `sgf-forward-move'."
-  (interactive "p")
-  (while (sgf-forward-move 0 nil ov))
-  (if interactival-call (sgf-update-display)))
+  (interactive "i\np")
+  (while (sgf-forward-move 0 ov))
+  (when interactival-call
+    (sgf-graph-tree ov)
+    (sgf-update-display ov)))
 
 
-(defun sgf-jump-moves (n &optional interactive-call ov)
+(defun sgf-jump-moves (n &optional ov interactive-call)
   "Move forward or backward N nodes.
 
 It pauses at fork and wait for user input to select a branch.
 See also `sgf-forward-move'."
-  (interactive "nMove _ plays forward (pos number) or backward (neg number): \np")
+  (interactive "nMove _ plays forward (pos number) or backward (neg number): \ni\np")
   (if (> n 0)
-      (dotimes (_ n) (sgf-forward-move 0 nil ov))
-    (dotimes (_ (- n)) (sgf-backward-move nil ov)))
-  (if interactive-call (sgf-update-display)))
+      (dotimes (_ n) (sgf-forward-move 0 ov))
+    (dotimes (_ (- n)) (sgf-backward-move ov)))
+  (when interactive-call
+    (sgf-graph-tree ov)
+    (sgf-update-display ov)))
 
 
 (defun sgf-show-comment (&optional lnode)
@@ -260,22 +282,24 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
   (let* ((ov (or ov (sgf-get-overlay))))
     (cond ((null path) nil) ; do nothing
           ;; path is `t': go to the last move and pick the first branch at all forks.
-          ((eq path t) (sgf-last-move nil ov))
+          ((eq path t) (sgf-last-move ov))
           ;; path is an integer: jump forward or backward by PATH steps.
           ((integerp path)
            (cond ((> path 0) (sgf-jump-moves path ov))
                  ;; if it is negative, jump to end and move back PATH steps.
-                 ((< path 0) (sgf-last-move nil ov) (sgf-jump-moves path ov))))
+                 ((< path 0) (sgf-last-move ov) (sgf-jump-moves path ov))))
           ;; path is a list. eg (9 ?b ?a)
           ((listp path)
            (dolist (branch (cdr path))
-             (sgf-forward-fork nil ov)
-             (sgf-forward-move (- branch ?a) nil ov))
+             (sgf-forward-fork ov)
+             (sgf-forward-move (- branch ?a) ov))
            (let ((depth 0) (steps (car path)) (lnode (sgf-get-lnode ov)))
              (while (setq lnode (aref lnode 0)) (setq depth (1+ depth)))
              ;; if come across additional forks, pick the 1st branch
-             (sgf-jump-moves (- steps depth) nil ov))))
-    (if interactive-call (sgf-update-display ov))))
+             (sgf-jump-moves (- steps depth) ov))))
+    (when interactive-call
+      (sgf-graph-tree ov)
+      (sgf-update-display ov))))
 
 
 (defun sgf-merge-nodes (node-1 node-2)
@@ -335,7 +359,7 @@ one game."
   (let* ((ov (sgf-get-overlay))
          (lnode (sgf-get-lnode ov)))
     (sgf--merge-branches lnode)
-    (sgf-graph-tree nil nil ov)
+    (sgf-graph-tree ov)
     (sgf-update-display ov t t nil)
     (sgf-serialize-game-to-buffer ov)))
 
@@ -371,6 +395,7 @@ nil, swap to front. If there is only one branch, it will not swap."
           ;; swap in place
           (setf (nth i children) child-j)
           (setf (nth j children) child-i)
+          (sgf-graph-tree ov)
           (sgf-update-display ov t t nil)
           (sgf-serialize-game-to-buffer ov))
       (message "There is only one branch - no swap."))))
@@ -387,6 +412,7 @@ nil, swap to front. If there is only one branch, it will not swap."
           (aset parent 2 (list lnode)))
       (setq lnode parent)
       (setq parent (aref parent 0)))
+    (sgf-graph-tree ov)
     (sgf-serialize-game-to-buffer ov)))
 
 
@@ -488,6 +514,7 @@ status bar to the top instead."
             (if (string-empty-p new-comment)
                 node
               (nconc node (list (list 'C new-comment)))))
+      (sgf-graph-tree ov)
       (sgf-serialize-game-to-buffer ov))))
 
 
@@ -565,7 +592,8 @@ marks, labels, and comments of the moves except the last one."
     (aset lnode 2 nil)
     ;; update hint display if the hint is set to shown
     (if (and interactive-call (sgf-game-plist-get :show-next))
-        (sgf-update-display ov t t nil))
+        (sgf-update-display ov t t))
+    (sgf-graph-tree ov)
     (sgf-serialize-game-to-buffer ov)))
 
 
@@ -576,9 +604,10 @@ marks, labels, and comments of the moves except the last one."
          (lnode (sgf-get-lnode ov))
          (parent (aref lnode 0))
          (siblings (aref parent 2)))
-    (sgf-backward-move)
+    (sgf-backward-move ov)
     (aset parent 2 (delq lnode siblings))
-    (sgf-update-display)
+    (sgf-graph-tree ov)
+    (sgf-update-display ov)
     (sgf-serialize-game-to-buffer ov)))
 
 
@@ -716,7 +745,7 @@ otherwise, create a new linked node and move the game state to it."
          (found (car (seq-positions next-xys xy))))
     (if found
         ;; Case 1: Clicked on one of the next move position
-        (sgf-forward-move found t)
+        (sgf-forward-move found ov t)
       ;; Case 2: Clicked on an empty position not equal to ko
       (let* ((new-node (if xy `((,turn ,xy)) `((,turn))))
              (new-lnode (sgf-linked-node curr-lnode new-node)))
@@ -725,7 +754,7 @@ otherwise, create a new linked node and move the game state to it."
         (aset curr-lnode 2 (nconc children (list new-lnode)))
         (aset game-state 0 new-lnode)
         (sgf-update-display ov)
-        (sgf-graph-tree nil nil ov)
+        (sgf-graph-tree ov)
         (sgf-serialize-game-to-buffer ov)))))
 
 
@@ -794,6 +823,7 @@ Cases:
             (setq found t)
           (sgf-revert-undo game-state)
           (aset game-state 0 prev-lnode))))
+    (sgf-graph-tree ov)
     (sgf-update-display ov)))
 
 (defun sgf-find-back-lnode (xy game-state)
