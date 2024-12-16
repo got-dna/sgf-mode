@@ -250,6 +250,21 @@ See also `sgf-forward-move'."
     (sgf-update-display ov)))
 
 
+(defun sgf-back-to-game ()
+  "Return to the main game, assuming you are off the main variation."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (lnode (sgf-get-lnode ov))
+         (path (sgf-lnode-path lnode))
+         (depth (pop path))
+         branch)
+    (while (branch (pop path))
+      (if (eq branch ?a)
+          (sgf-forward-fork ov)))
+    (sgf-graph-tree ov)
+    (sgf-update-display ov)))
+
+
 (defun sgf-show-comment (&optional lnode)
   "Show the comment of the move/node."
   ;; if 'C' does not exist, it shows an empty str.
@@ -1280,6 +1295,7 @@ It is set as overlay property and only activated when the overlay is displayed."
   "e"   #'sgf-last-move     "<hot-last> <mouse-1>"  #'sgf-last-move
   "j"   #'sgf-jump-moves
   "t"   #'sgf-traverse
+  "r"   #'sgf-back-to-game
   "s n" #'sgf-toggle-numbers
   "s m" #'sgf-toggle-marks
   "s h" #'sgf-toggle-nexts
