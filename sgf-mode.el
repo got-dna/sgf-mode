@@ -462,6 +462,19 @@ nil, swap to front. If there is only one branch, it will not swap."
   (sgf--toggle-layer :show-mark)
   (sgf-update-display nil t t nil))
 
+(defun sgf-toggle-new-move ()
+  "Toggle whether allow new moves.
+
+See also `sgf-new-move'."
+  (interactive)
+  (let* ((ov (sgf-get-overlay)))
+    (sgf-game-plist-toggle :new-move ov)
+    (if (and (sgf-game-plist-get :new-move ov)
+             (sgf-game-plist-get :show-next ov))
+        ;; if not allowing new move, it may be in self exam, disable
+        ;; showing hint of next move.
+        (sgf-toggle-nexts)))
+
 
 (defun sgf-export-image (&optional filename)
   "Export the board to an SVG file or display it in a buffer.
@@ -767,15 +780,17 @@ otherwise, create a new linked node and move the game state to it."
         ;; Case 1: Clicked on one of the next move position
         (sgf-forward-move found ov t)
       ;; Case 2: Clicked on an empty position not equal to ko
-      (let* ((new-node (if xy `((,turn ,xy)) `((,turn))))
-             (new-lnode (sgf-linked-node curr-lnode new-node)))
-        (sgf-apply-node new-node game-state (sgf-game-plist-get :suicide-move ov))
-        ;; add the new node as the last branch
-        (aset curr-lnode 2 (nconc children (list new-lnode)))
-        (aset game-state 0 new-lnode)
-        (sgf-update-display ov)
-        (sgf-graph-tree ov)
-        (sgf-serialize-game-to-buffer ov)))))
+      (if (sgf-game-plist-get :new-move ov)
+          ;; only allow new move if it is set to be allowed
+          (let* ((new-node (if xy `((,turn ,xy)) `((,turn))))
+                 (new-lnode (sgf-linked-node curr-lnode new-node)))
+            (sgf-apply-node new-node game-state (sgf-game-plist-get :suicide-move ov))
+            ;; add the new node as the last branch
+            (aset curr-lnode 2 (nconc children (list new-lnode)))
+            (aset game-state 0 new-lnode)
+            (sgf-update-display ov)
+            (sgf-graph-tree ov)
+            (sgf-serialize-game-to-buffer ov))))))
 
 
 (defun sgf-mouse-event-to-xy (event)

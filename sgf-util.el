@@ -15,6 +15,10 @@
 
 ;;; Code:
 
+(defcustom sgf-new-move nil
+  "Do not allow new move on the game. It is useful for exam to check if you clicked and played right next move (because it will not show up if the move is not in the game). However, it allow other changes (eg comment and mark modification)."
+  :type '(boolean)
+  :group 'sgf)
 
 (defcustom sgf-show-next t
   "Show the hint mark(s) for next move(s)."
@@ -64,11 +68,12 @@ See also `sgf-traverse'."
 
 (defun sgf-default-game-plist ()
   "Return the global default game property list."
-  `(:show-next ,sgf-show-next
-               :show-number ,sgf-show-number
-               :show-mark ,sgf-show-mark
-               :suicide-move ,sgf-suicide-move
-               :traverse-path ,sgf-traverse-path))
+  `(:new-move ,sgf-new-move
+              :show-next ,sgf-show-next
+              :show-number ,sgf-show-number
+              :show-mark ,sgf-show-mark
+              :suicide-move ,sgf-suicide-move
+              :traverse-path ,sgf-traverse-path))
 
 
 (defun sgf-update-game-plist (input-plist &rest plist)
