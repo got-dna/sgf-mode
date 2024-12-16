@@ -149,7 +149,7 @@ It is a reference for all other element sizes."
     ;; Layers: different types of information on board
     (svg-node grid 'g :id sgf-svg--node-id-stones)
     (svg-node grid 'g :id sgf-svg--node-id-mvnums
-              :font-size sgf-svg-font-size
+              :font-size (* sgf-svg-interval 0.4)
               :font-weight "bold")
     (svg-node grid 'g :id sgf-svg--node-id-nexts
               :font-size sgf-svg-font-size
@@ -265,6 +265,15 @@ PRISONERS is a cons cell of black and white prisoner counts."
     (setcar (nthcdr 2 status-pw) (number-to-string pw))))
 
 
+(defun sgf-svg-update-ko (svg ko)
+  "Clear old ko position and label new ko position."
+  (if ko
+      (let ((cx (* x sgf-svg-interval))
+            (cy (* y sgf-svg-interval))
+            (r (* sgf-svg-interval 0.48)))
+        (svg-circle svg-group cx cy r :color "red" :opacity 0.5))))
+
+
 (defun sgf-svg-update-marks (svg node board-2d)
   "Process and update the marks on the board for a node.
 
@@ -327,9 +336,6 @@ It removes the old marks and adds the new marks."
 (defun sgf-svg-group-marks (svg) (car (dom-by-id svg sgf-svg--node-id-marks)))
 (defun sgf-svg-group-stones (svg) (car (dom-by-id svg sgf-svg--node-id-stones)))
 (defun sgf-svg-group-mvnums (svg) (car (dom-by-id svg sgf-svg--node-id-mvnums)))
-
-(defun sgf-svg-stone-id (x y) (format "stone-%s-%s" x y))
-(defun sgf-svg-mvnum-id (x y) (format "mvnum-%s-%s" x y))
 
 
 (defun sgf-svg-update-stones (svg game-state)
@@ -421,8 +427,7 @@ For the move annotation, add circle ring of color to the stone on the board."
 (defun sgf-svg-add-mvnum (svg-group x y mvnum color)
   "COLOR is str."
   (sgf-svg-add-text svg-group
-                    x y (number-to-string mvnum) color
-                    (list :id (sgf-svg-mvnum-id x y))))
+                    x y (number-to-string mvnum) color))
 
 
 (defun sgf-svg-add-square (svg x y &rest attributes)

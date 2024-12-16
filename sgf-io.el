@@ -190,15 +190,14 @@
   (let (begin-pos ch chars end-pos)
     (setq begin-pos (point))
     (sgf-parse-match-char ?\[)
-
-    (while (progn (sgf-parse-skip-ws)
-                  (not (equal (setq ch (sgf-parse-get-char)) ?\])))
+    ;; skip leading spaces
+    (sgf-parse-skip-ws)
+    (while (not (equal (setq ch (sgf-parse-get-char)) ?\]))
       ;; end of strm
-      (if (null ch)
-          (error "%d: Unexpected end of Property Value" (point)))
+      (if (null ch) (error "%d: Unexpected end of Property Value" (point)))
       ;; push ch
       (push ch chars)
-      ;; NOTE: Do not resolve compose value here(colon separation). Depends on property type.
+      ;; NOTE: Do not resolve compose value (with colon separation) here.
 
       ;; skip \], convert \r \n\r \r\n to \n
       (if (= ch ?\\)
@@ -214,6 +213,10 @@
               (push ?\n chars))
              ;; ], \, :, \n, spaces, etc...
              (t (push escaped-ch chars))))))
+
+    ;; skip trailing whitespaces
+    (while (sgf-parse-ws-p (nth 0 chars))
+      (pop chars))
 
     (setq end-pos (point))
     ;; return value
@@ -279,7 +282,7 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
            (insert-file-contents-literally file)
            (funcall fn (point-min) (point-max))))) ;; Process the buffer
     (if name
-        (let ((buffer (generate-new-buffer name)))
+        (let ((buffer (get-buffer-create name)))
           (with-current-buffer buffer
             (insert (pp-to-string result))
             (emacs-lisp-mode))  ;; Enable emacs-lisp-mode for syntax highlighting
@@ -397,7 +400,7 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
                     ((eq key 'GM)
                      (if (string= val-str "1")
                          (list val-str)
-                       (error "%sGame type is not Go: %s (expected GM[1])."
+                       (error "%sGame type is not Go: %S (expected GM[1])."
                               (sgf-io--format-location beg-pos end-pos) val-str)))
                     ((eq key 'MN)
                      (list (string-to-number val-str)))
@@ -424,7 +427,7 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
 (defun sgf-decode-prop-LB (val &optional beg end)
   "for property LB: label a position or stone. e.g. LB[ee:label]"
   (if (not (equal (elt val 2) ?:))
-      (error "%sInvalid label property value (%s)."
+      (error "%sInvalid label property value (%S)."
              (sgf-io--format-location beg end) val))
   (let* ((pos (substring val 0 2))
          (label (substring val 3)))
@@ -434,13 +437,13 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
 (defun sgf-decode--prop-pos (val &optional beg end)
   "Process a 2-letter position property from an SGF file and return a cons cell of x and y."
   (if (/= (length val) 2)
-      (error "%sPosition value needs to be 2 letters (%s)."
+      (error "%sPosition value needs to be 2 letters (%S)."
              (sgf-io--format-location beg end) val))
   (let* ((x (sgf-decode-c2d (elt val 0)))
          (y (sgf-decode-c2d (elt val 1))))
     (if (and (>= x 0) (<= x 51) (>= y 0) (<= y 51))
         (cons x y)
-      (error "%sPosition value is out of range (x=%d y=%d) (%s)."
+      (error "%sPosition value is out of range (x=%d y=%d) (%S)."
              (sgf-io--format-location beg end) x y val))))
 
 
@@ -511,6 +514,10 @@ See also `sgf-encode-prop-pos'."
 (defun sgf-io--escape-text (txt)
   ;; see: https://www.red-bean.com/sgf/sgf4.html#text
   ;; (replace-regexp-in-string "\\([]:\\\\]\\)" "\\\\\\1" text) ;;escape :
+
+  ;; Matches either a closing square bracket (]) or a backslash (\).
+  ;; These characters are enclosed in a character class ([]) to group
+  ;; them.
   (replace-regexp-in-string "\\([]\\\\]\\)" "\\\\\\1" txt))
 
 

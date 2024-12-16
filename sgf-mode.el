@@ -1071,10 +1071,12 @@ The move number will be incremented."
          (svg (overlay-get ov 'svg))
          (hot-areas (overlay-get ov 'hot-areas))
          (board-2d   (aref game-state 1))
+         (ko         (aref game-state 2))
          (turn       (aref game-state 3))
          (pcounts    (aref game-state 4))
          (curr-lnode (aref game-state 0))
          (curr-node  (aref curr-lnode 1)))
+    (sgf-svg-update-ko svg ko)
     (unless no-move
       (sgf-svg-update-stones svg game-state)
       (sgf-svg-add-mvants svg game-state)
