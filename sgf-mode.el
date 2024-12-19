@@ -789,10 +789,19 @@ otherwise, create a new linked node and move the game state to it."
 (defun sgf-mouse-event-to-xy (event)
   "Convert a mouse click to a board position (X . Y)."
   (if (mouse-event-p event)
-      (let* ((xy (posn-object-x-y (event-start event)))
-             (x (/ (- (float (car xy)) sgf-svg-margin) sgf-svg-interval))
-             (y (/ (- (float (cdr xy)) sgf-svg-margin sgf-svg-bar) sgf-svg-interval)))
+      (let* ((pos (event-start event))
+             (image (posn-image pos))
+             (scale (let ((s (image-property image :scale)))
+                      ;; scale could be the symbol 'default
+                      (if (eq s 'default) 1 s)))
+             (margin (* scale sgf-svg-margin))
+             (interval (* scale sgf-svg-interval))
+             (bar (* scale sgf-svg-bar))
+             (xy (posn-object-x-y pos))
+             (x (/ (- (float (car xy)) margin) interval))
+             (y (/ (- (float (cdr xy)) margin bar) interval)))
         (cons (round x) (round y)))))
+
 
 (defun sgf-board-click-left (event)
   "Add stone by mouse click on board.
@@ -1091,7 +1100,6 @@ The move number will be incremented."
   (let* ((ov (or ov (sgf-get-overlay)))
          (game-state (overlay-get ov 'game-state))
          (svg (overlay-get ov 'svg))
-         (hot-areas (overlay-get ov 'hot-areas))
          (board-2d   (aref game-state 1))
          (ko         (aref game-state 2))
          (turn       (aref game-state 3))
@@ -1109,7 +1117,8 @@ The move number will be incremented."
     (unless no-hint
       (sgf-svg-update-hints svg curr-lnode)
       (sgf-svg-update-marks svg curr-node board-2d))
-    (overlay-put ov 'display (svg-image svg :map hot-areas))))
+    (overlay-put ov 'svg svg)
+    (sgf--display-svg ov)))
 
 
 (defun sgf-buffer-update-hook (ov after beg end &optional _length)
@@ -1162,16 +1171,21 @@ The move number will be incremented."
 (defun sgf--display-svg (ov)
   "Display SVG in the overlay (as well as setting up keyboard)."
   (let ((svg (overlay-get ov 'svg))
-        (hot-areas (overlay-get ov 'hot-areas)))
+        (hot-areas (overlay-get ov 'hot-areas))
+        (scale (or (overlay-get ov 'image-scale)
+                   (image-property (overlay-get ov 'display) :scale))))
     (unless (and svg hot-areas)
       (error "Overlay %S does not have 'svg' or 'hot-areas' properties" ov))
     (overlay-put ov 'keymap sgf-mode-display-map)
-    (overlay-put ov 'display (svg-image svg :map hot-areas))))
+    (overlay-put ov 'display (svg-image svg :map hot-areas :scale scale))))
 
 
 (defun sgf--hide-svg (ov)
-  (overlay-put ov 'display nil)
-  (overlay-put ov 'keymap nil))
+  (let* ((img (overlay-get ov 'display))
+         (scale (image-property img :scale)))
+    (overlay-put ov 'image-scale scale)
+    (overlay-put ov 'display nil)
+    (overlay-put ov 'keymap nil)))
 
 
 (defun sgf-toggle-game-display (&optional beg end game-plist)
@@ -1286,13 +1300,14 @@ The existing SGF content in the buffer will be erased."
   :doc   "Keymap for the overlay svg display.
 It is set as overlay property and only activated when the overlay is displayed."
   :suppress t
+  "+"   #'image-increase-size
+  "-"   #'image-decrease-size
   "g"   #'sgf-graph-tree
   "z"   #'sgf-export-image
   "c"   #'sgf-show-comment
   "p"   #'sgf-show-path
-  "f"   #'sgf-forward-move  "<hot-forward> <mouse-1>"  #'sgf-forward-move
-  "<right>" #'sgf-forward-move "<left>" #'sgf-backward-move
-  "b"   #'sgf-backward-move "<hot-backward> <mouse-1>" #'sgf-backward-move
+  "f"   #'sgf-forward-move  "<hot-forward> <mouse-1>"  #'sgf-forward-move "<right>" #'sgf-forward-move
+  "b"   #'sgf-backward-move "<hot-backward> <mouse-1>" #'sgf-backward-move "<left>" #'sgf-backward-move
   "M-f" #'sgf-forward-fork
   "M-b" #'sgf-backward-fork
   "a"   #'sgf-first-move    "<hot-first> <mouse-1>" #'sgf-first-move
