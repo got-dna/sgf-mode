@@ -172,14 +172,13 @@ vertical or horizontal (default). See also `sgf-traverse' and
     (forward-char 1)))
 
 
-(defun sgf-graph-node-annotation-faces (node)
- "Return the accumulated faces for NODE annotations."
- (let ((faces nil))
-   (dolist (type '(IT TE DO BM))
-     (when (alist-get type node)
-       (push (intern (format "sgf-graph-%s-node" (downcase (symbol-name type))))
-             faces)))
-   faces))
+(defun sgf-graph-node-annotation-face (node)
+ "Return node annotation face for NODE."
+ (cond ((alist-get 'IT node) 'sgf-graph-it-node)
+       ((alist-get 'TE node) 'sgf-graph-te-node)
+       ((alist-get 'DO node) 'sgf-graph-do-node)
+       ((alist-get 'BM node) 'sgf-graph-bm-node)))
+
 
 (defun sgf-graph-subtree-v (root-lnode)
   "Generate vertical ASCII tree representation from a doubly-linked node.
@@ -192,13 +191,16 @@ The play move comment will be shown."
              (branch (nth 1 current))
              (prefix (nth 2 current))
              (node (aref lnode 1))
+             (annt (sgf-graph-node-annotation-face node))
              (comment (alist-get 'C node))
              (comment-suffix (if comment (concat ":" (car comment)) ""))
              (children (aref lnode 2))
              (child-count (length children))
              (i (1- child-count)))
         ;; Insert the current node representation
-        (insert (format "%s%s\n" branch comment-suffix))
+        (insert branch)
+        (put-text-property (1- (point)) (point) 'face annt)
+        (insert comment-suffix "\n")
         ;; Add children to the stack in reverse order for proper traversal
         (while (>= i 0)
           (let* ((is-last (= i (1- child-count)))
@@ -232,11 +234,11 @@ ROOT-NODE is the root node."
       (let* ((current (pop stack))
              (lnode (car current))
              (node (aref lnode 1))
-             (faces (sgf-graph-node-annotation-faces node))
+             (annt (sgf-graph-node-annotation-face node))
              (props (if-let ((comment (alist-get 'C node)))
                         `(help-echo ,(car comment)
-                                  face ,(cons 'sgf-graph-comment-node faces))
-                      `(face ,faces)))
+                                  face ('sgf-graph-comment-node ,annt))
+                      `(face ,annt)))
              (line-n (cadr current))
              (children (aref lnode 2))
              (child-count (length children)))
