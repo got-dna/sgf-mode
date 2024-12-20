@@ -37,6 +37,11 @@
   :group 'sgf)
 
 
+(defcustom sgf-new-move nil
+  "Do not allow new move on the game. It is useful for exam to check if you clicked and played right next move (because it will not show up if the move is not in the game). However, it allow other changes (eg comment and mark modification)."
+  :type '(boolean)
+  :group 'sgf)
+
 (defcustom sgf-suicide-move nil
   "Allow suicide or not. Some rule set allow suicide: https://senseis.xmp.net/?Suicide"
   :type '(boolean)

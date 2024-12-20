@@ -467,6 +467,14 @@ See also `sgf-new-move'."
         ;; showing hint of next move.
         (sgf-toggle-hints))))
 
+(defun sgf-toggle-suicide-move ()
+  "Toggle whether allow suicide moves.
+
+See also `sgf-suicide-move'."
+  (interactive)
+  (let* ((ov (sgf-get-overlay)))
+    (sgf-game-plist-toggle :suicide-move ov)))
+
 
 (defun sgf-export-image (&optional filename)
   "Export the board to an SVG file or display it in a buffer.
