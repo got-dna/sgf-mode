@@ -11,10 +11,10 @@
 
 ;;; Code:
 
-(defcustom sgf-new-move nil
-  "Do not allow new move on the game. It is useful for exam to check if you clicked and played right next move (because it will not show up if the move is not in the game). However, it allow other changes (eg comment and mark modification)."
-  :type '(boolean)
-  :group 'sgf)
+(defvar sgf-bm-color "red" "Color for the node of the bad move")
+(defvar sgf-do-color "orange" "Color for the node of the doubtful move")
+(defvar sgf-it-color "yellow" "Color for the node of the interesting move")
+(defvar sgf-te-color "green" "Color for the node of the tesuji move")
 
 (defcustom sgf-show-hints t
   "Show the hint mark(s) for next move(s)."

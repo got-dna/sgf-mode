@@ -29,6 +29,18 @@
   "Face for the comment node in the graph tree."
   :group 'sgf-graph)
 
+(defmacro sgf-define-node-face (name color)
+ "Define face for move annotation of type NAME using COLOR."
+ `(defface ,(intern (format "sgf-graph-%s-node" name))
+    ;; specify both horizontal and vertical box width
+    `((t :box (:line-width (-1 . -3) :color ,,color :style flat-button)))
+    ,(format "Face for the %s move annotation." name)))
+
+(sgf-define-node-face "it" sgf-it-color)
+(sgf-define-node-face "te" sgf-te-color)
+(sgf-define-node-face "do" sgf-do-color)
+(sgf-define-node-face "bm" sgf-bm-color)
+
 (defvar-local sgf-graph--game nil
   "The game overlay the sgf tree graph is associated with.")
 
@@ -160,6 +172,15 @@ vertical or horizontal (default). See also `sgf-traverse' and
     (forward-char 1)))
 
 
+(defun sgf-graph-node-annotation-faces (node)
+ "Return the accumulated faces for NODE annotations."
+ (let ((faces nil))
+   (dolist (type '(IT TE DO BM))
+     (when (alist-get type node)
+       (push (intern (format "sgf-graph-%s-node" (downcase (symbol-name type))))
+             faces)))
+   faces))
+
 (defun sgf-graph-subtree-v (root-lnode)
   "Generate vertical ASCII tree representation from a doubly-linked node.
 
@@ -211,16 +232,18 @@ ROOT-NODE is the root node."
       (let* ((current (pop stack))
              (lnode (car current))
              (node (aref lnode 1))
-             (comment (alist-get 'C node))
+             (faces (sgf-graph-node-annotation-faces node))
+             (props (if-let ((comment (alist-get 'C node)))
+                        `(help-echo ,(car comment)
+                                  face ,(cons 'sgf-graph-comment-node faces))
+                      `(face ,faces)))
              (line-n (cadr current))
              (children (aref lnode 2))
              (child-count (length children)))
         ;; move to the end of line line-n
         (goto-char 0)
         (end-of-line line-n)
-        (if comment
-            (add-text-properties (1- (point)) (point)
-                                 `(help-echo ,(car comment) face sgf-graph-comment-node)))
+        (add-text-properties (1- (point)) (point) props)
         ;; Get the next line and transform it to the prefix
         (let* ((line (buffer-substring-no-properties (pos-bol 2) (pos-eol 2)))
                (prefix (sgf-graph--transform-str line (- (current-column) 1))))

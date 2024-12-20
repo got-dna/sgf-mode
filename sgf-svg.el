@@ -329,10 +329,10 @@ For the move annotation, add circle ring of color to the stone on the board."
       (let* ((node (aref curr-lnode 1))
              (move (sgf-process-move node))
              (xy    (cdr move))
-             (color (cond ((alist-get 'BM node) "red") ; good move
-                          ((alist-get 'DO node) "magenta") ; doubtful move
-                          ((alist-get 'IT node) "yellow") ; interesting move
-                          ((alist-get 'TE node) "green")))); tesuji move
+             (color (cond ((alist-get 'BM node) sgf-bm-color) ; good move
+                          ((alist-get 'DO node) sgf-do-color) ; doubtful move
+                          ((alist-get 'IT node) sgf-it-color) ; interesting move
+                          ((alist-get 'TE node) sgf-te-color)))); tesuji move
         (if (and xy color ; not a pass and has annotation
                  (not (sgf-xy-is-empty-p xy board-2d)) ; xy is not empty on current board
                  (not (gethash xy annotated-xys)))
