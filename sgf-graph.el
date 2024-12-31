@@ -3,9 +3,9 @@
 
 
 ;; Author: Zech Xu
-;; Version: version
-;; Package-Requires: dependencies
-;; Homepage: homepage
+;; Version: 1.0
+;; Package-Requires: ((emacs "30.1"))
+;; Homepage: https://github.com/RNAer/sgf-mode
 ;; Keywords: SGF, go, game
 
 
@@ -321,3 +321,4 @@ ROOT-NODE is the root node."
 
 
 (provide 'sgf-graph)
+;;; sgf-graph.el ends here

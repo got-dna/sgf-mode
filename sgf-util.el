@@ -1,17 +1,13 @@
 ;;; sgf-util.el --- util functions -*- lexical-binding: t -*-
 
+
 ;; Author: Zech Xu
-;; Version: version
-;; Package-Requires: dependencies
-;; Homepage: homepage
-;; Keywords: keywords
-
-;; This file is not part of GNU Emacs
-
+;; Version: 1.0
+;; Package-Requires: ((emacs "30.1"))
+;; Homepage: https://github.com/RNAer/sgf-mode
+;; Keywords: SGF, go, game
 
 ;;; Commentary:
-
-;; commentary
 
 ;;; Code:
 
@@ -20,20 +16,26 @@
   :type '(boolean)
   :group 'sgf)
 
-(defcustom sgf-show-next t
+(defcustom sgf-show-hints t
   "Show the hint mark(s) for next move(s)."
   :type '(boolean)
   :group 'sgf)
 
-(defcustom sgf-show-number t
+(defcustom sgf-show-numbers t
   "Show move number on the stones."
   :type '(boolean)
   :group 'sgf)
 
-(defcustom sgf-show-mark t
+(defcustom sgf-show-marks t
   "Show marks on the board."
   :type '(boolean)
   :group 'sgf)
+
+(defcustom sgf-show-ko t
+  "Show KO position on the board."
+  :type '(boolean)
+  :group 'sgf)
+
 
 (defcustom sgf-suicide-move nil
   "Allow suicide or not. Some rule set allow suicide: https://senseis.xmp.net/?Suicide"
@@ -67,11 +69,12 @@ See also `sgf-traverse'."
 
 
 (defun sgf-default-game-plist ()
-  "Return the global default game property list."
+  "Return the global default game option list."
   `(:new-move ,sgf-new-move
-              :show-next ,sgf-show-next
-              :show-number ,sgf-show-number
-              :show-mark ,sgf-show-mark
+              :show-hints ,sgf-show-hints
+              :show-numbers ,sgf-show-numbers
+              :show-marks ,sgf-show-marks
+              :show-ko ,sgf-show-ko
               :suicide-move ,sgf-suicide-move
               :traverse-path ,sgf-traverse-path))
 
@@ -83,7 +86,7 @@ Update the global default variable value in the plist from PLIST.
 
  Examples:
 (sgf-update-game-plist (sgf-default-game-plist) :foo 1 :editable nil)
-(sgf-update-game-plist (sgf-default-game-plist) :show-mark t :traverse-path \\='(9 ?b ?a))"
+(sgf-update-game-plist (sgf-default-game-plist) :show-marks t :traverse-path \\='(9 ?b ?a))"
   (while plist
     (let* ((key (pop plist))
            (value (pop plist)))

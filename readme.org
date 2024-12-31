@@ -9,34 +9,49 @@
   #+begin_src emacs-lisp
     (add-to-list 'load-path "~/git/sgf-mode")
     (require 'sgf-mode)
+    (set-keymap-parent org-mode-map sgf-mode-map)
   #+end_src
 
 - For latest Emacs, it can also be installed with ~use-package~:
   #+begin_src emacs-lisp
-  (use-package sgf-mode
-    :vc (:url https://github.com/RNAer/sgf-mode.git))
+    (use-package sgf-mode
+      :vc (:url https://github.com/RNAer/sgf-mode.git)
+      :bind
+      (:map sgf-mode-display-map
+            ("f" . sgf-forward-move)) ; example of keybinding setup
+      :config
+      ;; make sgf-mode-map bindings available in org-mode
+      (set-keymap-parent org-mode-map sgf-mode-map)
+      (org-babel-do-load-languages 'org-babel-load-languages
+                                   '((sgf . t)))
+      (setq org-babel-default-header-args:sgf
+            '(;(:show-hints . "nil")
+              (:results . "none"))))
   #+end_src
 * usage
+It creates overlay for the SGF and draws the svg for game and displays it.
+** global user options
+1. ~sgf-svg-interval~, ~sgf-svg-bar~, ~sgf-svg-font-size~, and ~sgf-svg-font-family~ to config game board display.
+2. ~sgf-show-numbers~, ~sgf-show-hints~, ~sgf-show-marks~, ~sgf-show-ko~, ~sgf-traverse-path~  and ~sgf-new-move~ to set initial game options.
 ** .sgf file and sgf-mode
-- =C-c C-c=: draw the svg board for the current game
-- =C-u C-c C-c=: initiate a new game and draw the board
-- Once putting the cursor on the drawn svg board, =C-h b= shows all the key bindings for playing GO game on the board.
+- =C-c C-c=: toggle the svg board for the current sgf. See [[help:sgf-mode-map][sgf-mode-map]] for more commands.
+- Once putting the cursor on the drawn svg board, you can click on the board to play the game. The right mouse click on the stone is also available for context menu. See [[help:sgf-mode-display-map][sgf-mode-display-map]] all the commands and key bindings. Note that these key bindings are only available when the cursor is on the overlay (ie the displayed svg board).
+- =C-c C-c= also displays a buffer to show all the game variations in a tree. Once in this buffer, you can see its commands in [[help:sgf-graph-mode-map][sgf-graph-mode-map]].
 ** sgf src block in org-mode
-recommended workflow:
+*** src block usage
+As org-mode src block header arguments, similar to global user options, users can set ~show-numbers~, ~show-hints~, ~show-marks~, ~show-ko~, ~traverse-path~  and ~new-move~ for game of the current src block. See examples: [[file:tests/test.org][sgf src block in org-mode file]]
+*** recommended workflow
 1. =C-c '= to edit the game in a separate buffer
-2. in this separate buffer, ~sgf-mode~ is enabled
+2. in this separate buffer, ~sgf-mode~ is enabled and everything works like above.
+*** or display game in situ
+- =C-c C-c= (~org-babel-execute-src-block~) to display the game in the current sgf block.
+- =C-c C-v b= (~org-babel-execute-buffer~) to display all the games in the org file.
 *** tangle file
 - =C-c C-v t= to tangle all the games of sgf blocks to a single file;
 - =C-u C-c C-v t= to tangle current sgf block only.
-*** display game
-- =C-c C-c= to display the game in the current sgf block.
-- ~org-babel-execute-buffer~ (=C-c C-v b=) to display all the games in the org file.
 * alternatives
-- [[https://github.com/misohena/el-igo][igo-org]]: learned a lot from it
+- [[https://github.com/misohena/el-igo][igo-org]]
 - [[https://github.com/eschulte/el-go][el-go]]
 * TODO
 - A pass move is shown as '[]' or alternatively as '[tt]' (only for boards <= 19x19), i.e. applications should be able to deal with both representations. '[tt]' is kept for compatibility with FF[3].
 - In FF[4] it is possible to specify board sizes upto 52x52. In this case uppercase letters are used to represent points from 27-52, i.e. 'a'=1 ... 'z'=26 , 'A'=27 ... 'Z'=52
-- sgf parser
-- use unicode instead of svg item for marks (borrow from el-go)
-- add validity check: 1. xy in the range of wxh

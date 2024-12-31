@@ -1,12 +1,11 @@
 ;;; ob-sgf.el --- sgf block in org-mode -*- lexical-binding: t -*-
 
-;; Author: Zech Xu <
-;; Version: version
-;; Package-Requires: dependencies
-;; Homepage: homepage
-;; Keywords: keywords
 
-;; This file is not part of GNU Emacs
+;; Author: Zech Xu
+;; Version: 1.0
+;; Package-Requires: ((emacs "30.1"))
+;; Homepage: https://github.com/RNAer/sgf-mode
+;; Keywords: SGF, go, game
 
 
 ;;; Commentary:
@@ -15,10 +14,13 @@
 ;; https://orgmode.org/worg/org-contrib/babel/languages/index.html#develop.
 ;; It defines new header args:
 
-;; 1. :show-number - t or nil value to show move number on the game board or not.
-;; 2. :show-mark - t or nil value to show marks on the board or not.
-;; 3. :show-next - t or nil value to show hint mark(s) for next move on the board or not.
-;; 4. :traverse-path - See `sgf-traverse-path' value to traverse to the game state.
+;; 1. :show-numbers - t or nil value to show move number on the game board or not.
+;; 2. :show-marks - t or nil value to show marks on the board or not.
+;; 3. :show-hints - t or nil value to show hint mark(s) for next move on the board or not.
+;; 4. :show-ko - t or nil value to show KO label on the KO position on the board or not.
+;; 5. :new-move - t or nil value to allow a play of new move or not.
+;; 6. :suicide-move - t or nil value to allow suicide move or not.
+;; 7. :traverse-path - See `sgf-traverse-path' value to traverse to the game state.
 
 
 ;; It takes advantage of `C-c C-c' to display graphics of game board.

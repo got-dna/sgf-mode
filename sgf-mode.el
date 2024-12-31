@@ -1,13 +1,11 @@
 ;;; sgf-mode.el --- SGF Major Mode  -*- lexical-binding: t; -*-
 
 
-
 ;; Author: Zech Xu
-;; Version: version
-;; Package-Requires: dependencies
-;; Homepage: homepage
+;; Version: 1.0
+;; Package-Requires: ((emacs "30.1"))
+;; Homepage: https://github.com/RNAer/sgf-mode
 ;; Keywords: SGF, go, game
-
 
 ;;; Commentary:
 ;;
@@ -106,16 +104,6 @@ See also `sgf-branch-selection'."
         (sgf-graph-tree ov)
         (sgf-update-display ov))
       t)))
-
-
-;; (defun sgf-update-buffer-adv (f &rest args)
-;;   (let ((ov (sgf-get-overlay)))
-;;     (apply f args)
-;;     (if (overlay-get ov 'update-buffer)
-;;         (sgf-serialize-game-to-buffer ov))
-;;     (if (and (called-interactively-p 'interactive)
-;;              (overlay-get ov 'update-display))
-;;         (sgf-update-display ov))))
 
 
 (defun sgf-forward-fork (&optional ov interactive-call)
@@ -431,36 +419,39 @@ nil, swap to front. If there is only one branch, it will not swap."
     (sgf-serialize-game-to-buffer ov)))
 
 
-(defun sgf--toggle-layer (key)
+(defun sgf--svg-group-from-game-prop (svg game-prop)
+  (let* ((s (symbol-name game-prop))
+         (group-id (substring s 6)))
+    (sgf-svg-group svg group-id)))
+
+(defun sgf--toggle-layer (game-prop)
   "Toggle the display of a give layer."
   (let* ((ov (sgf-get-overlay))
          (svg  (overlay-get ov 'svg))
-         (group (pcase key
-                  (:show-number (sgf-svg-group-mvnums svg))
-                  (:show-mark (sgf-svg-group-marks svg))
-                  (:show-next (sgf-svg-group-next svg))
-                  (_ (error "Unexpected key: %s" key)))))
-    (sgf-game-plist-toggle key ov)
-    (sgf-svg-toggle-visibility group)))
+         (group (sgf--svg-group-from-game-prop svg game-prop)))
+    (sgf-game-plist-toggle game-prop ov)
+    (sgf-svg-toggle-visibility group)
+    (sgf-update-display ov)))
 
 (defun sgf-toggle-numbers ()
   "Toggle the display of move numbers."
   (interactive)
-  (sgf--toggle-layer :show-number)
-  ;; update display of move number only
-  (sgf-update-display nil t nil t))
+  (sgf--toggle-layer :show-numbers))
 
-(defun sgf-toggle-nexts ()
+(defun sgf-toggle-hints ()
   "Toggle the display of next move hint."
   (interactive)
-  (sgf--toggle-layer :show-next)
-  (sgf-update-display nil t t nil))
+  (sgf--toggle-layer :show-hints))
 
 (defun sgf-toggle-marks ()
   "Toggle the display of marks."
   (interactive)
-  (sgf--toggle-layer :show-mark)
-  (sgf-update-display nil t t nil))
+  (sgf--toggle-layer :show-marks))
+
+(defun sgf-toggle-ko ()
+  "Toggle the display of KO mark."
+  (interactive)
+  (sgf--toggle-layer :show-ko))
 
 (defun sgf-toggle-new-move ()
   "Toggle whether allow new moves.
@@ -474,7 +465,7 @@ See also `sgf-new-move'."
              (sgf-game-plist-get :show-hints ov))
         ;; if not allowing new move, it may be in self exam, disable
         ;; showing hint of next move.
-        (sgf-toggle-nexts)))
+        (sgf-toggle-hints))))
 
 
 (defun sgf-export-image (&optional filename)
@@ -518,7 +509,7 @@ status bar to the top instead."
                 ;; delete the old MN *whether* it exists or not
                 (nconc (assq-delete-all 'MN node)
                        (list (list 'MN new-mvnum))))
-          (if (sgf-game-plist-get :show-number)
+          (if (sgf-game-plist-get :show-numbers)
               (sgf-update-display ov t nil t)
             (message "Move number was not displayed. Enable its display.")
             (sgf-toggle-numbers))
@@ -625,7 +616,7 @@ marks, labels, and comments of the moves except the last one."
          (lnode (sgf-get-lnode ov)))
     (aset lnode 2 nil)
     ;; update hint display if the hint is set to shown
-    (if (and interactive-call (sgf-game-plist-get :show-next))
+    (if (and interactive-call (sgf-game-plist-get :show-hints))
         (sgf-update-display ov t t))
     (sgf-graph-tree ov)
     (sgf-serialize-game-to-buffer ov)))
@@ -791,7 +782,8 @@ otherwise, create a new linked node and move the game state to it."
             (aset game-state 0 new-lnode)
             (sgf-update-display ov)
             (sgf-graph-tree ov)
-            (sgf-serialize-game-to-buffer ov))))))
+            (sgf-serialize-game-to-buffer ov))
+        (message "New move is set to be prohibited.")))))
 
 
 (defun sgf-mouse-event-to-xy (event)
@@ -895,7 +887,6 @@ The move number will be incremented."
     (sgf--move-to-existing-or-new-next-node ov nil)))
 
 
-
 (defun sgf--handle-mouse-input (action-fn message-text)
   "Generalized handler for mouse input, calling ACTION-FN for specific actions."
   ;; Define a transient keymap that captures mouse clicks on the hot grid
@@ -923,7 +914,7 @@ The move number will be incremented."
          (board-2d (aref game-state 1))
          (curr-lnode (aref game-state 0))
          (curr-node (aref curr-lnode 1))
-         (prop-key (if (eq stone 'B) 'AB 'AW))   ;; 'AB for black stones, 'AW for white stones
+         (prop-key (if (eq stone 'B) 'AB 'AW))  ; 'AB for black stones, 'AW for white stones
          (prop (assoc prop-key curr-node))
          (xys (cdr prop)))
     (if (sgf-root-p curr-lnode)
@@ -970,7 +961,7 @@ The move number will be incremented."
           (lambda ()
             "Add/delete a mark on the board of the current game state."
             (interactive)
-            (unless (sgf-game-plist-get :show-mark)
+            (unless (sgf-game-plist-get :show-marks)
               (message "Marks were not displayed. Enable it.")
               (sgf-toggle-marks))
             (sgf--handle-mouse-input
@@ -1110,13 +1101,13 @@ The move number will be incremented."
     (sgf-svg-update-ko svg ko)
     (unless no-move
       (sgf-svg-update-stones svg game-state)
-      (sgf-svg-add-mvants svg game-state)
+      (sgf-svg-add-annotations svg game-state)
       (sgf-svg-update-status-prisoners svg pcounts)
       (sgf-svg-update-status-turn svg turn))
     (unless no-number
-      (sgf-svg-update-mvnums svg game-state))
+      (sgf-svg-update-numbers svg game-state))
     (unless no-hint
-      (sgf-svg-update-nexts svg curr-lnode)
+      (sgf-svg-update-hints svg curr-lnode)
       (sgf-svg-update-marks svg curr-node board-2d))
     (overlay-put ov 'display (svg-image svg :map hot-areas))))
 
@@ -1161,13 +1152,9 @@ The move number will be incremented."
     (sgf-traverse (plist-get game-plist :traverse-path) ov)
     ;; these svg group are visible when svg was created and needs to
     ;; be synced with game-plist when the overlay is initialized.
-    (dolist (p '(:show-number :show-next :show-mark))
+    (dolist (p '(:show-numbers :show-hints :show-marks :show-ko))
       (unless (plist-get game-plist p)
-        (sgf-svg-toggle-visibility
-         (pcase p
-           (:show-number (sgf-svg-group-mvnums svg))
-           (:show-mark (sgf-svg-group-marks svg))
-           (:show-next (sgf-svg-group-next svg))))))
+        (sgf-svg-toggle-visibility (sgf--svg-group-from-game-prop svg p))))
     (sgf-update-display ov)
     ov))
 
@@ -1262,15 +1249,15 @@ The existing SGF content in the buffer will be erased."
                    (sgf-toggle-numbers ; key symbol
                     menu-item "Show Move Number"
                     sgf-toggle-numbers
-                    :button (:toggle . (sgf-game-plist-get :show-number ,ov)))
-                   (sgf-toggle-nexts
+                    :button (:toggle . (sgf-game-plist-get :show-numbers ,ov)))
+                   (sgf-toggle-hints
                     menu-item "Show Next Hint"
-                    sgf-toggle-nexts
-                    :button (:toggle . (sgf-game-plist-get :show-next ,ov)))
+                    sgf-toggle-hints
+                    :button (:toggle . (sgf-game-plist-get :show-hints ,ov)))
                    (sgf-toggle-marks
                     menu-item "Show Marks"
                     sgf-toggle-marks
-                    :button (:toggle . (sgf-game-plist-get :show-mark ,ov)))
+                    :button (:toggle . (sgf-game-plist-get :show-marks ,ov)))
                    (seperator-2 menu-item "--")
                    (sgf-edit-move-number menu-item "Edit Move Number" sgf-edit-move-number)
                    (sgf-edit-comment menu-item "Edit Comment" sgf-edit-comment)
@@ -1304,6 +1291,7 @@ It is set as overlay property and only activated when the overlay is displayed."
   "c"   #'sgf-show-comment
   "p"   #'sgf-show-path
   "f"   #'sgf-forward-move  "<hot-forward> <mouse-1>"  #'sgf-forward-move
+  "<right>" #'sgf-forward-move "<left>" #'sgf-backward-move
   "b"   #'sgf-backward-move "<hot-backward> <mouse-1>" #'sgf-backward-move
   "M-f" #'sgf-forward-fork
   "M-b" #'sgf-backward-fork
@@ -1314,7 +1302,9 @@ It is set as overlay property and only activated when the overlay is displayed."
   "r"   #'sgf-back-to-game
   "s n" #'sgf-toggle-numbers
   "s m" #'sgf-toggle-marks
-  "s h" #'sgf-toggle-nexts
+  "s h" #'sgf-toggle-hints
+  "s k" #'sgf-toggle-ko
+  "s s" #'sgf-toggle-new-move
   "m p" #'sgf-pass          "<hot-pass> <mouse-1>" #'sgf-pass
   "m r" #'sgf-make-root
   "m k" #'sgf-prune-inclusive ; kill node

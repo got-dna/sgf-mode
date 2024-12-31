@@ -1,5 +1,12 @@
 ;;; sgf-io.el --- input and output sgf file and prep data   -*- lexical-binding: t; -*-
 
+
+;; Author: Zech Xu
+;; Version: 1.0
+;; Package-Requires: ((emacs "30.1"))
+;; Homepage: https://github.com/RNAer/sgf-mode
+;; Keywords: SGF, go, game
+
 ;;; Commentary:
 
 ;; This module provides

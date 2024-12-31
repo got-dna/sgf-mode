@@ -1,8 +1,8 @@
 ;;; sgf-svg.el --- svg visualization  -*- lexical-binding: t; -*-
 
 ;; Author: Zech Xu
-;; Version: version
-;; Package-Requires: ((svg "0.5.1") (emacs "29.4"))
+;; Version: 1.0
+;; Package-Requires: ((emacs "30.1"))
 ;; Homepage: homepage
 ;; Keywords: svg, go, game
 
@@ -14,49 +14,47 @@
 (require 'svg)
 (require 'sgf-util)
 
-(defcustom sgf-svg-interval 25
+(defcustom sgf-svg-interval 28
   "Default pixels for the size of grid cells.
 It is a reference for all other element sizes."
-  :type '(number)
-  :group 'sgf-svg)
+  :type '(number) :group 'sgf-svg)
 
 (defcustom sgf-svg-margin 30
   "Default pixels for the margin of the board."
-  :type '(number)
-  :group 'sgf-svg)
+  :type '(number) :group 'sgf-svg)
 
-(defcustom sgf-svg-bar 25
+(defcustom sgf-svg-bar 26
   "Default pixels for the bar height of the board."
-  :type '(number)
-  :group 'sgf-svg)
+  :type '(number) :group 'sgf-svg)
 
 (defcustom sgf-svg-padding 5
   "Default padding for the board. Used in buttons and other elements."
-  :type '(number)
-  :group 'sgf-svg)
+  :type '(number) :group 'sgf-svg)
 
 
-(defcustom sgf-svg-font-size  (* sgf-svg-interval 0.6)
+(defcustom sgf-svg-font-size  (* sgf-svg-interval 0.7)
   "Default font size for the board."
-  :type '(number)
-  :group 'sgf-svg)
+  :type '(number) :group 'sgf-svg)
 
 (defcustom sgf-svg-font-family "Arial"
   "Default font family for the board."
-  :type '(string)
-  :group 'sgf-svg)
+  :type '(string) :group 'sgf-svg)
 
-(defvar sgf-svg--node-id-stones "stones"
-  "The id of the group node for stones on the board.")
 
-(defvar sgf-svg--node-id-mvnums "mvnums"
-  "The id of the group node for move numbers on the board.")
+(defcustom sgf-svg-stone-size (* sgf-svg-interval 0.48)
+  "Default size for stone radius"
+  :type '(number) :group 'sgf-svg)
 
-(defvar sgf-svg--node-id-nexts "nexts"
-  "The id of the group node for next moves on the board.")
 
-(defvar sgf-svg--node-id-marks "marks"
-  "The id of the group node for marks on the board.")
+(defun sgf-svg-group (svg group-id)
+  (or (car (dom-by-id svg group-id))
+      ;; create the new group if it does not exist
+      (let ((grid (car (dom-by-id svg "game-grid"))))
+        (svg-node grid 'g :id group-id
+                  :font-size (if (string= group-id "numbers")
+                                 (* sgf-svg-font-size 0.7)
+                               sgf-svg-font-size)
+                  :font-weight "bold"))))
 
 
 (defun sgf-svg-stone-gradient (svg color stops)
@@ -77,7 +75,7 @@ It is a reference for all other element sizes."
          (board-h (+ sgf-svg-margin grid-h sgf-svg-margin))
          (line-width 0.5)
          (star-radius 2)
-         (idx-font-scale 0.7)
+         (idx-font-scale 0.6)
          (hot-grid-t-l (cons sgf-svg-margin (+ sgf-svg-bar sgf-svg-margin)))
          (hot-grid-b-r (cons (+ sgf-svg-margin (* (1- w) sgf-svg-interval))
                              (+ sgf-svg-bar sgf-svg-margin (* (1- h) sgf-svg-interval))))
@@ -111,32 +109,25 @@ It is a reference for all other element sizes."
                          :id "game-grid"
                          :font-family sgf-svg-font-family
                          :transform (format "translate(%s, %s)" sgf-svg-margin sgf-svg-margin)))
+    (setq grid-idx (svg-node grid 'g :id "grid-idx"
+                             :font-size (* sgf-svg-font-size idx-font-scale)))
     ;; Grid Lines
     (dotimes (n w)
       ;; vertical lines
       (setq idx (format "%c" (if (< n (- ?I ?A)) (+ ?A n) (+ ?A n 1)))) ; skip char I
       ;; (setq idx (format "%c" (sgf-encode-d2c n)))
-      (svg-text grid idx :class "grid-idx"
-                :font-size (* sgf-svg-font-size idx-font-scale)
-                :x (* sgf-svg-interval n) :y (- sgf-svg-font-size)
-                :dominant-baseline "hanging")
-      (svg-text grid idx :class "grid-idx"
-                :font-size (* sgf-svg-font-size idx-font-scale)
-                :x (* sgf-svg-interval n) :y (* sgf-svg-interval h))
-      (svg-line grid (* sgf-svg-interval n) 0 (* sgf-svg-interval n) (* grid-h)
+      (svg-text grid-idx idx :x (* sgf-svg-interval n) :y (- sgf-svg-font-size))
+      (svg-text grid-idx idx :x (* sgf-svg-interval n) :y (* sgf-svg-interval h))
+      (svg-line grid-idx (* sgf-svg-interval n) 0 (* sgf-svg-interval n) (* grid-h)
                 :stroke "black" :stroke-width line-width))
     (dotimes (n h)
       ;; horizontal lines
       (setq idx (number-to-string (- h n)))
-      (svg-text grid idx :class "grid-idx"
-                :font-size (* sgf-svg-font-size idx-font-scale)
-                :x (- sgf-svg-font-size) :y (* sgf-svg-interval n)
-                :text-anchor "end" :dy ".25em")
-      (svg-text grid idx :class "grid-idx"
-                :font-size (* sgf-svg-font-size idx-font-scale)
-                :x (+ grid-w sgf-svg-font-size) :y (* sgf-svg-interval n)
-                :text-anchor "start" :dy ".25em")
-      (svg-line grid 0 (* sgf-svg-interval n) grid-w (* sgf-svg-interval n)
+      (svg-text grid-idx idx :x (- sgf-svg-font-size) :y (* sgf-svg-interval n)
+                :text-anchor "end" :dy ".5em")
+      (svg-text grid-idx idx :x (+ grid-w sgf-svg-font-size) :y (* sgf-svg-interval n)
+                :text-anchor "start" :dy ".5em")
+      (svg-line grid-idx 0 (* sgf-svg-interval n) grid-w (* sgf-svg-interval n)
                 :stroke "black" :stroke-width line-width))
 
     ;; Hoshi/Stars
@@ -145,18 +136,6 @@ It is a reference for all other element sizes."
                   (* sgf-svg-interval (car hoshi))
                   (* sgf-svg-interval (cdr hoshi))
                   star-radius))
-
-    ;; Layers: different types of information on board
-    (svg-node grid 'g :id sgf-svg--node-id-stones)
-    (svg-node grid 'g :id sgf-svg--node-id-mvnums
-              :font-size (* sgf-svg-interval 0.4)
-              :font-weight "bold")
-    (svg-node grid 'g :id sgf-svg--node-id-nexts
-              :font-size sgf-svg-font-size
-              :font-weight "bold")
-    (svg-node grid 'g :id sgf-svg--node-id-marks
-              :font-size sgf-svg-font-size
-              :font-weight "bold")
 
     ;; Status Bar
     (setq status-bar (svg-node svg 'g
@@ -267,105 +246,85 @@ PRISONERS is a cons cell of black and white prisoner counts."
 
 (defun sgf-svg-update-ko (svg ko)
   "Clear old ko position and label new ko position."
-  (if ko
-      (let ((cx (* x sgf-svg-interval))
-            (cy (* y sgf-svg-interval))
-            (r (* sgf-svg-interval 0.48)))
-        (svg-circle svg-group cx cy r :color "red" :opacity 0.5))))
+  (let ((group (sgf-svg-group svg "ko")))
+    (sgf-svg-clear-group-content group)
+    (if ko
+        (let* ((x (car ko)) (y (cdr ko)))
+          (sgf-svg-add-text group x y "KO" "red")))))
 
 
 (defun sgf-svg-update-marks (svg node board-2d)
-  "Process and update the marks on the board for a node.
+  "Toggle or update the marks on the board for a node.
 
 It removes the old marks and adds the new marks."
   ;; make sure to remove old marks
-  (let ((marks-group (sgf-svg-group-marks svg))
+  (let ((group (sgf-svg-group svg "marks"))
         type)
-    (sgf-svg-clear-node-content marks-group)
+    (sgf-svg-clear-group-content group)
     (dolist (prop node)
       (setq type (car prop))
       (if (member type '(SQ TR CR MA))
           (dolist (xy (cdr prop))
-            (let* ((x (car xy))
-                   (y (cdr xy))
+            (let* ((x (car xy)) (y (cdr xy))
                    (xy-state (sgf-board-get xy board-2d))
                    (color (sgf-svg-set-color xy-state)))
-              (sgf-svg-add-mark type marks-group x y color))))
-      (if (equal type 'LB)
+              (sgf-svg-add-mark type group x y color))))
+      (if (eq type 'LB)
           (dolist (prop-val (cdr prop))
             (let* ((label (cdr prop-val))
                    (xy (car prop-val))
-                   (x (car xy))
-                   (y (cdr xy))
+                   (x (car xy)) (y (cdr xy))
                    (xy-state (sgf-board-get xy board-2d))
                    (color (sgf-svg-set-color xy-state)))
               ;; (message "---------%S %S" xy-state color)
-              (sgf-svg-add-text marks-group x y label color)))))))
+              (sgf-svg-add-text group x y label color)))))))
 
 
-(defun sgf-svg-update-nexts (svg curr-lnode)
-  "Update and show branches/next move(s) on board svg."
-  (let* ((next-lnodes (aref curr-lnode 2))
-         (branch-count (length next-lnodes))
-         (branch-index 0)
-         (next-group (sgf-svg-group-next svg))
-         text play stone xy x y)
-    (sgf-svg-clear-node-content next-group)
-    (dolist (next-lnode next-lnodes)
-      (if (= branch-count 1)
-          (setq text "x")
-        (setq text (string (+ ?a branch-index))))
-      (setq play (sgf-process-move (aref next-lnode 1))
-            stone (car play) xy (cdr play) x (car xy) y (cdr xy))
-      (if (consp xy) ; xy is not nil, i.e. next move is not pass
-          (sgf-svg-add-text next-group x y text (sgf-svg-set-color (sgf-enemy-stone stone))))
-      (setq branch-index (1+ branch-index)))))
-
-
-(defun sgf-svg-add-text (svg x y text color &optional attributes)
-  (apply #'svg-text svg text
-         :x (* x sgf-svg-interval) :y (* y sgf-svg-interval)
-         :fill color
-         :dy ".25em" ; or
-         ;; :baseline-shift "-30%"
-         ;; librsvg issue: https://github.com/lovell/sharp/issues/1996
-         ;; :alignment-baseline "central"
-         attributes))
-
-(defun sgf-svg-group-next (svg) (car (dom-by-id svg sgf-svg--node-id-nexts)))
-(defun sgf-svg-group-marks (svg) (car (dom-by-id svg sgf-svg--node-id-marks)))
-(defun sgf-svg-group-stones (svg) (car (dom-by-id svg sgf-svg--node-id-stones)))
-(defun sgf-svg-group-mvnums (svg) (car (dom-by-id svg sgf-svg--node-id-mvnums)))
+(defun sgf-svg-update-hints (svg curr-lnode)
+  "Update hints of the next move(s) on board svg."
+  (let* ((group (sgf-svg-group svg "hints"))
+         (next-lnodes (aref curr-lnode 2))
+         (branch-count (length next-lnodes)))
+    (sgf-svg-clear-group-content group)
+    (dotimes (i branch-count)
+      (let* ((text (if (= branch-count 1)
+                       (setq text "x")
+                     (setq text (string (+ ?a i)))))
+             (next-lnode (nth i next-lnodes))
+             (node (aref next-lnode 1))
+             (play (sgf-process-move node))
+             (stone (car play)) (xy (cdr play)) (x (car xy)) (y (cdr xy)))
+        (if (consp xy) ; xy is not nil, i.e. next move is not pass
+            (sgf-svg-add-text group x y text
+                              (sgf-svg-set-color (sgf-enemy-stone stone))))))))
 
 
 (defun sgf-svg-update-stones (svg game-state)
   "Add stones to the board."
-  (let ((svg-group (sgf-svg-group-stones svg))
+  (let ((group (sgf-svg-group svg "stones"))
         (board-2d (aref game-state 1)))
-    (sgf-svg-clear-node-content svg-group)
+    (sgf-svg-clear-group-content group)
     (dotimes (y (length board-2d))
       (dotimes (x (length (aref board-2d y)))
         (let ((state (sgf-board-get (cons x y) board-2d)))
-          (unless (equal state 'E) (sgf-svg-add-stone svg-group x y state)))))))
+          (unless (equal state 'E) (sgf-svg-add-stone group x y state)))))))
 
 
-(defun sgf-svg-add-stone (svg-group x y stone)
+(defun sgf-svg-add-stone (group x y stone)
   "STONE is a symbol."
   (let ((cx (* x sgf-svg-interval))
-        (cy (* y sgf-svg-interval))
-        (r (* sgf-svg-interval 0.48)))
-    (svg-circle svg-group cx cy r
-                ;;:id (sgf-svg-stone-id x y)
-                :gradient stone)))
+        (cy (* y sgf-svg-interval)))
+    (svg-circle group cx cy sgf-svg-stone-size :gradient stone)))
 
-(defun sgf-svg-add-mvants (svg game-state)
+
+(defun sgf-svg-add-annotations (svg game-state)
   "Add move annotations to the board.
 
 For the move annotation, add circle ring of color to the stone on the board."
   (let ((board-2d (aref game-state 1))
         (curr-lnode (aref game-state 0))
         (annotated-xys (make-hash-table :test 'equal))
-        (svg-group (sgf-svg-group-stones svg)))
+        (group (sgf-svg-group svg "stones")))
     (while (not (sgf-root-p curr-lnode))
       (let* ((node (aref curr-lnode 1))
              (move (sgf-process-move node))
@@ -377,43 +336,44 @@ For the move annotation, add circle ring of color to the stone on the board."
         (if (and xy color ; not a pass and has annotation
                  (not (sgf-xy-is-empty-p xy board-2d)) ; xy is not empty on current board
                  (not (gethash xy annotated-xys)))
-            (svg-circle svg-group
+            (svg-circle group
                         (* (car xy) sgf-svg-interval)
                         (* (cdr xy) sgf-svg-interval)
-                        (* 0.48 sgf-svg-interval)
+                        sgf-svg-stone-size
                         :fill "none" :stroke color :stroke-width 2))
         (puthash xy t annotated-xys)
         ;; move to the previous node
         (setq curr-lnode (aref curr-lnode 0))))))
 
 
-(defun sgf-svg-update-mvnums (svg game-state)
-  "Add move numbers to the board."
-  (let* ((svg-group (sgf-svg-group-mvnums svg))
+(defun sgf-svg-update-numbers (svg game-state)
+  "Update move numbers to the board."
+  (let* ((group (sgf-svg-group svg "numbers"))
          (board-2d (aref game-state 1))
          (curr-lnode (aref game-state 0))
          (mvnum (sgf-lnode-move-number curr-lnode))
          (numbered-xys (make-hash-table :test 'equal))
          (last-move-p t))
     (sgf-svg-update-status-mvnum svg mvnum)
-    (sgf-svg-clear-node-content svg-group)
+    (sgf-svg-clear-group-content group)
     (while (not (sgf-root-p curr-lnode))
       (let* ((node (aref curr-lnode 1))
              (move (sgf-process-move node))
              (xy    (cdr move))
              (stone (car move))
-             (last-color (when last-move-p
-                           ;; first iteration (ie last move) is red
-                           (setq last-move-p nil) "red")))
+             ;; first iteration (ie last move) is red
+             (last-color (when last-move-p (setq last-move-p nil) "red")))
         (if (and xy (not (gethash xy numbered-xys)))
             (let* ((xy-state (sgf-board-get xy board-2d))
                    (actual-color (or last-color
                                      (sgf-svg-set-color (if (eq xy-state 'E)
-                                                     ;; this is a removed, captured stone
+                                                            ;; this is a removed, captured stone
                                                             (sgf-enemy-stone stone)
                                                           xy-state)))))
               ;; add move number only if it does not already have a number.
-              (sgf-svg-add-mvnum svg-group (car xy) (cdr xy) mvnum actual-color)
+              (sgf-svg-add-text group (car xy) (cdr xy)
+                                (number-to-string mvnum)
+                                actual-color)
               (puthash xy t numbered-xys)))
         ;; move to the previous node
         (setq curr-lnode (aref curr-lnode 0))
@@ -424,10 +384,15 @@ For the move annotation, add circle ring of color to the stone on the board."
                       (1- mvnum)))))))
 
 
-(defun sgf-svg-add-mvnum (svg-group x y mvnum color)
-  "COLOR is str."
-  (sgf-svg-add-text svg-group
-                    x y (number-to-string mvnum) color))
+(defun sgf-svg-add-text (svg x y text color &optional attributes)
+  (apply #'svg-text svg text
+         :x (* x sgf-svg-interval) :y (* y sgf-svg-interval)
+         :fill color
+         :dy ".25em" ; or
+         ;; :baseline-shift "-30%"
+         ;; TODO: librsvg issue: https://github.com/lovell/sharp/issues/1996
+         ;; :alignment-baseline "central"
+         attributes))
 
 
 (defun sgf-svg-add-square (svg x y &rest attributes)
@@ -465,32 +430,30 @@ For the move annotation, add circle ring of color to the stone on the board."
            attributes)))
 
 
-(defun sgf-svg-add-mark (type svg-group x y color)
+(defun sgf-svg-add-mark (type group x y color)
   "Add a mark to the marks group in a svg."
   (let* ((adders '((SQ . sgf-svg-add-square)
                    (CR . sgf-svg-add-circle)
                    (TR . sgf-svg-add-triangle)
                    (MA . sgf-svg-add-cross)))
          (adder (cdr (assoc type adders))))
-    (funcall adder svg-group x y
-             :fill "none" :stroke color :stroke-width 2)))
+    (funcall adder group x y :fill "none" :stroke color :stroke-width 2)))
 
 
-(defun sgf-svg-toggle-visibility (svg-group)
+(defun sgf-svg-toggle-visibility (group)
   "Toggle the visibility of the SVG-GROUP."
-  (let ((visibility (dom-attr svg-group 'visibility)))
-    (dom-set-attribute svg-group 'visibility
+  (let ((visibility (dom-attr group 'visibility)))
+    (dom-set-attribute group 'visibility
                        (if (or (null visibility) (equal visibility "visible"))
                            "hidden" "visible"))))
 
 
-(defun sgf-svg-clear-node-content (node)
-  "Remove all content under the SVG NODE.
+(defun sgf-svg-clear-group-content (group)
+  "Remove all content under the svg GROUP.
 
 Attributes are kept."
-  (if node
-      ;; Keep the tag name and attributes, remove all children
-      (setcdr (cdr node) nil)))
+  ;; Keep the tag name and attributes, remove all children
+  (if group (setcdr (cdr group) nil)))
 
 
 (provide 'sgf-svg)

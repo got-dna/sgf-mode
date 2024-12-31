@@ -11,7 +11,7 @@
 
 ** 有一外气，劫；
 #+name: one outside liberties
-#+begin_src sgf :show-number t :show-next nil :show-mark nil :traverse-path t
+#+begin_src sgf :show-numbers t :show-hints nil :show-marks nil :traverse-path t
 (;FF[4]GM[1]SZ[9]AB[ae:de][df:dh][ei]AW[af:cf][cg:ci];B[ah];W[bh];B[ag];W[ai];B[bi])
 #+end_src
 
