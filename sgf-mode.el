@@ -469,8 +469,9 @@ See also `sgf-new-move'."
   (interactive)
   (let* ((ov (sgf-get-overlay)))
     (sgf-game-plist-toggle :new-move ov)
-    (if (and (sgf-game-plist-get :new-move ov)
-             (sgf-game-plist-get :show-next ov))
+    (message "Toggled allowing new move.")
+    (if (and (not (sgf-game-plist-get :new-move ov))
+             (sgf-game-plist-get :show-hints ov))
         ;; if not allowing new move, it may be in self exam, disable
         ;; showing hint of next move.
         (sgf-toggle-nexts)))
