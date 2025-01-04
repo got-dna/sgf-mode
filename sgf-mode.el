@@ -1310,7 +1310,7 @@ It is set as overlay property and only activated when the overlay is displayed."
   :suppress t
   "+"   #'image-increase-size
   "-"   #'image-decrease-size
-  "g"   #'sgf-graph-tree
+  "g"   #'sgf-graph-hv
   "z"   #'sgf-export-image
   "c"   #'sgf-show-comment
   "p"   #'sgf-show-path

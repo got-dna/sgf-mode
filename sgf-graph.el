@@ -18,6 +18,8 @@
 (require 'sgf-svg)
 (require 'sgf-io)
 
+(defvar sgf-graph-buffer-name "*SGF TREE*"
+  "The default buffer name for the SGF tree graph.")
 
 (defface sgf-graph-current-node
   '((t :foreground "magenta" :weight bold))
@@ -44,29 +46,32 @@
 (defvar-local sgf-graph--game nil
   "The game overlay the sgf tree graph is associated with.")
 
-(defvar-local sgf-graph--vertical nil
+(defvar-local sgf-graph--direction 'h
   "The direction of the sgf tree graph is oriented.")
 
 ;;;###autoload
-(defun sgf-graph-tree (&optional ov bname vertical interactive-call)
+(defun sgf-graph-hv (&optional vertical ov)
+  "Generate an vertical or horizontal (default) graph to show all game variations in a tree structure."
+  (interactive "P")
+  (sgf-graph-tree ov "*SGF TREE*" (if vertical 'v 'h) t))
+
+
+(defun sgf-graph-tree (&optional ov bname direction force)
   "Generate an graph to show all game variations in a tree structure.
 
-The prefix argument VERTICAL specifies the direction of the tree
-structure. By default, the tree is graphed in horizontal direction. If
-prefix argument is provided or VERTICAL is t, the tree will be graphed
-in vertical direction. BNAME is the name of the output buffer."
-  (interactive "i\ni\nP\np")
+DIRECTION specifies the direction of the tree structure. By default, the
+tree is graphed in horizontal direction. BNAME is the name of the output
+buffer. FORCE is boolean to force to create the buffer if it exists in
+the overlay property."
   (let* ((ov (or ov (sgf-get-overlay)))
          ;; get the existing graph buffer or create a new one
          (graph-buffer (overlay-get ov 'graph-buffer))
          (exist-p (buffer-live-p graph-buffer)))
-    (when (or interactive-call exist-p)
+    (when (or exist-p force)
       (unless exist-p
         (setq graph-buffer
               (get-buffer-create
-               (or bname
-                   (read-buffer "Output buffer name: "
-                                (if vertical "*SGF TREE V*" "*SGF TREE H*")))))
+               (or bname (read-buffer "Output buffer name: " sgf-graph-buffer-name))))
         ;; put the graph buffer in the overlay
         (overlay-put ov 'graph-buffer graph-buffer))
       ;; display the graph buffer before `recenter'
@@ -75,18 +80,18 @@ in vertical direction. BNAME is the name of the output buffer."
         (let* ((lnode (sgf-get-lnode ov))
                (path (sgf-lnode-path lnode))
                (inhibit-read-only t)
-               (vertical (or vertical sgf-graph--vertical)))
+               (direction (or direction sgf-graph--direction)))
           ;; move to the root-lnode
           (while (aref lnode 0) (setq lnode (aref lnode 0)))
           (erase-buffer)
-          (if vertical
-              (sgf-graph-subtree-v lnode)
-            (sgf-graph-subtree-h lnode))
+          (cond ((eq direction 'v) (sgf-graph-subtree-v lnode))
+                ((eq direction 'h) (sgf-graph-subtree-h lnode))
+                (t (error "Invalid direction: %s" direction)))
           (setq truncate-lines t) ; do not wrap long lines
           ;; it seems `recenter' only works in the active window
           (with-selected-window (get-buffer-window graph-buffer)
             ;; move to the current node of the game
-            (sgf-graph-path-to-pos vertical path)
+            (sgf-graph-path-to-pos (eq direction 'v) path)
             (sgf-graph-hl-before-cursor))
           (unless (eq major-mode 'sgf-graph-mode) (sgf-graph-mode))
           ;; set local variables:
@@ -95,7 +100,7 @@ in vertical direction. BNAME is the name of the output buffer."
           ;; This has to be done after the mode is enabled - major mode enabling
           ;; kills all local variables.
           (setq sgf-graph--game ov)
-          (setq sgf-graph--vertical vertical))))))
+          (setq sgf-graph--direction direction))))))
 
 
 (defun sgf-graph-valid-char-p (char)
@@ -181,9 +186,9 @@ vertical or horizontal (default). See also `sgf-traverse' and
 
 
 (defun sgf-graph-subtree-v (root-lnode)
-  "Generate vertical ASCII tree representation from a doubly-linked node.
+  "Generate vertical ASCII tree representation for the game from a doubly-linked node.
 
-The play move comment will be shown."
+The play move comment will be shown. See also `sgf-graph-subtree-h'."
   (let ((stack (list (list root-lnode "*" ""))))
     (while stack
       (let* ((current (pop stack))
@@ -225,9 +230,9 @@ other characters to spaces."
                 ?\s))))))
 
 (defun sgf-graph-subtree-h (root-lnode)
-  "Generate horizontal ASCII tree representation for SGF subtree non-recursively.
+  "Generate horizontal ASCII tree representation for the game (non-recursively).
 
-ROOT-NODE is the root node."
+ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
   (let ((stack (list (list root-lnode 1))))
     (insert "*") ; root
     (while stack
@@ -268,7 +273,7 @@ ROOT-NODE is the root node."
   "Sync the game state to the current node in the graph tree."
   (interactive "p")
   (let ((ov sgf-graph--game)
-        (path (sgf-graph-pos-to-path sgf-graph--vertical)))
+        (path (sgf-graph-pos-to-path (eq sgf-graph--direction 'v))))
     (when path
       (sgf-first-move ov)
       (sgf-traverse path ov t)
