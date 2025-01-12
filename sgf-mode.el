@@ -1148,9 +1148,13 @@ The move number will be incremented."
 
 
 (defun sgf-remove-game-display ()
-  "Remove the overlay and turn off the game and display."
+  "Remove the overlay and turn off the game display.
+
+It also removes tree graph buffer if it exists."
   (interactive)
   (let* ((ov (sgf-get-overlay-at))
+         (b (overlay-get ov 'graph-buffer)))
+    (if b (kill-buffer b))
     (delete-overlay ov)))
 
 
@@ -1205,9 +1209,11 @@ content.
 
 If the overlay exists, it keeps unchanged."
 
-  (interactive (if (use-region-p)
-                   (list (region-beginning) (region-end))
-                 (list (point-min) (point-max))))
+  (interactive)
+  (if (use-region-p)
+      (setq beg (region-beginning) end (region-end))
+    (setq beg (or beg (point-min))
+          end (or end (point-max))))
 
   (let* ((ov (ignore-errors (sgf-get-overlay))))
     (if ov
@@ -1363,14 +1369,30 @@ It is set as overlay property and only activated when the overlay is displayed."
       (define-key keymap (vector area-id 'wheel-down) #'pixel-scroll-precision))))
 
 
-;; Emacs automatically creates a hook for the mode (e.g.,
-;; sgf-mode-hook), and this hook will be run every time the mode is
-;; enabled.
+(defun sgf-setup (&optional vertical)
+  (whitespace-cleanup)
+  (let ((beg (point-min)) (end (point-max)))
+    (if (eq beg end)
+        (sgf-init-new-game beg end)
+      (sgf-toggle-game-display beg end))
+  (sgf-graph-hv vertical)))
+
+
+(defcustom sgf-mode-hook nil
+  "Hook run when entering SGF mode."
+  :type 'hook
+  :group 'sgf)
+
+
 ;;;###autoload
 (define-derived-mode sgf-mode nil "SGF"
   "Major mode for editing SGF files. The following commands are available:
 \\{sgf-mode-map}"
   :keymap sgf-mode-map)
+
+
+;;;###autoload
+(add-hook 'sgf-mode-hook 'sgf-setup)
 
 
 ;;;###autoload
