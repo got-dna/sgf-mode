@@ -1150,7 +1150,7 @@ The move number will be incremented."
 (defun sgf-remove-game-display ()
   "Remove the overlay and turn off the game and display."
   (interactive)
-  (let ((ov (sgf-get-overlay)))
+  (let* ((ov (sgf-get-overlay-at))
     (delete-overlay ov)))
 
 

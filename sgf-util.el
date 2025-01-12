@@ -135,9 +135,12 @@ Examples: (sgf-toggle t) => nil
         (t flag)))
 
 
-(defun sgf-get-overlay-at (pos)
-  "Return the SGF overlay at POS position in the current buffer."
-  (let ((ovs (overlays-in (1- pos) (1+ pos)))
+(defun sgf-get-overlay-at (&optional pos)
+  "Return the SGF overlay at POS position in the current buffer.
+
+See also `sgf-get-overlay'. Use this function if no mouse event is involved."
+  (let* ((pos (or pos (point)))
+         (ovs (overlays-in (1- pos) (1+ pos)))
          sgf-ov)
     (while (and ovs (not sgf-ov))
       (let ((ov (pop ovs)))
@@ -149,7 +152,9 @@ Examples: (sgf-toggle t) => nil
 
 
 (defun sgf-get-overlay ()
-  "Return the SGF overlay (even if mouse clicked on non current buffer)."
+  "Return the SGF overlay (even if mouse clicked on non current buffer).
+
+See also `sgf-get-overlay-at'. Use this function if mouse event is involved."
   (if (or (mouse-event-p last-input-event)
           (memq (event-basic-type last-input-event) '(wheel-up wheel-down)))
       (let* ((mouse-pos (event-start last-input-event))

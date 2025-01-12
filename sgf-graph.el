@@ -63,7 +63,7 @@ DIRECTION specifies the direction of the tree structure. By default, the
 tree is graphed in horizontal direction. BNAME is the name of the output
 buffer. FORCE is boolean to force to create the buffer if it exists in
 the overlay property."
-  (let* ((ov (or ov (sgf-get-overlay)))
+  (let* ((ov (or ov (sgf-get-overlay-at)))
          ;; get the existing graph buffer or create a new one
          (graph-buffer (overlay-get ov 'graph-buffer))
          (exist-p (buffer-live-p graph-buffer)))
