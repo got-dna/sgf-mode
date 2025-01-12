@@ -1131,7 +1131,9 @@ The move number will be incremented."
 
 (defun sgf-buffer-update-hook (ov after beg end &optional _length)
   ;; (message "Before --- beg: %d end: %d" beg end)
-  (when after                            ; after the text change
+  (when (and after                             ; after the text change
+             ;; only update the overlay if it is current buffer that are modified.
+             (eq (current-buffer) (window-buffer)))
     (let* ((inhibit-modification-hooks nil)
            (game-state (overlay-get ov 'game-state))
            (lnode (aref game-state 0))
