@@ -16,7 +16,7 @@
 (require 'sgf-svg)
 (require 'sgf-io)
 (require 'sgf-graph)
-
+(require 'katago)
 
 (defun sgf-push-undo (game-state change)
   "Push a game CHANGE to the undo stack in GAME-STATE."
@@ -433,6 +433,17 @@ nil, swap to front. If there is only one branch, it will not swap."
     (sgf-svg-toggle-visibility group)
     (sgf-update-display ov)))
 
+;; todo
+(defun sgf-toggle-katago-info ()
+  "Toggle the display of katago winrate or score."
+  (interactive)
+  (sgf--toggle-layer :show-kifu))
+
+(defun sgf-toggle-katago ()
+  "Toggle the display of Katago's evaluation."
+  (interactive)
+  (sgf--toggle-layer :show-katago))
+
 (defun sgf-toggle-numbers ()
   "Toggle the display of move numbers."
   (interactive)
@@ -826,33 +837,67 @@ Cases:
     (sgf--move-to-existing-or-new-next-node ov xy)))
 
 
+(defun sgf-katago-get-next-move-xy (xy)
+  "Return the KataGo evaluation for the next move at the XY position."
+  (let* ((moves (sgf-katago-get-next-move))
+         (move-xy (assoc xy moves))
+         (info (cdr move-xy)))
+    info))
+
+(defun sgf-katago-get-next-move ()
+  "Return the KataGo evaluation for the next move."
+  (let* ((ov  (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (turn-number (aref game-state 6))
+         (result (or (overlay-get ov 'katago)
+                     (error "No KataGo analysis found.")))
+         (moves (gethash turn-number result)))
+    moves))
+
+
 (defun sgf-board-click-right (event)
   "Right click on board pop up a menu."
   (interactive "@e")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
+         (board-2d (aref game-state 1))
+         (h (length board-2d))
          (curr-lnode (aref game-state 0))
          (xy (sgf-mouse-event-to-xy event))
+         ;; (xy-gtp (cons (car xy) (- h (cdr xy))))
+         (katago-info (sgf-katago-get-next-move-xy xy))
          (clicked-lnode (sgf-find-back-lnode xy game-state))
-         (menu `("ACTION ON THIS MOVE"
-                 ["Edit Comment"
-                  ,(lambda () (interactive) (sgf-edit-comment clicked-lnode))]
-                 ["Edit Move Number"
-                  ,(lambda () (interactive) (sgf-edit-move-number clicked-lnode))
-                  :enable ,(not (sgf-root-p clicked-lnode))]
-                 ["Edit Move Annotation"
-                  ,(lambda () (interactive) (sgf-edit-annotation clicked-lnode))
-                  :enable ,(not (sgf-root-p clicked-lnode))]
-                 ["Back to This Move"
-                  ,(lambda () (interactive) (sgf-goto-back-lnode clicked-lnode))
-                  :help "Move game state to this move"
-                  :enable ,(not (equal curr-lnode clicked-lnode))]
-                 ["Prune to This Move"
-                  ,(lambda () (interactive) (sgf-goto-back-lnode clicked-lnode) (sgf-prune))
-                  :enable ,(not (sgf-root-p clicked-lnode))] ; not root node
-                 ["Put the Stone and Before as Setup"
-                  ,(lambda () (interactive) (sgf-make-root clicked-lnode))
-                  :enable ,(not (sgf-root-p clicked-lnode))])))
+         (menu (cond (clicked-lnode
+                      `("ACTION ON THIS MOVE"
+                        ["Edit Comment"
+                         ,(lambda () (interactive) (sgf-edit-comment clicked-lnode))]
+                        ["Edit Move Number"
+                         ,(lambda () (interactive) (sgf-edit-move-number clicked-lnode))
+                         :enable ,(not (sgf-root-p clicked-lnode))]
+                        ["Edit Move Annotation"
+                         ,(lambda () (interactive) (sgf-edit-annotation clicked-lnode))
+                         :enable ,(not (sgf-root-p clicked-lnode))]
+                        ["Back to This Move"
+                         ,(lambda () (interactive)
+                            (sgf-goto-back-lnode clicked-lnode)
+                            (sgf-update-display ov))
+                         :help "Move game state to this move"
+                         :enable ,(not (equal curr-lnode clicked-lnode))]
+                        ["Prune to This Move"
+                         ,(lambda () (interactive)
+                            (sgf-goto-back-lnode clicked-lnode)
+                            (sgf-prune t))
+                         :enable ,(not (sgf-root-p clicked-lnode))] ; not root node
+                        ["Put the Stone and Before as Setup"
+                         ,(lambda () (interactive) (sgf-make-root clicked-lnode))
+                         :enable ,(not (sgf-root-p clicked-lnode))]))
+                     (katago-info `(,(format "KATAGO EVAL @ %s" xy)
+                                    ,(format "win rate: %.2f%%\nscore: %.2f\nvisits: %d\npv: %s"
+                                            (plist-get katago-info :winrate)
+                                            (plist-get katago-info :score)
+                                            (plist-get katago-info :visits)
+                                            (plist-get katago-info :pv))))
+                     (t `("No action or info to show.")))))
     (popup-menu menu)))
 
 
@@ -1102,7 +1147,7 @@ The move number will be incremented."
 ;;           (overlay-put ov 'svg svg)))))
 
 
-(defun sgf-update-display (&optional ov no-move no-number no-hint)
+(defun sgf-update-display (&optional ov no-move no-number no-hint katago)
   "Update the svg object and display according to the current game state."
   (interactive)
   (let* ((ov (or ov (sgf-get-overlay)))
@@ -1125,6 +1170,8 @@ The move number will be incremented."
     (unless no-hint
       (sgf-svg-update-hints svg curr-lnode)
       (sgf-svg-update-marks svg curr-node board-2d))
+    (if (overlay-get ov 'katago-moves)
+        (sgf-svg-update-katago-winrate svg (sgf-katago-get-next-move)))
     (overlay-put ov 'svg svg)
     (sgf--display-svg ov)))
 
@@ -1261,7 +1308,16 @@ The existing SGF content in the buffer will be erased."
     (sgf--setup-overlay ov game-state svg-hot-areas game-plist)
     (sgf-serialize-game-to-buffer ov)))
 
+(defun sgf-katago-analyze (&optional whole-game-p)
+  "Analyze the whole game or the next move only with KataGo.
 
+If WHOLE-GAME-P (argument prefix) is non-nil, analyze the whole game,
+otherwise analyze next move."
+  (interactive "P")
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (depth (aref game-state 5))
+         (lnode (aref game-state 0))
 
 (defun sgf-menu ()
   "Show the main menu for the SGF mode."
@@ -1303,6 +1359,13 @@ The existing SGF content in the buffer will be erased."
                    (seperator-4 menu-item "--")
                    (sgf-export-image menu-item "Export Image" sgf-export-image))))
     (popup-menu menu-keymap)))
+         (json (sgf-serialize-lnode-to-json lnode whole-game-p))
+         (result (or (overlay-get ov 'katago-moves) (make-hash-table)))
+         (callback (lambda (t m) (puthash t m result))))
+    (unless katago-analysis-process (katago-analysis-init))
+    (message "%s" json)
+    (katago-analysis-query (json-encode json) callback)
+    (overlay-put ov 'katago-moves result)))
 
 
 (defvar-keymap sgf-mode-map
@@ -1331,12 +1394,15 @@ It is set as overlay property and only activated when the overlay is displayed."
   "j"   #'sgf-jump-moves
   "t"   #'sgf-traverse
   "r"   #'sgf-back-to-game
+  "k"   #'sgf-katago-analyze
   "s n" #'sgf-toggle-numbers
   "s m" #'sgf-toggle-marks
   "s h" #'sgf-toggle-hints
   "s k" #'sgf-toggle-ko
   "s s" #'sgf-toggle-new-move
-  "m p" #'sgf-pass          "<hot-pass> <mouse-1>" #'sgf-pass
+  "s a" #'sgf-toggle-katago
+  "s i" #'sgf-toggle-katago-info
+  "m p" #'sgf-pass
   "m r" #'sgf-make-root
   "m k" #'sgf-prune-inclusive ; kill node
   "m K" #'sgf-prune

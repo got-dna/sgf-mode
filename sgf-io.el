@@ -309,7 +309,8 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
                        ko
                        turn
                        prisoners
-                       undos)
+                       undos
+                       depth)
   "Define game state object. The move number, board-2d, ko, prisoners are re-computed every time when traversing the moves."
   (vector linked-node                 ; 0 current node
           board-2d                    ; 1
@@ -721,6 +722,49 @@ If OV is nil, it will use the overlay at point."
           (insert (sgf-serialize-game-to-str lnode))
           (insert "\n"))
         (undo-boundary)))))
+
+
+(defun sgf-serialize-lnode-to-json (lnode &optional whole-game-p)
+  "Serialize the game state (from root to the current LNODE) to JSON for katago input.
+
+Katago requires json as input for game analysis."
+  (let (moves move)
+    (while (not (sgf-root-p lnode))
+      (setq move (sgf-process-move (aref lnode 1)))
+      (push move moves)
+      (setq lnode (aref lnode 0)))
+    (let* ((root-node (aref lnode 1))
+           (size (car (alist-get 'SZ root-node)))
+           (w (car size))
+           (h (cdr size))
+           (ab (mapcar (lambda (i)
+                         (vector "B" (format "(%d,%d)" (car i) (- h (cdr i) 1))))
+                    (alist-get 'AB root-node)))
+           (aw (mapcar (lambda (i)
+                         (vector "W" (format "(%d,%d)" (car i) (- h (cdr i) 1))))
+                    (alist-get 'AW root-node)))
+           (rule (or (car (alist-get 'RU root-node)) "Japanese"))
+           (komi (or (car (alist-get 'KM root-node)) 6.5))
+           (n (length moves))
+           (moves-gtp (mapcar (lambda (m)
+                                (let* ((stone (car m))
+                                       (xy (cdr m)))
+                                   (vector (format "%s" stone)
+                                           (format "(%d,%d)" (car xy) (- h (cdr xy) 1)))))
+                              moves)))
+       `(("id" . ,(buffer-name))
+         ("initialStones" . ,(vconcat ab aw))
+         ("moves" . ,(vconcat moves-gtp
+))
+         ("analyzeTurns" . ,(if whole-game-p
+                               (vconcat (number-sequence 0 n))
+                             (vector n)))
+         ("komi" . ,komi)
+         ("rules" . ,rule)
+         ("includeOwnership" . t)
+         ("includePolicy" . t)
+         ("boardXSize" . ,w)
+         ("boardYSize" . ,h)))))
 
 
 (provide 'sgf-io)

@@ -310,11 +310,76 @@ It removes the old marks and adds the new marks."
           (unless (equal state 'E) (sgf-svg-add-stone group x y state)))))))
 
 
+(defun sgf-svg-interpolate-color (color1 color2 val lim)
+  "Interpolate between COLOR1 and COLOR2 based on VAL (between -LIM and LIM).
+If VAL is 0, return a color in the middle of COLOR1 and COLOR2.
+If VAL is positive, move toward COLOR1.
+If VAL is negative, move toward COLOR2."
+  (let* ((color1-rgb (color-name-to-rgb color1))
+         (color2-rgb (color-name-to-rgb color2))
+         (ratio (/ (+ lim val) (+ lim lim)))
+         (r (+ (* (nth 0 color1-rgb) (- 1 ratio))
+               (* (nth 0 color2-rgb) ratio)))
+         (g (+ (* (nth 1 color1-rgb) (- 1 ratio))
+               (* (nth 1 color2-rgb) ratio)))
+         (b (+ (* (nth 2 color1-rgb) (- 1 ratio))
+               (* (nth 2 color2-rgb) ratio))))
+    ;; (message "color ratio: %.2f %.2f %.2f" val lim ratio)
+    (format "#%02x%02x%02x"
+            (round (* 255 r))
+            (round (* 255 g))
+            (round (* 255 b)))))
+
+
+(defun sgf-svg-update-katago-winrate (svg katago)
+  "Update win rate (for black) from KataGo's analysis on the board."
+  (let ((group (sgf-svg-group svg "katago"))
+        (max-delta 50)
+        (beg-color "red")
+        (end-color "green"))
+    (sgf-svg-clear-group-content group)
+    (dolist (move katago)
 (defun sgf-svg-add-stone (group x y stone)
   "STONE is a symbol."
   (let ((cx (* x sgf-svg-interval))
         (cy (* y sgf-svg-interval)))
     (svg-circle group cx cy sgf-svg-stone-size :gradient stone)))
+      (let* ((xy (car move))
+             (x (car xy)) (y (cdr xy))
+             (info (cdr move))
+             (winrate (plist-get info :winrate))
+             (delta (- winrate 50))
+             (color (sgf-svg-interpolate-color beg-color end-color
+                                               delta max-delta)))
+        (sgf-svg-add-circle-xyr group x y sgf-svg-stone-size
+                                :fill color :opacity 0.7)
+        (sgf-svg-add-text group x y (format "%d" (round winrate)) "white"
+                          :font-size (* sgf-svg-size 0.4))))))
+
+
+(defun sgf-svg-update-katago-score (svg katago &optional anchor)
+  "Update the score (for black) from KataGo's analysis on the board.
+
+ANCHOR is the score of the current board position. This function shows
+the score changes of the possible moves."
+  (let ((group (sgf-svg-group svg "katago"))
+        (max-delta 20)
+        (anchor (or anchor 0))
+        (beg-color "red")
+        (end-color "green"))
+    (sgf-svg-clear-group-content group)
+    (dolist (move katago)
+      (let* ((xy (car move))
+             (x (car xy)) (y (cdr xy))
+             (info (cdr move))
+             (score (plist-get info :score))
+             (delta (- score anchor))
+             (color (sgf-svg-interpolate-color beg-color end-color
+                                               delta max-delta)))
+        (sgf-svg-add-circle-xyr group x y sgf-svg-stone-size
+                                :fill color :opacity 0.7)
+        (sgf-svg-add-text group x y (format "%.2f" score) "white"
+                          :font-size (* sgf-svg-size 0.3))))))
 
 
 (defun sgf-svg-add-annotations (svg game-state)

@@ -36,6 +36,11 @@
   :type '(boolean)
   :group 'sgf)
 
+(defcustom sgf-show-katago t
+  "Show katago analysis on the board."
+  :type '(boolean)
+  :group 'sgf)
+
 
 (defcustom sgf-new-move nil
   "Do not allow new move on the game. It is useful for exam to check if you clicked and played right next move (because it will not show up if the move is not in the game). However, it allow other changes (eg comment and mark modification)."
