@@ -242,7 +242,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
              (annt (sgf-graph-node-annotation-face node))
              (props (if-let ((comment (alist-get 'C node)))
                         `(help-echo ,(car comment)
-                                  face ('sgf-graph-comment-node ,annt))
+                                  face (sgf-graph-comment-node ,annt))
                       `(face ,annt)))
              (line-n (cadr current))
              (children (aref lnode 2))
@@ -282,9 +282,8 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
         (message "Synced the game state to the current node in the graph tree.")))))
 
 
-(defun sgf-forward-char ()
+(defun sgf-graph-forward-char ()
   "Custom forward character movement, putting cursor only after a node."
-  (interactive)
   (unless (eobp) (forward-char 1))
   (while (and (not (eobp))
               (not (eq (char-before) ?-)))
@@ -292,14 +291,33 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
   (unless (eobp) (forward-char 1)))
 
 
-(defun sgf-backward-char ()
+(defun sgf-graph-backward-char ()
   "Custom backward character movement, putting cursor only after a node."
-  (interactive)
   (if (> (point) 2) (backward-char 2))
   (while (and (not (bobp))
               (not (eq (char-before) ?-)))
     (backward-char 1))
   (forward-char 1))
+
+
+(defun sgf-graph-forward-node (&optional n)
+  "Forward to the next node in the graph tree."
+  (interactive "p")
+  (sgf-graph-forward-char)
+  (let ((col (current-column)))
+    (forward-line n)
+    (move-to-column col)))
+
+
+(defun sgf-graph-backward-node ()
+  "Backward to the previous node in the graph tree."
+  (interactive)
+  (let ((col (current-column)))
+    (while (not (or (eq (char-before) ?*)
+                    (eq (char-before) ?a)))
+      (forward-line -1)
+      (move-to-column col)))
+  (sgf-graph-backward-char))
 
 
 (defun sgf-graph-hl-before-cursor ()
@@ -314,26 +332,26 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
 (defun sgf-graph-forward-comment ()
   "Forward to the next node with comment."
   (interactive)
-  (sgf-forward-char)
+  (sgf-graph-forward-char)
   (while (not (get-text-property (1- (point)) 'help-echo))
-    (sgf-forward-char))
+    (sgf-graph-forward-char))
   (sgf-graph-sync-game))
 
 
 (defun sgf-graph-backward-comment ()
   "Forward to the previous node with comment."
   (interactive)
-  (sgf-backward-char)
+  (sgf-graph-backward-char)
   (while (not (get-text-property (1- (point)) 'help-echo))
-    (sgf-backward-char))
+    (sgf-graph-backward-char))
   (sgf-graph-sync-game))
 
 
 (defvar-keymap sgf-graph-mode-map
   :doc "Keymap for SGF Graph mode."
   :suppress t
-  "f" #'sgf-forward-char
-  "b" #'sgf-backward-char
+  "f" #'sgf-graph-forward-node
+  "b" #'sgf-graph-backward-node
   "F" #'sgf-graph-forward-comment
   "B" #'sgf-graph-backward-comment
   ;; "M-f" is forward-word, ie forward to next branch char;

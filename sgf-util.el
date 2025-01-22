@@ -12,7 +12,7 @@
 ;;; Code:
 
 (defvar sgf-bm-color "red" "Color for the node of the bad move")
-(defvar sgf-do-color "orange" "Color for the node of the doubtful move")
+(defvar sgf-do-color "blue" "Color for the node of the doubtful move")
 (defvar sgf-it-color "yellow" "Color for the node of the interesting move")
 (defvar sgf-te-color "green" "Color for the node of the tesuji move")
 
@@ -153,7 +153,7 @@ See also `sgf-get-overlay'. Use this function if no mouse event is involved."
         (if (overlay-get ov 'game-state)
             (setq sgf-ov ov))))
     (or sgf-ov
-        (error "No SGF overlay found at position %d. Try moving point to an overlay region." pos))))
+        (error "No SGF overlay found at position %d in buffer %s. Try moving point to an overlay region." pos (buffer-name)))))
 
 
 (defun sgf-get-overlay ()
@@ -239,7 +239,9 @@ Return nil if LNODE is the root node."
   (inline-quote (null (sgf-get-parent ,lnode))))
 
 (define-inline sgf-path-to-str (path)
-  "Return the path in the form of `(steps branch-1 branch-2 ...)' to reach"
+  "Return the str of the path in the form of `(steps branch-1 branch-2 ...)'.
+
+(sgf-path-to-str '(3 ?a ?b ?a)) => \"(3 a b a)\""
   (inline-quote (format "(%d %s)"
                         (car ,path)
                         (mapconcat #'char-to-string (nthcdr 1 ,path) " "))))
@@ -249,9 +251,7 @@ Return nil if LNODE is the root node."
   "Return the move number for the LNODE.
 
 It computes the depth of LNODE from the root node or previous MN
-property, not include setup node.
-
-See also `sgf-lnode-depth'."
+property, not include setup node."
   (let ((num 0) mn-prop)
     (while (and (not (sgf-root-p lnode))
                 (not (setq mn-prop (car (alist-get 'MN (aref lnode 1)))))
@@ -264,7 +264,7 @@ See also `sgf-lnode-depth'."
   "Return the path in the form of `(steps branch-1 branch-2 ...)' to reach
 LNODE from the root.
 
-The return value can be passed to `sgf-traverse'. See also `sgf-lnode-depth'."
+The return value can be passed to `sgf-traverse'."
   (let ((depth 0) (branch-choices '()))
     (while (not (sgf-root-p lnode))
       (let* ((parent (aref lnode 0))

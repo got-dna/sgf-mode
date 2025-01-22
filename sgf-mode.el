@@ -48,6 +48,7 @@
     (dolist (xy empty-xys) (sgf-board-set xy 'E board-2d))
     (aset game-state 3 turn)
     (aset game-state 2 ko)
+    (aset game-state 6 (1- (aref game-state 6)))
     (setcar pcounts (- (car pcounts) (length black-xys)))
     (setcdr pcounts (- (cdr pcounts) (length white-xys)))))
 
@@ -93,15 +94,14 @@ See also `sgf-branch-selection'."
         (when interactive-call (message "No more next move.") nil)
       (setq branch (sgf-branch-selection n branch))
       (setq child (nth branch children))
-      (sgf-apply-node (aref child 1)
-                      game-state
-                      (sgf-game-plist-get :suicide-move ov))
-      (aset game-state 0 child)
+      (sgf-apply-lnode child game-state (sgf-game-plist-get :suicide-move ov))
+      (when (get-buffer-window sgf-graph-buffer-name)
+        (with-current-buffer sgf-graph-buffer-name
+          (sgf-graph-forward-node branch)))
       ;; return t if it is a noninteractive call, to indicate a
       ;; successful forward move.
       (when interactive-call
         (sgf-show-comment child)
-        (sgf-graph-tree ov)
         (sgf-update-display ov))
       t)))
 
@@ -116,7 +116,6 @@ See also `sgf-branch-selection'."
       (sgf-forward-move 0 ov))
     ;; Update display if called interactively.
     (when interactive-call
-      (sgf-graph-tree ov)
       (sgf-update-display ov))))
 
 
@@ -134,9 +133,11 @@ See also `sgf-forward-move'."
         (when interactive-call (message "No more previous move.") nil)
       (sgf-revert-undo game-state)
       (aset game-state 0 parent)
+      (when (get-buffer-window sgf-graph-buffer-name)
+        (with-current-buffer sgf-graph-buffer-name
+          (sgf-graph-backward-node)))
       (when interactive-call
         (sgf-show-comment parent)
-        (sgf-graph-tree ov)
         (sgf-update-display ov))
       t)))
 
@@ -154,13 +155,13 @@ See also `sgf-forward-move'."
              (and siblings (= (length siblings) 1))))
     ;; Update display if called interactively.
     (when interactive-call
-      (sgf-graph-tree ov)
       (sgf-update-display ov))))
 
 
-(defun sgf-apply-node (node game-state allow-suicide)
+(defun sgf-apply-lnode (lnode game-state allow-suicide)
   "Apply the node of move to the game state."
-  (let* ((move (sgf-process-move node))
+  (let* ((node (aref lnode 1))
+         (move (sgf-process-move node))
          (stone (car move))
          (xy (cdr move))
          (board-2d (aref game-state 1))
@@ -173,6 +174,8 @@ See also `sgf-forward-move'."
          (setup-stones (sgf-add-setup-stones node board-2d))
          (empty-xys (nconc (car setup-stones) (cdr setup-stones)))
          black-xys white-xys ko-new prisoners)
+    (aset game-state 0 lnode)
+    (aset game-state 6 (1+ (aref game-state 6)))
     (when xy   ; node is not a pass
       ;; Validate the move before make any change to game state.
       (unless (sgf-valid-move-p xy stone board-2d ko-old)
@@ -183,7 +186,8 @@ See also `sgf-forward-move'."
       (setq prisoners (sgf-capture-stones xy board-2d))
       (dolist (xy prisoners) (sgf-board-set xy 'E board-2d))
       ;; Check for suicide after removing captured stones
-      (when (and (not allow-suicide) (sgf-suicide-stones xy board-2d))
+      (when (and (not allow-suicide)
+                 (sgf-suicide-stones xy board-2d))
         ;; undo the changes on the board
         (dolist (xy prisoners) (sgf-board-set xy (sgf-enemy-stone stone) board-2d))
         (sgf-board-set xy 'E board-2d)
@@ -209,7 +213,6 @@ See also `sgf-forward-move'."
   (interactive "i\np")
   (while (sgf-backward-move ov))
   (when interactive-call
-    (sgf-graph-tree ov)
     (sgf-update-display ov)))
 
 
@@ -220,7 +223,6 @@ Always pick the 1st branch upon fork. See also `sgf-forward-move'."
   (interactive "i\np")
   (while (sgf-forward-move 0 ov))
   (when interactival-call
-    (sgf-graph-tree ov)
     (sgf-update-display ov)))
 
 
@@ -234,12 +236,13 @@ See also `sgf-forward-move'."
       (dotimes (_ n) (sgf-forward-move 0 ov))
     (dotimes (_ (- n)) (sgf-backward-move ov)))
   (when interactive-call
-    (sgf-graph-tree ov)
     (sgf-update-display ov)))
 
 
 (defun sgf-back-to-game ()
-  "Return to the main game, assuming you are off the main variation."
+  "Return to the main game, assuming you are off the main variation.
+
+The main variation is the 1st branch for every forks."
   (interactive)
   (let* ((ov (sgf-get-overlay))
          (lnode (sgf-get-lnode ov))
@@ -249,7 +252,6 @@ See also `sgf-forward-move'."
     (while (branch (pop path))
       (if (eq branch ?a)
           (sgf-forward-fork ov)))
-    (sgf-graph-tree ov)
     (sgf-update-display ov)))
 
 
@@ -266,9 +268,7 @@ See also `sgf-forward-move'."
 
 (defun sgf-show-path ()
   "Show the path in the form of `(steps branch-1 branch-2 ...)' to reach
-the current game state from the root.
-
-The return value can be passed to `sgf-traverse'. See also `sgf-lnode-depth'."
+the current game state from the root."
   (interactive)
   (let* ((lnode (sgf-get-lnode))
          (path (sgf-lnode-path lnode)))
@@ -301,7 +301,6 @@ pick branch b and a in the 1st and 2nd forks (if come across forks),
              ;; if come across additional forks, pick the 1st branch
              (sgf-jump-moves (- steps depth) ov))))
     (when interactive-call
-      (sgf-graph-tree ov)
       (sgf-update-display ov))))
 
 
@@ -793,12 +792,12 @@ otherwise, create a new linked node and move the game state to it."
       ;; Case 2: Clicked on an empty position not equal to ko
       (if (sgf-game-plist-get :new-move ov)
           ;; only allow new move if it is set to be allowed
-          (let* ((new-node (if xy `((,turn ,xy)) `((,turn))))
+          (let* ((allow-suicide (sgf-game-plist-get :suicide-move ov))
+                 (new-node (if xy `((,turn ,xy)) `((,turn))))
                  (new-lnode (sgf-linked-node curr-lnode new-node)))
-            (sgf-apply-node new-node game-state (sgf-game-plist-get :suicide-move ov))
+            (sgf-apply-lnode new-lnode game-state allow-suicide)
             ;; add the new node as the last branch
             (aset curr-lnode 2 (nconc children (list new-lnode)))
-            (aset game-state 0 new-lnode)
             (sgf-update-display ov)
             (sgf-graph-tree ov)
             (sgf-serialize-game-to-buffer ov))
@@ -813,13 +812,12 @@ otherwise, create a new linked node and move the game state to it."
              (scale (let ((s (image-property image :scale)))
                       ;; scale could be the symbol 'default
                       (if (eq s 'default) 1 s)))
-             (margin (* scale sgf-svg-margin))
-             (interval (* scale sgf-svg-interval))
-             (bar (* scale sgf-svg-bar))
+             (size (float (* scale sgf-svg-size)))
              (xy (posn-object-x-y pos))
-             (x (/ (- (float (car xy)) margin) interval))
-             (y (/ (- (float (cdr xy)) margin bar) interval)))
-        (cons (round x) (round y)))))
+             (x (/ (car xy) size))
+             (y (/ (cdr xy) size)))
+        (message "%s: %.2f %.2f" xy x y)
+        (cons (1- (round x)) (- (round y) 2)))))
 
 
 (defun sgf-board-click-left (event)
@@ -911,10 +909,8 @@ Cases:
              (prev-lnode  (aref curr-lnode 0)))
         (if (equal curr-lnode lnode)
             (setq found t)
-          (sgf-revert-undo game-state)
-          (aset game-state 0 prev-lnode))))
-    (sgf-graph-tree ov)
-    (sgf-update-display ov)))
+          (sgf-backward-move))))))
+
 
 (defun sgf-find-back-lnode (xy game-state)
   "Search backward from the current game state to find the node that put
@@ -923,22 +919,21 @@ the same position during the whole game; this function finds the closest
 one to the current game state.
 
 Returns linked node found or nil if not. The game-state remains unchanged."
-  (let* ((board-2d  (aref game-state 1))
+  (let* ((board-2d (aref game-state 1))
          (stone (sgf-board-get xy board-2d))
          (curr-lnode (aref game-state 0))
          found-lnode)
-    (while (not found-lnode)  ;; Loop until node is found or root is reached
+    (while (and (not found-lnode) (not (sgf-root-p curr-lnode)))
       (let* ((curr-node (aref curr-lnode 1))
              (play (sgf-process-move curr-node))
              (stone-i (car play))
              (xy-i (cdr play)))
-        (if (and (eq stone-i stone) (equal xy-i xy))  ;; Check if it's the node we're looking for
-            (setq found-lnode curr-lnode)  ;; Node found
-          (if (sgf-root-p curr-lnode)  ;; If we reach the root node, stop the loop
-              (error "No move is found at position %S." xy)
-            (setq curr-lnode (aref curr-lnode 0))))))  ;; Move to the previous node
-    found-lnode))  ;; Return the found node, or nil if not found
-
+        (if (and (eq stone-i stone) (equal xy-i xy))
+            (setq found-lnode curr-lnode)
+          (setq curr-lnode (aref curr-lnode 0)))))
+    (or found-lnode
+        (progn (message "No move is found at position %S." xy)
+               nil))))
 
 (defun sgf-pass ()
   "Pass the current. Add a new node of W[] or B[].
@@ -1151,8 +1146,8 @@ The move number will be incremented."
   "Update the svg object and display according to the current game state."
   (interactive)
   (let* ((ov (or ov (sgf-get-overlay)))
-         (game-state (overlay-get ov 'game-state))
          (svg (overlay-get ov 'svg))
+         (game-state (overlay-get ov 'game-state))
          (board-2d   (aref game-state 1))
          (ko         (aref game-state 2))
          (turn       (aref game-state 3))
@@ -1318,47 +1313,6 @@ otherwise analyze next move."
          (game-state (overlay-get ov 'game-state))
          (depth (aref game-state 5))
          (lnode (aref game-state 0))
-
-(defun sgf-menu ()
-  "Show the main menu for the SGF mode."
-  (interactive "@")
-  (let* ((ov (sgf-get-overlay))
-         (menu-keymap
-          ;; https://www.gnu.org/software/emacs/manual/html_node/elisp/Menu-Example.html
-          `(keymap "Main Menu"
-                   (sgf-toggle-game-display menu-item "Diable SVG Display" sgf-toggle-game-display)
-                   (sgf-toggle-allow-suicide-move
-                    menu-item "Allow Suicide Move"
-                    sgf-toggle-allow-suicide-move
-                    :button (:toggle . (sgf-game-plist-get :suicide-move ,ov)))
-                   (seperator-1 menu-item "--")
-                   (sgf-toggle-numbers ; key symbol
-                    menu-item "Show Move Number"
-                    sgf-toggle-numbers
-                    :button (:toggle . (sgf-game-plist-get :show-numbers ,ov)))
-                   (sgf-toggle-hints
-                    menu-item "Show Next Hint"
-                    sgf-toggle-hints
-                    :button (:toggle . (sgf-game-plist-get :show-hints ,ov)))
-                   (sgf-toggle-marks
-                    menu-item "Show Marks"
-                    sgf-toggle-marks
-                    :button (:toggle . (sgf-game-plist-get :show-marks ,ov)))
-                   (seperator-2 menu-item "--")
-                   (sgf-edit-move-number menu-item "Edit Move Number" sgf-edit-move-number)
-                   (sgf-edit-comment menu-item "Edit Comment" sgf-edit-comment)
-                   (seperator-3 menu-item "--")
-                   (sgf-edit-setup-black-stone menu-item "Edit Black Setup Stone" sgf-edit-setup-black-stone)
-                   (sgf-edit-setup-white-stone menu-item "Edit White Setup Stone" sgf-edit-setup-white-stone)
-                   (sgf-edit-mark-cross menu-item "Edit Cross Mark" sgf-edit-mark-cross)
-                   (sgf-edit-mark-square menu-item "Edit Square Mark" sgf-edit-mark-square)
-                   (sgf-edit-mark-triangle menu-item "Edit Triangle Mark" sgf-edit-mark-triangle)
-                   (sgf-edit-mark-circle menu-item "Edit Circle Mark" sgf-edit-mark-circle)
-                   (sgf-edit-mark-label menu-item "Edit Label" sgf-edit-mark-label)
-                   (sgf-delete-mark menu-item "Delete Mark" sgf-delete-mark)
-                   (seperator-4 menu-item "--")
-                   (sgf-export-image menu-item "Export Image" sgf-export-image))))
-    (popup-menu menu-keymap)))
          (json (sgf-serialize-lnode-to-json lnode whole-game-p))
          (result (or (overlay-get ov 'katago-moves) (make-hash-table)))
          (callback (lambda (t m) (puthash t m result))))
@@ -1385,12 +1339,12 @@ It is set as overlay property and only activated when the overlay is displayed."
   "z"   #'sgf-export-image
   "c"   #'sgf-show-comment
   "p"   #'sgf-show-path
-  "f"   #'sgf-forward-move  "<hot-forward> <mouse-1>"  #'sgf-forward-move "<right>" #'sgf-forward-move
-  "b"   #'sgf-backward-move "<hot-backward> <mouse-1>" #'sgf-backward-move "<left>" #'sgf-backward-move
+  "f"   #'sgf-forward-move "<right>" #'sgf-forward-move
+  "b"   #'sgf-backward-move "<left>" #'sgf-backward-move
   "M-f" #'sgf-forward-fork
   "M-b" #'sgf-backward-fork
-  "a"   #'sgf-first-move    "<hot-first> <mouse-1>" #'sgf-first-move
-  "e"   #'sgf-last-move     "<hot-last> <mouse-1>"  #'sgf-last-move
+  "a"   #'sgf-first-move
+  "e"   #'sgf-last-move
   "j"   #'sgf-jump-moves
   "t"   #'sgf-traverse
   "r"   #'sgf-back-to-game
@@ -1422,9 +1376,7 @@ It is set as overlay property and only activated when the overlay is displayed."
   "m s" #'sgf-swap-branches
   "m v" #'sgf-remove-variations
   "<hot-grid> <mouse-1>" #'sgf-board-click-left
-  "<hot-grid> <mouse-3>" #'sgf-board-click-right
-  "<hot-del> <mouse-1>"  #'sgf-prune-inclusive
-  "<hot-menu> <mouse-1>" #'sgf-menu)
+  "<hot-grid> <mouse-3>" #'sgf-board-click-right)
 
 
 (defun sgf--scroll-map-areas (hot-areas keymap)
@@ -1443,7 +1395,7 @@ It is set as overlay property and only activated when the overlay is displayed."
     (if (eq beg end)
         (sgf-init-new-game beg end)
       (sgf-toggle-game-display beg end))
-  (sgf-graph-hv vertical)))
+    (sgf-graph-hv vertical)))
 
 
 (defcustom sgf-mode-hook nil

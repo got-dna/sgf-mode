@@ -14,46 +14,28 @@
 (require 'svg)
 (require 'sgf-util)
 
-(defcustom sgf-svg-interval 28
+(defcustom sgf-svg-size 28
   "Default pixels for the size of grid cells.
 It is a reference for all other element sizes."
   :type '(number) :group 'sgf-svg)
 
-(defcustom sgf-svg-margin 30
-  "Default pixels for the margin of the board."
+
+(defcustom sgf-svg-stone-size 0.48
+  "Default size for stone radius"
   :type '(number) :group 'sgf-svg)
 
-(defcustom sgf-svg-bar 26
-  "Default pixels for the bar height of the board."
-  :type '(number) :group 'sgf-svg)
-
-(defcustom sgf-svg-padding 5
-  "Default padding for the board. Used in buttons and other elements."
-  :type '(number) :group 'sgf-svg)
-
-
-(defcustom sgf-svg-font-size  (* sgf-svg-interval 0.7)
-  "Default font size for the board."
-  :type '(number) :group 'sgf-svg)
 
 (defcustom sgf-svg-font-family "Arial"
   "Default font family for the board."
   :type '(string) :group 'sgf-svg)
 
 
-(defcustom sgf-svg-stone-size (* sgf-svg-interval 0.48)
-  "Default size for stone radius"
-  :type '(number) :group 'sgf-svg)
-
-
 (defun sgf-svg-group (svg group-id)
   (or (car (dom-by-id svg group-id))
       ;; create the new group if it does not exist
-      (let ((grid (car (dom-by-id svg "game-grid"))))
+      (let ((grid (car (dom-by-id svg "grid"))))
         (svg-node grid 'g :id group-id
-                  :font-size (if (string= group-id "numbers")
-                                 (* sgf-svg-font-size 0.7)
-                               sgf-svg-font-size)
+                  :font-size (* sgf-svg-size 0.5)
                   :font-weight "bold"))))
 
 
@@ -69,140 +51,73 @@ It is a reference for all other element sizes."
 
 
 (defun sgf-svg-init (w h)
-  (let* ((grid-w (* sgf-svg-interval (1- w)))
-         (grid-h (* sgf-svg-interval (1- h)))
-         (board-w (+ sgf-svg-margin grid-w sgf-svg-margin))
-         (board-h (+ sgf-svg-margin grid-h sgf-svg-margin))
+  "Create the svg object for the game with width W and height H."
+  (let* ((grid-w (* sgf-svg-size (1- w)))
+         (grid-h (* sgf-svg-size (1- h)))
+         (board-w (* sgf-svg-size (1+ w)))
+         (board-h (* sgf-svg-size (1+ h)))
          (line-width 0.5)
-         (star-radius 2)
-         (idx-font-scale 0.6)
-         (hot-grid-t-l (cons sgf-svg-margin (+ sgf-svg-bar sgf-svg-margin)))
-         (hot-grid-b-r (cons (+ sgf-svg-margin (* (1- w) sgf-svg-interval))
-                             (+ sgf-svg-bar sgf-svg-margin (* (1- h) sgf-svg-interval))))
+         (idx-font-scale 0.3)
+         (hot-grid-t-l (cons sgf-svg-size (+ sgf-svg-size sgf-svg-size)))
+         (hot-grid-b-r (cons (* w sgf-svg-size) (* (1+ h) sgf-svg-size)))
          (hot-areas (list (list (cons 'rect (cons hot-grid-t-l hot-grid-b-r))
                                 'hot-grid (list 'pointer 'hand))))
-         svg status-bar board grid menu-bar ; svg nodes
+         svg bar board grid ; svg nodes
          idx)
     ;; Note that the order of svg elements matters
-    (setq svg (svg-create board-w (+ sgf-svg-bar board-h sgf-svg-bar)
-                          :text-anchor "middle"
-                          :font-family sgf-svg-font-family))
+    (setq svg (svg-create board-w (+ board-h sgf-svg-size) :text-anchor "middle"))
 
     ;; Stones' Gradient
     (sgf-svg-stone-gradient svg "B" '((0 . "#606060") (100 . "#000000")))
     (sgf-svg-stone-gradient svg "W" '((0 . "#ffffff") (100 . "#b0b0b0")))
 
-    ;; Menu Bar at top
-    (setq menu-bar (svg-node svg 'g :id "menu-bar" :fill "gray"))
-
-    ;; (svg-rectangle menu-bar 0 menu-bar-y board-w sgf-svg-bar :fill "gray")
-    (nconc hot-areas (sgf-svg-create-menu-buttons menu-bar))
-
+    ;; Status Bar
+    (setq bar (svg-node svg 'g :id "bar" :font-family sgf-svg-font-family))
+    (svg-rectangle bar 0 0 board-w sgf-svg-size :fill "gray")
+    (sgf-svg-add-circle-xyr bar 0.4       0.5 0.3 :gradient "B")
+    (sgf-svg-add-circle-xyr bar (+ 0.6 w) 0.5 0.3 :gradient "W")
+    ;; show what play turn it is
+    (sgf-svg-add-circle-xyr bar 0.4 0.5       0.1 :id "status-b" :fill "none")
+    (sgf-svg-add-circle-xyr bar (+ 0.6 w) 0.5 0.1 :id "status-w" :fill "none")
+    ;; show move number
+    (svg-text bar "0" :x (/ board-w 2) :y sgf-svg-size :id "status-n" :fill "white" :dy "-0.75em")
+    ;; show prisoner number
+    (svg-text bar "0" :x sgf-svg-size :y sgf-svg-size
+              :id "status-pb" :fill "white" :dy "-0.75em")
+    (svg-text bar "0" :x (- board-w sgf-svg-size) :y sgf-svg-size
+              :id "status-pw" :fill "white" :dy "-0.75em")
     ;; Board Rect
-    (setq board (svg-node svg 'g
-                          :id "game-board"
-                          :transform (format "translate(%s, %s)" 0 sgf-svg-bar)
-                          :fill "black"))
+    (setq board (svg-node svg 'g :id "board" :fill "black"
+                          :transform (format "translate(%s,%s)" 0 sgf-svg-size)))
     (svg-rectangle board 0 0 board-w board-h :fill "#e3aa4e")
     ;; Board Grid
-    (setq grid (svg-node board 'g
-                         :id "game-grid"
+    (setq grid (svg-node board 'g :id "grid"
                          :font-family sgf-svg-font-family
-                         :transform (format "translate(%s, %s)" sgf-svg-margin sgf-svg-margin)))
+                         :transform (format "translate(%s,%s)" sgf-svg-size sgf-svg-size)))
     (setq grid-idx (svg-node grid 'g :id "grid-idx"
-                             :font-size (* sgf-svg-font-size idx-font-scale)))
+                             :font-size (* sgf-svg-size idx-font-scale)))
     ;; Grid Lines
     (dotimes (n w)
       ;; vertical lines
       (setq idx (format "%c" (if (< n (- ?I ?A)) (+ ?A n) (+ ?A n 1)))) ; skip char I
       ;; (setq idx (format "%c" (sgf-encode-d2c n)))
-      (svg-text grid-idx idx :x (* sgf-svg-interval n) :y (- sgf-svg-font-size))
-      (svg-text grid-idx idx :x (* sgf-svg-interval n) :y (* sgf-svg-interval h))
-      (svg-line grid-idx (* sgf-svg-interval n) 0 (* sgf-svg-interval n) (* grid-h)
+      (svg-text grid-idx idx :x (* sgf-svg-size n) :y (* sgf-svg-size h)
+                :dy "-0.5em")
+      (svg-line grid-idx (* sgf-svg-size n) 0 (* sgf-svg-size n) (* grid-h)
                 :stroke "black" :stroke-width line-width))
     (dotimes (n h)
       ;; horizontal lines
       (setq idx (number-to-string (- h n)))
-      (svg-text grid-idx idx :x (- sgf-svg-font-size) :y (* sgf-svg-interval n)
-                :text-anchor "end" :dy ".5em")
-      (svg-text grid-idx idx :x (+ grid-w sgf-svg-font-size) :y (* sgf-svg-interval n)
+      (svg-text grid-idx idx :x (- sgf-svg-size) :y (* sgf-svg-size n)
                 :text-anchor "start" :dy ".5em")
-      (svg-line grid-idx 0 (* sgf-svg-interval n) grid-w (* sgf-svg-interval n)
+      (svg-line grid-idx 0 (* sgf-svg-size n) grid-w (* sgf-svg-size n)
                 :stroke "black" :stroke-width line-width))
 
     ;; Hoshi/Stars
     (dolist (hoshi (sgf-board-hoshi w h))
-      (svg-circle grid
-                  (* sgf-svg-interval (car hoshi))
-                  (* sgf-svg-interval (cdr hoshi))
-                  star-radius))
-
-    ;; Status Bar
-    (setq status-bar (svg-node svg 'g
-                               :id "status-bar"
-                               :font-weight "bold" :font-family sgf-svg-font-family
-                               :transform
-                               (format "translate(%s, %s)" 0 (+ sgf-svg-bar board-h))))
-    (svg-rectangle status-bar 0 0 board-w sgf-svg-bar :fill "gray")
-    (svg-circle status-bar (/ sgf-svg-interval 2)
-                (/ sgf-svg-interval 2) (/ sgf-svg-interval 3) :gradient "B")
-    (svg-circle status-bar (- board-w (/ sgf-svg-interval 2))
-                (/ sgf-svg-interval 2) (/ sgf-svg-interval 3) :gradient "W")
-    ;; show what play turn it is
-    (svg-rectangle status-bar 0 (- sgf-svg-bar sgf-svg-padding)
-                   sgf-svg-interval sgf-svg-padding
-                   :id "status-b" :fill "gray")
-    (svg-rectangle status-bar (- board-w sgf-svg-interval) (- sgf-svg-bar sgf-svg-padding)
-                   sgf-svg-interval sgf-svg-padding
-                   :id "status-w" :fill "gray")
-    ;; show move number
-    (svg-text status-bar "0" :x (/ board-w 2) :y sgf-svg-bar
-              :id "status-n" :fill "white"
-              :dy "-0.5em")
-    ;; show prisoner number
-    (svg-text status-bar "0" :x (* sgf-svg-interval 2) :y sgf-svg-bar
-              :id "status-pb" :fill "white"
-              :dy "-0.5em")
-    (svg-text status-bar "0" :x (- board-w sgf-svg-interval sgf-svg-interval) :y sgf-svg-bar
-              :id "status-pw" :fill "white"
-              :dy "-0.5em")
+      (sgf-svg-add-circle-xyr grid (car hoshi) (cdr hoshi) 0.07))
 
     (cons svg hot-areas)))
-
-
-(defun sgf-svg-create-menu-buttons (menu-bar)
-  "Create all the buttons to the svg node MENU-BAR and return the hot areas for the buttons.
-
-SGF-SVG-BAR is the starting y coordinate for menu bar."
-  (let ((btns '((hot-menu "Menu" "menu")
-                (hot-first "|<" "Move to the beginning of the game")
-                (hot-backward "<" "Move backward")
-                (hot-forward ">" "Move forward")
-                (hot-last ">|" "Move to the end of the game")
-                (hot-del "Del" "Delete the current move")
-                (hot-pass "Pass" "Pass the current move")))
-        (x sgf-svg-padding) (y sgf-svg-padding)
-        (height (- sgf-svg-bar (* 2 sgf-svg-padding))))
-
-    (mapcar (lambda (btn)
-              (let* ((hot-area-id (nth 0 btn))
-                     (name        (nth 1 btn))
-                     (tooltip     (nth 2 btn))
-                     (width (+ (* 2 sgf-svg-padding) (string-pixel-width name)))
-                     hot-area)
-                (svg-rectangle menu-bar x y width height :rx 3 :ry 3 :fill "#fff")
-                (svg-text menu-bar name
-                          :x (+ x (/ width 2)) :y height
-                          :fill "#000")
-                (setq hot-area (list (cons 'rect
-                                           (cons (cons x 0)
-                                                 (cons (+ x width)
-                                                       sgf-svg-bar )))
-                                     hot-area-id (list 'pointer 'hand
-                                                       'help-echo tooltip)))
-                (setq x (+ x width sgf-svg-padding))
-                hot-area))
-            btns)))
 
 
 (defun sgf-svg-set-color (xy-state)
@@ -217,11 +132,11 @@ SGF-SVG-BAR is the starting y coordinate for menu bar."
   "Update the current turn on the status bar."
   (let ((status-w (car (dom-by-id svg "^status-w$")))
         (status-b (car (dom-by-id svg "^status-b$"))))
-    (cond ((equal stone 'W)
+    (cond ((eq stone 'W)
            (dom-set-attribute status-w 'fill "#f00")
-           (dom-set-attribute status-b 'fill "gray"))
-          ((equal stone 'B)
-           (dom-set-attribute status-w 'fill "gray")
+           (dom-set-attribute status-b 'fill "none"))
+          ((eq stone 'B)
+           (dom-set-attribute status-w 'fill "none")
            (dom-set-attribute status-b 'fill "#f00"))
           (t (error "Invalid stone color %s" stone)))))
 
@@ -307,7 +222,10 @@ It removes the old marks and adds the new marks."
     (dotimes (y (length board-2d))
       (dotimes (x (length (aref board-2d y)))
         (let ((state (sgf-board-get (cons x y) board-2d)))
-          (unless (equal state 'E) (sgf-svg-add-stone group x y state)))))))
+          (unless (eq state 'E)
+            (sgf-svg-add-circle-xyr group
+                                    x y sgf-svg-stone-size
+                                    :gradient state)))))))
 
 
 (defun sgf-svg-interpolate-color (color1 color2 val lim)
@@ -339,11 +257,6 @@ If VAL is negative, move toward COLOR2."
         (end-color "green"))
     (sgf-svg-clear-group-content group)
     (dolist (move katago)
-(defun sgf-svg-add-stone (group x y stone)
-  "STONE is a symbol."
-  (let ((cx (* x sgf-svg-interval))
-        (cy (* y sgf-svg-interval)))
-    (svg-circle group cx cy sgf-svg-stone-size :gradient stone)))
       (let* ((xy (car move))
              (x (car xy)) (y (cdr xy))
              (info (cdr move))
@@ -401,18 +314,18 @@ For the move annotation, add circle ring of color to the stone on the board."
         (if (and xy color ; not a pass and has annotation
                  (not (sgf-xy-is-empty-p xy board-2d)) ; xy is not empty on current board
                  (not (gethash xy annotated-xys)))
-            (svg-circle group
-                        (* (car xy) sgf-svg-interval)
-                        (* (cdr xy) sgf-svg-interval)
-                        sgf-svg-stone-size
-                        :fill "none" :stroke color :stroke-width 2))
+            (sgf-svg-add-circle-xyr group
+                                    (car xy)
+                                    (cdr xy)
+                                    sgf-svg-stone-size
+                                    :fill "none" :stroke color :stroke-width 2))
         (puthash xy t annotated-xys)
         ;; move to the previous node
         (setq curr-lnode (aref curr-lnode 0))))))
 
 
 (defun sgf-svg-update-numbers (svg game-state)
-  "Update move numbers to the board."
+  "Update move numbers on the board."
   (let* ((group (sgf-svg-group svg "numbers"))
          (board-2d (aref game-state 1))
          (curr-lnode (aref game-state 0))
@@ -449,9 +362,9 @@ For the move annotation, add circle ring of color to the stone on the board."
                       (1- mvnum)))))))
 
 
-(defun sgf-svg-add-text (svg x y text color &optional attributes)
+(defun sgf-svg-add-text (svg x y text color &rest attributes)
   (apply #'svg-text svg text
-         :x (* x sgf-svg-interval) :y (* y sgf-svg-interval)
+         :x (* x sgf-svg-size) :y (* y sgf-svg-size)
          :fill color
          :dy ".25em" ; or
          ;; :baseline-shift "-30%"
@@ -461,16 +374,16 @@ For the move annotation, add circle ring of color to the stone on the board."
 
 
 (defun sgf-svg-add-square (svg x y &rest attributes)
-  (let ((r (* 0.2 sgf-svg-interval)))
+  (let ((r (* 0.2 sgf-svg-size)))
     (apply 'svg-rectangle svg
-           (- (* x sgf-svg-interval) r) (- (* y sgf-svg-interval) r) (* 2 r) (* 2 r)
+           (- (* x sgf-svg-size) r) (- (* y sgf-svg-size) r) (* 2 r) (* 2 r)
            attributes)))
 
 
 (defun sgf-svg-add-triangle (svg x y &rest attributes)
-  (let ((cx (* x sgf-svg-interval))
-        (cy (* y sgf-svg-interval))
-        (r (* 0.2 sgf-svg-interval))
+  (let ((cx (* x sgf-svg-size))
+        (cy (* y sgf-svg-size))
+        (r (* 0.2 sgf-svg-size))
         (rt3 1.5))
     (apply 'svg-polygon svg
            (list (cons cx (+ cy (* r rt3 -0.55)))
@@ -479,14 +392,20 @@ For the move annotation, add circle ring of color to the stone on the board."
            attributes)))
 
 
-(defun sgf-svg-add-circle (svg x y &rest attributes)
-  (apply 'svg-circle svg (* x sgf-svg-interval) (* y sgf-svg-interval) (* 0.2 sgf-svg-interval) attributes))
+(defun sgf-svg-add-circle-xyr (svg x y r &rest attributes)
+  (apply 'svg-circle svg
+         (* x sgf-svg-size)
+         (* y sgf-svg-size)
+         (* r sgf-svg-size)
+         attributes))
 
+(defun sgf-svg-add-circle (svg x y &rest attributes)
+  (sgf-svg-add-circle-xyr svg x y 0.2 attributes))
 
 (defun sgf-svg-add-cross (svg x y &rest attributes)
-  (let ((cx (* x sgf-svg-interval))
-        (cy (* y sgf-svg-interval))
-        (r (* 0.2 sgf-svg-interval)))
+  (let ((cx (* x sgf-svg-size))
+        (cy (* y sgf-svg-size))
+        (r (* 0.2 sgf-svg-size)))
     (apply 'svg-path svg
            (list (list 'moveto (list (cons (- cx r) (- cy r))))
                  (list 'lineto (list (cons (+ cx r) (+ cy r))))

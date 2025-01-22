@@ -302,7 +302,7 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
   "Define linked node object. It is doubly linked list."
   (vector prev-node current-node next-nodes))
 
-;;; Game State Object
+;;; Game State Object (consider using `cl-defstruct' for this)
 (defun sgf-game-state (linked-node
                        board-2d
                        &optional
@@ -324,7 +324,8 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
           ;; - a list of cons cells: xy positions for empty
           ;; - ko position (cons cell)
           ;; - turn
-          undos))
+          undos
+          (or depth 0)))               ; 6 depth of moves
 
 
 (defun sgf-parse-buffer-to-game-state (beg end)
@@ -410,7 +411,7 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
                          (list val-str)
                        (error "%sGame type is not Go: %S (expected GM[1])."
                               (sgf-io--format-location beg-pos end-pos) val-str)))
-                    ((eq key 'MN)
+                    ((or (eq key 'MN) (eq key 'KM))
                      (list (string-to-number val-str)))
                     ((eq key 'LB)
                      (list (sgf-decode-prop-LB val-str)))
@@ -676,9 +677,9 @@ where all positions in the rectangle are filled in coords."
 
 
 (defun sgf-serialize-game-to-str-no-variation ()
-  "Output the SGF string for each game variation after the LNODE.
+  "Output the SGF string for each game variation after the current move.
 
-It keeps the moves leading to the LNODE and ignore any other variations
+It keeps the moves leading to the move and ignore any other variations
 before that. See also `sgf-remove-variations'. This function is normally
 not used and kept for reference."
   (interactive)
@@ -699,7 +700,7 @@ not used and kept for reference."
   "Update the buffer region with the SGF string representation of game.
 
 If OV is nil, it will use the overlay at point."
-  (interactive "i")
+  (interactive)
   (let* ((ov (or ov (sgf-get-overlay)))
          (buffer (overlay-buffer ov))
          (beg (overlay-start ov))
