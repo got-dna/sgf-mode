@@ -96,7 +96,7 @@ See also `sgf-branch-selection'."
       (setq child (nth branch children))
       (sgf-apply-lnode child game-state (sgf-game-plist-get :suicide-move ov))
       (when (get-buffer-window sgf-graph-buffer-name)
-        (with-current-buffer sgf-graph-buffer-name
+        (with-selected-window (get-buffer-window sgf-graph-buffer-name)
           (sgf-graph-forward-node branch)))
       ;; return t if it is a noninteractive call, to indicate a
       ;; successful forward move.
@@ -134,7 +134,7 @@ See also `sgf-forward-move'."
       (sgf-revert-undo game-state)
       (aset game-state 0 parent)
       (when (get-buffer-window sgf-graph-buffer-name)
-        (with-current-buffer sgf-graph-buffer-name
+        (with-selected-window (get-buffer-window sgf-graph-buffer-name)
           (sgf-graph-backward-node)))
       (when interactive-call
         (sgf-show-comment parent)
