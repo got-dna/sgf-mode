@@ -78,8 +78,9 @@ The position is in the GTP format: https://www.lysator.liu.se/~gunnar/gtp/gtp2-s
 
 It parses the output from KataGo analysis and stores the result in the
 process property."
-  (let ((message-truncate-lines t)
-        (json-object (json-read-from-string output)))
+  (with-current-buffer (process-buffer process)
+    (insert output))
+  (let ((json-object (json-read-from-string output)))
     ;; (message "KataGo analysis output: %s" output)
     (when json-object
       (let* ((res (katago-analysis-handle-response json-object))

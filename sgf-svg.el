@@ -228,14 +228,10 @@ It removes the old marks and adds the new marks."
                                     :gradient state)))))))
 
 
-(defun sgf-svg-interpolate-color (color1 color2 val lim)
-  "Interpolate between COLOR1 and COLOR2 based on VAL (between -LIM and LIM).
-If VAL is 0, return a color in the middle of COLOR1 and COLOR2.
-If VAL is positive, move toward COLOR1.
-If VAL is negative, move toward COLOR2."
+(defun sgf-svg-interpolate-color (color1 color2 ratio)
+  "Interpolate between COLOR1 and COLOR2 based on RATIO between 0 and 1."
   (let* ((color1-rgb (color-name-to-rgb color1))
          (color2-rgb (color-name-to-rgb color2))
-         (ratio (/ (+ lim val) (+ lim lim)))
          (r (+ (* (nth 0 color1-rgb) (- 1 ratio))
                (* (nth 0 color2-rgb) ratio)))
          (g (+ (* (nth 1 color1-rgb) (- 1 ratio))
@@ -249,50 +245,51 @@ If VAL is negative, move toward COLOR2."
             (round (* 255 b)))))
 
 
-(defun sgf-svg-update-katago-winrate (svg katago)
-  "Update win rate (for black) from KataGo's analysis on the board."
-  (let ((group (sgf-svg-group svg "katago"))
-        (max-delta 50)
-        (beg-color "red")
-        (end-color "green"))
+(defun sgf-svg-update-katago (svg katago &optional score-p)
+  "Common logic for updating SVG with KataGo analysis data.
+
+KATAGO is the katago output for next moves. If it is nil, do nothing,
+clear the katago svg node."
+  (let* ((group (sgf-svg-group svg "katago"))
+         (beg-color "red")
+         (end-color "green")
+         (min-delta (if score-p
+                        (sgf-svg--katago-score-range katago)
+                      (cons 0 100)))
+         (min-value (car min-delta))
+         (delta-max (cdr min-delta)))
     (sgf-svg-clear-group-content group)
-    (dolist (move katago)
-      (let* ((xy (car move))
-             (x (car xy)) (y (cdr xy))
-             (info (cdr move))
-             (winrate (plist-get info :winrate))
-             (delta (- winrate 50))
-             (color (sgf-svg-interpolate-color beg-color end-color
-                                               delta max-delta)))
-        (sgf-svg-add-circle-xyr group x y sgf-svg-stone-size
-                                :fill color :opacity 0.7)
-        (sgf-svg-add-text group x y (format "%d" (round winrate)) "white"
-                          :font-size (* sgf-svg-size 0.4))))))
-
-
-(defun sgf-svg-update-katago-score (svg katago &optional anchor)
-  "Update the score (for black) from KataGo's analysis on the board.
-
-ANCHOR is the score of the current board position. This function shows
-the score changes of the possible moves."
-  (let ((group (sgf-svg-group svg "katago"))
-        (max-delta 20)
-        (anchor (or anchor 0))
-        (beg-color "red")
-        (end-color "green"))
-    (sgf-svg-clear-group-content group)
-    (dolist (move katago)
-      (let* ((xy (car move))
+    (dotimes (i (length katago))
+      (let* ((move (nth i katago))
+             (xy (car move))
              (x (car xy)) (y (cdr xy))
              (info (cdr move))
              (score (plist-get info :score))
-             (delta (- score anchor))
-             (color (sgf-svg-interpolate-color beg-color end-color
-                                               delta max-delta)))
+             (winrate (plist-get info :winrate))
+             (value (if score-p score winrate))
+             (ratio (/ (- value min-value) delta-max))
+             (color (sgf-svg-interpolate-color beg-color end-color ratio)))
         (sgf-svg-add-circle-xyr group x y sgf-svg-stone-size
                                 :fill color :opacity 0.7)
-        (sgf-svg-add-text group x y (format "%.2f" score) "white"
+        ;; show index
+        (sgf-svg-add-text group x y (format "%d" (1+ i)) "white"
+                          :baseline-shift "90%"
+                          :font-size (* sgf-svg-size 0.3))
+        ;; show score
+        (sgf-svg-add-text group x y (format "%.1f" score) "black"
+                          :font-size (* sgf-svg-size 0.35))
+        ;; show winrate
+        (sgf-svg-add-text group x y (format "%d" (round winrate)) "black"
+                          :baseline-shift "-100%"
                           :font-size (* sgf-svg-size 0.3))))))
+
+(defun sgf-svg--katago-score-range (katago)
+  (if katago
+      (let* ((scores (mapcar (lambda (move) (plist-get (cdr move) :score)) katago))
+             (max-score (apply 'max scores))
+             (min-score (apply 'min scores))
+             (delta-max (- max-score min-score)))
+        (cons min-score delta-max))))
 
 
 (defun sgf-svg-add-annotations (svg game-state)

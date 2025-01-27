@@ -835,21 +835,20 @@ Cases:
     (sgf--move-to-existing-or-new-next-node ov xy)))
 
 
-(defun sgf-katago-get-next-move-xy (xy)
+(defun sgf-katago-get-next-move (xy)
   "Return the KataGo evaluation for the next move at the XY position."
-  (let* ((moves (sgf-katago-get-next-move))
+  (let* ((moves (sgf-katago-get-next-moves))
          (move-xy (assoc xy moves))
          (info (cdr move-xy)))
     info))
 
-(defun sgf-katago-get-next-move ()
-  "Return the KataGo evaluation for the next move."
+(defun sgf-katago-get-next-moves ()
+  "Return the KataGo evaluation for the next move of possible positions."
   (let* ((ov  (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
          (turn-number (aref game-state 6))
-         (result (or (overlay-get ov 'katago)
-                     (error "No KataGo analysis found.")))
-         (moves (gethash turn-number result)))
+         (result (overlay-get ov 'katago-moves))
+         (moves (and result (gethash turn-number result))))
     moves))
 
 
@@ -863,7 +862,7 @@ Cases:
          (curr-lnode (aref game-state 0))
          (xy (sgf-mouse-event-to-xy event))
          ;; (xy-gtp (cons (car xy) (- h (cdr xy))))
-         (katago-info (sgf-katago-get-next-move-xy xy))
+         (katago-info (sgf-katago-get-next-move xy))
          (clicked-lnode (sgf-find-back-lnode xy game-state))
          (menu (cond (clicked-lnode
                       `("ACTION ON THIS MOVE"
@@ -1142,7 +1141,7 @@ The move number will be incremented."
 ;;           (overlay-put ov 'svg svg)))))
 
 
-(defun sgf-update-display (&optional ov no-move no-number no-hint katago)
+(defun sgf-update-display (&optional ov no-move no-number no-hint no-katago)
   "Update the svg object and display according to the current game state."
   (interactive)
   (let* ((ov (or ov (sgf-get-overlay)))
@@ -1165,8 +1164,11 @@ The move number will be incremented."
     (unless no-hint
       (sgf-svg-update-hints svg curr-lnode)
       (sgf-svg-update-marks svg curr-node board-2d))
-    (if (overlay-get ov 'katago-moves)
-        (sgf-svg-update-katago-winrate svg (sgf-katago-get-next-move)))
+    (unless no-katago
+      (let ((katago (sgf-katago-get-next-moves)))
+        ;; if katago is nil (not analyzed for the next move), clear the
+        ;; obsolete katago info on the board from the previous move.
+        (sgf-svg-update-katago svg katago t)))
     (overlay-put ov 'svg svg)
     (sgf--display-svg ov)))
 
@@ -1315,11 +1317,30 @@ otherwise analyze next move."
          (lnode (aref game-state 0))
          (json (sgf-serialize-lnode-to-json lnode whole-game-p))
          (result (or (overlay-get ov 'katago-moves) (make-hash-table)))
-         (callback (lambda (t m) (puthash t m result))))
+         (callback (lambda (t m)
+                     (puthash t m result)
+                     ;; these have to be put inside callback;
+                     ;; otherwise, they will be executed before the
+                     ;; asynchronous process is done.
+                     (overlay-put ov 'katago-moves result)
+                     (sgf-update-display ov t t t))))
     (unless katago-analysis-process (katago-analysis-init))
     (message "%s" json)
-    (katago-analysis-query (json-encode json) callback)
-    (overlay-put ov 'katago-moves result)))
+    (katago-analysis-query (json-encode json) callback)))
+
+;; (defun sgf-katago-compute-scores ()
+;;   "Compute the score of the current game state with KataGo."
+;;   (interactive)
+;;   (let* ((ov (sgf-get-overlay))
+;;          (game-state (overlay-get ov 'game-state))
+;;          (lnode (aref game-state 0))
+;;          (root (sgf-get-root))
+;;          children)
+;;     (while (setq children (sgf-get-children root))
+;;       (setq root (car children)))
+
+;;     (unless katago-analysis-process (katago-analysis-init))
+;;     (katago-analysis-query (json-encode json) callback)))
 
 
 (defvar-keymap sgf-mode-map
@@ -1348,14 +1369,14 @@ It is set as overlay property and only activated when the overlay is displayed."
   "j"   #'sgf-jump-moves
   "t"   #'sgf-traverse
   "r"   #'sgf-back-to-game
-  "k"   #'sgf-katago-analyze
+  "k a" #'sgf-katago-analyze
   "s n" #'sgf-toggle-numbers
   "s m" #'sgf-toggle-marks
   "s h" #'sgf-toggle-hints
   "s k" #'sgf-toggle-ko
   "s s" #'sgf-toggle-new-move
   "s a" #'sgf-toggle-katago
-  "s i" #'sgf-toggle-katago-info
+  "s i" #'sgf-toggle-katago-metrics
   "m p" #'sgf-pass
   "m r" #'sgf-make-root
   "m k" #'sgf-prune-inclusive ; kill node

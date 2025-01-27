@@ -85,6 +85,7 @@ See also `sgf-traverse'."
               :show-numbers ,sgf-show-numbers
               :show-marks ,sgf-show-marks
               :show-ko ,sgf-show-ko
+              :show-katago ,sgf-show-katago
               :suicide-move ,sgf-suicide-move
               :traverse-path ,sgf-traverse-path))
 
