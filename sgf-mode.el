@@ -362,7 +362,7 @@ one game."
          (lnode (sgf-get-lnode ov)))
     (sgf--merge-branches lnode)
     (sgf-graph-tree ov)
-    (sgf-update-display ov t t nil)
+    (sgf-update-display ov t t nil t t t)
     (sgf-serialize-game-to-buffer ov)))
 
 
@@ -398,7 +398,7 @@ nil, swap to front. If there is only one branch, it will not swap."
           (setf (nth i children) child-j)
           (setf (nth j children) child-i)
           (sgf-graph-tree ov)
-          (sgf-update-display ov t t nil)
+          (sgf-update-display ov t t nil t t t)
           (sgf-serialize-game-to-buffer ov))
       (message "There is only one branch - no swap."))))
 
@@ -528,7 +528,7 @@ status bar to the top instead."
                 (nconc (assq-delete-all 'MN node)
                        (list (list 'MN new-mvnum))))
           (if (sgf-game-plist-get :show-numbers)
-              (sgf-update-display ov t nil t)
+              (sgf-update-display ov t nil t t t t)
             (message "Move number was not displayed. Enable its display.")
             (sgf-toggle-numbers))
           (sgf-serialize-game-to-buffer ov))
@@ -581,7 +581,7 @@ status bar to the top instead."
                 node
               (nconc node (list (list new-annt "1")))))
       (sgf-graph-tree ov)
-      (sgf-update-display ov nil t t))
+      (sgf-update-display ov t t t t nil t))
     (sgf-serialize-game-to-buffer ov)))
 
 
@@ -635,7 +635,7 @@ marks, labels, and comments of the moves except the last one."
     (aset lnode 2 nil)
     ;; update hint display if the hint is set to shown
     (if (and interactive-call (sgf-game-plist-get :show-hints))
-        (sgf-update-display ov t t))
+        (sgf-update-display ov t t nil t t t))
     (sgf-graph-tree ov)
     (sgf-serialize-game-to-buffer ov)))
 
@@ -1139,7 +1139,10 @@ The move number will be incremented."
 ;;           (overlay-put ov 'svg svg)))))
 
 
-(defun sgf-update-display (&optional ov no-move no-number no-hint no-katago)
+(defun sgf-update-display (&optional ov
+                                     skip-moves skip-numbers
+                                     skip-hints skip-marks
+                                     skip-annotations skip-katago)
   "Update the svg object and display according to the current game state."
   (interactive)
   (let* ((ov (or ov (sgf-get-overlay)))
@@ -1152,23 +1155,25 @@ The move number will be incremented."
          (curr-lnode (aref game-state 0))
          (curr-node  (aref curr-lnode 1)))
     (sgf-svg-update-ko svg ko)
-    (unless no-move
+    (unless skip-moves
       (sgf-svg-update-stones svg game-state)
-      (sgf-svg-add-annotations svg game-state)
       (sgf-svg-update-status-prisoners svg pcounts)
       (sgf-svg-update-status-turn svg turn))
-    (unless no-number
+    (unless skip-annotations
+      (sgf-svg-update-annotations svg game-state))
+    (unless skip-numbers
       (sgf-svg-update-numbers svg game-state))
-    (unless no-hint
-      (sgf-svg-update-hints svg curr-lnode)
+    (unless skip-hints
+      (sgf-svg-update-hints svg curr-lnode))
+    (unless skip-marks
       (sgf-svg-update-marks svg curr-node board-2d))
-    (unless no-katago
+    (unless skip-katago
       (let ((katago (sgf-katago-get-next-moves ov)))
         ;; if katago is nil (not analyzed for the next move), clear the
         ;; obsolete katago info on the board from the previous move.
         (sgf-svg-update-katago svg katago t)))
     (overlay-put ov 'svg svg)
-    (sgf--display-svg ov)))
+    (sgf--show-svg ov)))
 
 
 (defun sgf-buffer-update-hook (ov after beg end &optional _length)
@@ -1225,7 +1230,7 @@ It also removes tree graph buffer if it exists."
     ov))
 
 
-(defun sgf--display-svg (ov)
+(defun sgf--show-svg (ov)
   "Display SVG in the overlay (as well as setting up keyboard)."
   (let ((svg (overlay-get ov 'svg))
         (hot-areas (overlay-get ov 'hot-areas))
@@ -1238,10 +1243,12 @@ It also removes tree graph buffer if it exists."
 
 
 (defun sgf--hide-svg (ov)
+  "See `sgf--show-svg'."
   (let* ((img (overlay-get ov 'display))
          (scale (image-property img :scale)))
     (overlay-put ov 'image-scale scale)
     (overlay-put ov 'display nil)
+    ;; if the svg is not displayed, disable the keymap to allow normal text edit.
     (overlay-put ov 'keymap nil)))
 
 
@@ -1262,7 +1269,7 @@ If the overlay exists, it keeps unchanged."
 
   (let* ((ov (ignore-errors (sgf-get-overlay))))
     (if ov
-        (if (overlay-get ov 'display) (sgf--hide-svg ov) (sgf--display-svg ov))
+        (if (overlay-get ov 'display) (sgf--hide-svg ov) (sgf--show-svg ov))
       ;; set front- and rear-advance parameters to allow
       ;; the overlay cover the whole buffer even if it is
       ;; updated from game playing.
@@ -1308,7 +1315,7 @@ The existing SGF content in the buffer will be erased."
   "Analyze the whole game or the next move only with KataGo.
 
 If WHOLE-GAME-P (argument prefix) is non-nil, analyze the whole game,
-otherwise analyze next move."
+otherwise analyze next move (default)."
   (interactive "P")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
@@ -1322,7 +1329,7 @@ otherwise analyze next move."
                      ;; otherwise, they will be executed before the
                      ;; asynchronous process is done.
                      (overlay-put ov 'katago-moves result)
-                     (sgf-update-display ov t t t))))
+                     (sgf-update-display ov t t t t t))))
     (unless katago-analysis-process (katago-analysis-init))
     (message "%s" json)
     (katago-analysis-query (json-encode json) callback)))
@@ -1360,7 +1367,7 @@ otherwise analyze next move."
          (katago (sgf-katago-get-next-move xy))
          (pv (plist-get katago :pv)))
     (sgf-svg-update-katago-pv svg pv turn)
-    (sgf-update-display ov t t t t)))
+    (sgf-update-display ov t t t t t t)))
 
 ;; (defun sgf-katago-compute-scores ()
 ;;   "Compute the score of the current game state with KataGo."
@@ -1396,14 +1403,14 @@ It is set as overlay property and only activated when the overlay is displayed."
   "p"   #'sgf-show-path
   "f"   #'sgf-forward-move "<right>" #'sgf-forward-move
   "b"   #'sgf-backward-move "<left>" #'sgf-backward-move
-  "M-f" #'sgf-forward-fork
-  "M-b" #'sgf-backward-fork
+  "M-f" #'sgf-forward-fork "<down>" #'sgf-forward-fork
+  "M-b" #'sgf-backward-fork "<up>" #'sgf-backward-fork
   "a"   #'sgf-first-move
   "e"   #'sgf-last-move
   "j"   #'sgf-jump-moves
   "t"   #'sgf-traverse
   "r"   #'sgf-back-to-game
-  "k a" #'sgf-katago-analyze
+  "k"   #'sgf-katago-analyze
   "s n" #'sgf-toggle-numbers
   "s m" #'sgf-toggle-marks
   "s h" #'sgf-toggle-hints

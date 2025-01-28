@@ -305,7 +305,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
   (interactive "p")
   (sgf-graph-forward-char)
   (let ((col (current-column)))
-    (forward-line n)
+    (forward-line (1- n))
     (move-to-column col)))
 
 

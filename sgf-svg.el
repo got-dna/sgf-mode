@@ -163,9 +163,7 @@ PRISONERS is a cons cell of black and white prisoner counts."
   "Clear old ko position and label new ko position."
   (let ((group (sgf-svg-group svg "ko")))
     (sgf-svg-clear-group-content group)
-    (if ko
-        (let* ((x (car ko)) (y (cdr ko)))
-          (sgf-svg-add-text group x y "KO" "red")))))
+    (if ko (sgf-svg-add-text group (car ko) (cdr ko) "KO" "red"))))
 
 
 (defun sgf-svg-update-marks (svg node board-2d)
@@ -294,9 +292,9 @@ clear the katago svg node."
 
 (defun sgf-svg-update-katago-pv (svg pv turn)
   "Show the principal variation of KataGo analysis on the board."
-  (let* ((group (sgf-svg-group svg "katago-pv")))
+  (let* ((group (sgf-svg-group svg "katago")))
     (sgf-svg-clear-group-content group)
-    (sgf-svg-update-katago svg nil) ; clear the katago svg node
+    ;(sgf-svg-update-katago svg nil) ; clear the katago svg node
     (dotimes (i (length pv))
       (let* ((xy (nth i pv)) (x (car xy)) (y (cdr xy)))
         (sgf-svg-add-circle-xyr group x y sgf-svg-stone-size
@@ -308,7 +306,7 @@ clear the katago svg node."
         (setq turn (if (eq turn 'B) 'W 'B))))))
 
 
-(defun sgf-svg-add-annotations (svg game-state)
+(defun sgf-svg-update-annotations (svg game-state)
   "Add move annotations to the board.
 
 For the move annotation, add circle ring of color to the stone on the board."
