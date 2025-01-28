@@ -292,6 +292,22 @@ clear the katago svg node."
         (cons min-score delta-max))))
 
 
+(defun sgf-svg-update-katago-pv (svg pv turn)
+  "Show the principal variation of KataGo analysis on the board."
+  (let* ((group (sgf-svg-group svg "katago-pv")))
+    (sgf-svg-clear-group-content group)
+    (sgf-svg-update-katago svg nil) ; clear the katago svg node
+    (dotimes (i (length pv))
+      (let* ((xy (nth i pv)) (x (car xy)) (y (cdr xy)))
+        (sgf-svg-add-circle-xyr group x y sgf-svg-stone-size
+                                :gradient (format "%s" turn)
+                                :opacity 0.7)
+        (sgf-svg-add-text group x y
+                          (number-to-string (1+ i))
+                          "magenta")
+        (setq turn (if (eq turn 'B) 'W 'B))))))
+
+
 (defun sgf-svg-add-annotations (svg game-state)
   "Add move annotations to the board.
 

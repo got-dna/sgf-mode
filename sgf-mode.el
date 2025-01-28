@@ -835,16 +835,16 @@ Cases:
     (sgf--move-to-existing-or-new-next-node ov xy)))
 
 
-(defun sgf-katago-get-next-move (xy)
+(defun sgf-katago-get-next-move (xy &optional ov)
   "Return the KataGo evaluation for the next move at the XY position."
-  (let* ((moves (sgf-katago-get-next-moves))
+  (let* ((moves (sgf-katago-get-next-moves ov))
          (move-xy (assoc xy moves))
          (info (cdr move-xy)))
     info))
 
-(defun sgf-katago-get-next-moves ()
+(defun sgf-katago-get-next-moves (&optional ov)
   "Return the KataGo evaluation for the next move of possible positions."
-  (let* ((ov  (sgf-get-overlay))
+  (let* ((ov (or ov (sgf-get-overlay)))
          (game-state (overlay-get ov 'game-state))
          (turn-number (aref game-state 6))
          (result (overlay-get ov 'katago-moves))
@@ -857,8 +857,6 @@ Cases:
   (interactive "@e")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
-         (board-2d (aref game-state 1))
-         (h (length board-2d))
          (curr-lnode (aref game-state 0))
          (xy (sgf-mouse-event-to-xy event))
          ;; (xy-gtp (cons (car xy) (- h (cdr xy))))
@@ -1165,7 +1163,7 @@ The move number will be incremented."
       (sgf-svg-update-hints svg curr-lnode)
       (sgf-svg-update-marks svg curr-node board-2d))
     (unless no-katago
-      (let ((katago (sgf-katago-get-next-moves)))
+      (let ((katago (sgf-katago-get-next-moves ov)))
         ;; if katago is nil (not analyzed for the next move), clear the
         ;; obsolete katago info on the board from the previous move.
         (sgf-svg-update-katago svg katago t)))
@@ -1219,7 +1217,8 @@ It also removes tree graph buffer if it exists."
     (sgf-traverse (plist-get game-plist :traverse-path) ov)
     ;; these svg group are visible when svg was created and needs to
     ;; be synced with game-plist when the overlay is initialized.
-    (dolist (p '(:show-numbers :show-hints :show-marks :show-ko))
+    (dolist (p '(:show-numbers :show-hints :show-marks
+                               :show-ko :show-katago))
       (unless (plist-get game-plist p)
         (sgf-svg-toggle-visibility (sgf--svg-group-from-game-prop svg p))))
     (sgf-update-display ov)
@@ -1328,6 +1327,41 @@ otherwise analyze next move."
     (message "%s" json)
     (katago-analysis-query (json-encode json) callback)))
 
+
+(defun sgf-katago-expand-pv (event)
+  "Mouse click to show the KataGo recommended following move sequence on the board."
+  (interactive "@e")
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (lnode (aref game-state 0))
+         (turn (aref game-state 3))
+         (xy (sgf-mouse-event-to-xy event))
+         (katago (sgf-katago-get-next-move xy))
+         (pv (plist-get katago :pv)))
+    (dolist (xy pv)
+      (let* ((new-lnode (sgf-linked-node lnode `((,turn ,xy)))))
+        (aset lnode 2 (nconc (aref lnode 2) (list new-lnode)))
+        (sgf-apply-lnode new-lnode game-state t)
+        (setq lnode new-lnode)
+        (setq turn (if (eq turn 'B) 'W 'B))))
+    (sgf-graph-tree ov)
+    (sgf-serialize-game-to-buffer ov)
+    (sgf-update-display ov)))
+
+
+(defun sgf-katago-visualize-pv (event)
+  "Mouse click to show the KataGo recommended following move sequence on the board."
+  (interactive "@e")
+  (let* ((ov (sgf-get-overlay))
+         (svg (overlay-get ov 'svg))
+         (game-state (overlay-get ov 'game-state))
+         (turn (aref game-state 3))
+         (xy (sgf-mouse-event-to-xy event))
+         (katago (sgf-katago-get-next-move xy))
+         (pv (plist-get katago :pv)))
+    (sgf-svg-update-katago-pv svg pv turn)
+    (sgf-update-display ov t t t t)))
+
 ;; (defun sgf-katago-compute-scores ()
 ;;   "Compute the score of the current game state with KataGo."
 ;;   (interactive)
@@ -1396,6 +1430,8 @@ It is set as overlay property and only activated when the overlay is displayed."
   "m m" #'sgf-merge-branches
   "m s" #'sgf-swap-branches
   "m v" #'sgf-remove-variations
+  "<hot-grid> M-<mouse-1>" #'sgf-katago-visualize-pv
+  "<hot-grid> C-M-<mouse-1>" #'sgf-katago-expand-pv
   "<hot-grid> <mouse-1>" #'sgf-board-click-left
   "<hot-grid> <mouse-3>" #'sgf-board-click-right)
 
