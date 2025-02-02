@@ -3,16 +3,13 @@
 (defvar katago-exe "katago"
   "The path to the KataGo executable.")
 
-(defvar katago-model
-  "/opt/homebrew/Cellar/katago/1.15.3/share/katago/g170-b30c320x2-s4824661760-d1229536699.bin.gz"
+(defvar katago-model nil
   "The path to the KataGo model file.")
 
-(defvar katago-analysis-config
-  "/opt/homebrew/Cellar/katago/1.15.3/share/katago/configs/analysis_example.cfg"
+(defvar katago-analysis-config nil
   "The path to the KataGo analysis config file.")
 
-(defvar katago-gtp-config
-  "/opt/homebrew/Cellar/katago/1.15.3/share/katago/configs/gtp_example.cfg"
+(defvar katago-gtp-config nil
   "The path to the KataGo gtp configuration file.")
 
 (defvar katago-log-buffer "*katago-log*"
@@ -67,10 +64,11 @@
   "Convert a POSITION in the KataGo format 'A1' to `(0 . 0)'.
 
 The position is in the GTP format: https://www.lysator.liu.se/~gunnar/gtp/gtp2-spec-draft2/gtp2-spec.html#SECTION000311000000000000000"
-  (let* ((x-pos (string-to-char (upcase (substring pos 0 1))))
-         (x (- (if (> x-pos ?I) (1- x-pos) x-pos) ?A))
-         (y (1- (string-to-number (substring pos 1)))))
-    (cons x y)))
+  (unless (string= (downcase pos) "pass")
+    (let* ((x-pos (string-to-char (upcase (substring pos 0 1))))
+           (x (- (if (> x-pos ?I) (1- x-pos) x-pos) ?A))
+           (y (1- (string-to-number (substring pos 1)))))
+      (cons x y))))
 
 
 (defun katago-analysis-filter (process output)
@@ -208,6 +206,7 @@ If called interactively, prompt the user for the number of visits."
     (when (process-live-p process)
       ;; (process-send-string process "quit\n")
       (delete-process process)
+      (setq katago-analysis-process nil)
       (message "KataGo process killed."))))
 
 

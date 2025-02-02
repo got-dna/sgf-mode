@@ -353,9 +353,11 @@ The return value can be passed to `sgf-traverse'."
   (and
    board-2d
    (sgf-valid-stone-p stone)       ;; valid color
-   (sgf-xy-on-board-p xy board-2d) ;; position is on board
-   (sgf-xy-is-empty-p xy board-2d) ;; no stone at this position yet
-   (not (equal xy ko))))           ;; pos is not ko
+   (or (null xy)                       ;; pass move
+       (and
+        (sgf-xy-on-board-p xy board-2d) ;; position is on board
+        (sgf-xy-is-empty-p xy board-2d) ;; no stone at this position yet
+        (not (equal xy ko))))))           ;; pos is not ko
 
 
 (defun sgf-neighbors-xy (xy board-2d)

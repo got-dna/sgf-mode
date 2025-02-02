@@ -174,8 +174,6 @@ See also `sgf-forward-move'."
          (setup-stones (sgf-add-setup-stones node board-2d))
          (empty-xys (nconc (car setup-stones) (cdr setup-stones)))
          black-xys white-xys ko-new prisoners)
-    (aset game-state 0 lnode)
-    (aset game-state 6 (1+ (aref game-state 6)))
     (when xy   ; node is not a pass
       ;; Validate the move before make any change to game state.
       (unless (sgf-valid-move-p xy stone board-2d ko-old)
@@ -192,6 +190,7 @@ See also `sgf-forward-move'."
         (dolist (xy prisoners) (sgf-board-set xy (sgf-enemy-stone stone) board-2d))
         (sgf-board-set xy 'E board-2d)
         (error "Suicide move at %S is not allowed!" xy))
+
       ;; Determine KO status after captures: this code needs to be put after prisoners are removed.
       (setq ko-new (sgf-get-ko xy stone board-2d prisoners))
       (aset game-state 2 ko-new)
@@ -202,7 +201,9 @@ See also `sgf-forward-move'."
             ((eq stone 'W)
              (setcar pcounts (+ (length prisoners) (car pcounts)))
              (setq black-xys prisoners))))
-    ;; Update the game state with the next turn.
+    ;; Update the game state.
+    (aset game-state 0 lnode)
+    (aset game-state 6 (1+ (aref game-state 6)))
     (aset game-state 3 turn-new)
     ;; Save undo state.
     (sgf-push-undo game-state (vector black-xys white-xys empty-xys ko-old turn-old))))
@@ -432,11 +433,6 @@ nil, swap to front. If there is only one branch, it will not swap."
     (sgf-svg-toggle-visibility group)
     (sgf-update-display ov)))
 
-;; todo
-(defun sgf-toggle-katago-info ()
-  "Toggle the display of katago winrate or score."
-  (interactive)
-  (sgf--toggle-layer :show-kifu))
 
 (defun sgf-toggle-katago ()
   "Toggle the display of Katago's evaluation."
@@ -816,7 +812,7 @@ otherwise, create a new linked node and move the game state to it."
              (xy (posn-object-x-y pos))
              (x (/ (car xy) size))
              (y (/ (cdr xy) size)))
-        (message "%s: %.2f %.2f" xy x y)
+        (message "Clicked on position %s (%.2f %.2f)" xy x y)
         (cons (1- (round x)) (- (round y) 2)))))
 
 
@@ -1169,7 +1165,7 @@ The move number will be incremented."
       (sgf-svg-update-marks svg curr-node board-2d))
     (unless skip-katago
       (let ((katago (sgf-katago-get-next-moves ov)))
-        ;; if katago is nil (not analyzed for the next move), clear the
+        ;; if katago is nil (not analyzed for the next move), it clears the
         ;; obsolete katago info on the board from the previous move.
         (sgf-svg-update-katago svg katago t)))
     (overlay-put ov 'svg svg)
@@ -1311,6 +1307,25 @@ The existing SGF content in the buffer will be erased."
     (sgf--setup-overlay ov game-state svg-hot-areas game-plist)
     (sgf-serialize-game-to-buffer ov)))
 
+
+(defun sgf-katago-scores ()
+  "Collect katago scores for every move of the game."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (katago-moves (overlay-get ov 'katago-moves))
+         (i 1)
+         scores)
+    (while i
+      (let ((move (gethash i katago-moves)))
+        (if move
+            (progn (push (apply #'max (mapcar (lambda (x) (plist-get (cdr x) :score)) move))
+                  scores)
+                   (setq i (1+ i)))
+          (setq i nil))))
+    (message "%s" scores)
+    scores))
+
+
 (defun sgf-katago-analyze (&optional whole-game-p)
   "Analyze the whole game or the next move only with KataGo.
 
@@ -1319,9 +1334,8 @@ otherwise analyze next move (default)."
   (interactive "P")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
-         (depth (aref game-state 5))
          (lnode (aref game-state 0))
-         (json (sgf-serialize-lnode-to-json lnode whole-game-p))
+         (json (sgf-serialize-lnode-to-json lnode (not whole-game-p)))
          (result (or (overlay-get ov 'katago-moves) (make-hash-table)))
          (callback (lambda (t m)
                      (puthash t m result)
@@ -1343,8 +1357,8 @@ otherwise analyze next move (default)."
          (lnode (aref game-state 0))
          (turn (aref game-state 3))
          (xy (sgf-mouse-event-to-xy event))
-         (katago (sgf-katago-get-next-move xy))
-         (pv (plist-get katago :pv)))
+         (katago-move (sgf-katago-get-next-move xy ov))
+         (pv (plist-get katago-move :pv)))
     (dolist (xy pv)
       (let* ((new-lnode (sgf-linked-node lnode `((,turn ,xy)))))
         (aset lnode 2 (nconc (aref lnode 2) (list new-lnode)))
@@ -1364,7 +1378,7 @@ otherwise analyze next move (default)."
          (game-state (overlay-get ov 'game-state))
          (turn (aref game-state 3))
          (xy (sgf-mouse-event-to-xy event))
-         (katago (sgf-katago-get-next-move xy))
+         (katago (sgf-katago-get-next-move xy ov))
          (pv (plist-get katago :pv)))
     (sgf-svg-update-katago-pv svg pv turn)
     (sgf-update-display ov t t t t t t)))

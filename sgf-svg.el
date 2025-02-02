@@ -34,9 +34,7 @@ It is a reference for all other element sizes."
   (or (car (dom-by-id svg group-id))
       ;; create the new group if it does not exist
       (let ((grid (car (dom-by-id svg "grid"))))
-        (svg-node grid 'g :id group-id
-                  :font-size (* sgf-svg-size 0.5)
-                  :font-weight "bold"))))
+        (svg-node grid 'g :id group-id))))
 
 
 (defun sgf-svg-stone-gradient (svg color stops)
@@ -57,7 +55,6 @@ It is a reference for all other element sizes."
          (board-w (* sgf-svg-size (1+ w)))
          (board-h (* sgf-svg-size (1+ h)))
          (line-width 0.5)
-         (idx-font-scale 0.3)
          (hot-grid-t-l (cons sgf-svg-size (+ sgf-svg-size sgf-svg-size)))
          (hot-grid-b-r (cons (* w sgf-svg-size) (* (1+ h) sgf-svg-size)))
          (hot-areas (list (list (cons 'rect (cons hot-grid-t-l hot-grid-b-r))
@@ -65,14 +62,17 @@ It is a reference for all other element sizes."
          svg bar board grid ; svg nodes
          idx)
     ;; Note that the order of svg elements matters
-    (setq svg (svg-create board-w (+ board-h sgf-svg-size) :text-anchor "middle"))
+    (setq svg (svg-create board-w (+ board-h sgf-svg-size)))
 
     ;; Stones' Gradient
     (sgf-svg-stone-gradient svg "B" '((0 . "#606060") (100 . "#000000")))
     (sgf-svg-stone-gradient svg "W" '((0 . "#ffffff") (100 . "#b0b0b0")))
 
     ;; Status Bar
-    (setq bar (svg-node svg 'g :id "bar" :font-family sgf-svg-font-family))
+    (setq bar (svg-node svg 'g :id "bar"
+                        :font-family sgf-svg-font-family
+                        :font-weight "bold"
+                        :text-anchor "middle"))
     (svg-rectangle bar 0 0 board-w sgf-svg-size :fill "gray")
     (sgf-svg-add-circle-xyr bar 0.4       0.5 0.3 :gradient "B")
     (sgf-svg-add-circle-xyr bar (+ 0.6 w) 0.5 0.3 :gradient "W")
@@ -93,9 +93,11 @@ It is a reference for all other element sizes."
     ;; Board Grid
     (setq grid (svg-node board 'g :id "grid"
                          :font-family sgf-svg-font-family
+                         :font-size sgf-svg-size
+                         :font-weight "bold"
+                         :text-anchor "middle"
                          :transform (format "translate(%s,%s)" sgf-svg-size sgf-svg-size)))
-    (setq grid-idx (svg-node grid 'g :id "grid-idx"
-                             :font-size (* sgf-svg-size idx-font-scale)))
+    (setq grid-idx (svg-node grid 'g :id "grid-idx" :font-size "0.4em"))
     ;; Grid Lines
     (dotimes (n w)
       ;; vertical lines
@@ -163,7 +165,7 @@ PRISONERS is a cons cell of black and white prisoner counts."
   "Clear old ko position and label new ko position."
   (let ((group (sgf-svg-group svg "ko")))
     (sgf-svg-clear-group-content group)
-    (if ko (sgf-svg-add-text group (car ko) (cdr ko) "KO" "red"))))
+    (if ko (sgf-svg-add-text group (car ko) (cdr ko) "X" "red"))))
 
 
 (defun sgf-svg-update-marks (svg node board-2d)
@@ -190,7 +192,8 @@ It removes the old marks and adds the new marks."
                    (xy-state (sgf-board-get xy board-2d))
                    (color (sgf-svg-set-color xy-state)))
               ;; (message "---------%S %S" xy-state color)
-              (sgf-svg-add-text group x y label color)))))))
+              (sgf-svg-add-text group x y label color
+                                :font-size "0.5em")))))))
 
 
 (defun sgf-svg-update-hints (svg curr-lnode)
@@ -209,7 +212,8 @@ It removes the old marks and adds the new marks."
              (stone (car play)) (xy (cdr play)) (x (car xy)) (y (cdr xy)))
         (if (consp xy) ; xy is not nil, i.e. next move is not pass
             (sgf-svg-add-text group x y text
-                              (sgf-svg-set-color (sgf-enemy-stone stone))))))))
+                              (sgf-svg-set-color (sgf-enemy-stone stone))
+                              :font-size "0.7em"))))))
 
 
 (defun sgf-svg-update-stones (svg game-state)
@@ -244,7 +248,7 @@ It removes the old marks and adds the new marks."
 
 
 (defun sgf-svg-update-katago (svg katago &optional score-p)
-  "Common logic for updating SVG with KataGo analysis data.
+  "Updating SVG with KataGo analysis data.
 
 KATAGO is the katago output for next moves. If it is nil, do nothing,
 clear the katago svg node."
@@ -267,19 +271,20 @@ clear the katago svg node."
              (value (if score-p score winrate))
              (ratio (/ (- value min-value) delta-max))
              (color (sgf-svg-interpolate-color beg-color end-color ratio)))
-        (sgf-svg-add-circle-xyr group x y sgf-svg-stone-size
-                                :fill color :opacity 0.7)
-        ;; show index
-        (sgf-svg-add-text group x y (format "%d" (1+ i)) "white"
-                          :baseline-shift "90%"
-                          :font-size (* sgf-svg-size 0.3))
-        ;; show score
-        (sgf-svg-add-text group x y (format "%.1f" score) "black"
-                          :font-size (* sgf-svg-size 0.35))
-        ;; show winrate
-        (sgf-svg-add-text group x y (format "%d" (round winrate)) "black"
-                          :baseline-shift "-100%"
-                          :font-size (* sgf-svg-size 0.3))))))
+        (when xy
+          (sgf-svg-add-circle-xyr group x y sgf-svg-stone-size
+                                  :fill color :opacity 0.3)
+          ;; show index
+          (sgf-svg-add-text group x y (format "%d" (1+ i)) "white"
+                            :baseline-shift "90%"
+                            :font-size (* sgf-svg-size 0.3))
+          ;; show score
+          (sgf-svg-add-text group x y (format "%.1f" score) "black"
+                            :font-size (* sgf-svg-size 0.35))
+          ;; show winrate
+          (sgf-svg-add-text group x y (format "%d" (round winrate)) "black"
+                            :baseline-shift "-100%"
+                            :font-size (* sgf-svg-size 0.3)))))))
 
 (defun sgf-svg--katago-score-range (katago)
   (if katago
@@ -294,7 +299,7 @@ clear the katago svg node."
   "Show the principal variation of KataGo analysis on the board."
   (let* ((group (sgf-svg-group svg "katago")))
     (sgf-svg-clear-group-content group)
-    ;(sgf-svg-update-katago svg nil) ; clear the katago svg node
+    ;;(sgf-svg-update-katago svg nil) ; clear the katago svg node
     (dotimes (i (length pv))
       (let* ((xy (nth i pv)) (x (car xy)) (y (cdr xy)))
         (sgf-svg-add-circle-xyr group x y sgf-svg-stone-size
@@ -302,7 +307,8 @@ clear the katago svg node."
                                 :opacity 0.7)
         (sgf-svg-add-text group x y
                           (number-to-string (1+ i))
-                          "magenta")
+                          "magenta"
+                          :font-size "0.5em")
         (setq turn (if (eq turn 'B) 'W 'B))))))
 
 
@@ -313,7 +319,8 @@ For the move annotation, add circle ring of color to the stone on the board."
   (let ((board-2d (aref game-state 1))
         (curr-lnode (aref game-state 0))
         (annotated-xys (make-hash-table :test 'equal))
-        (group (sgf-svg-group svg "stones")))
+        (group (sgf-svg-group svg "annotations")))
+    (sgf-svg-clear-group-content group)
     (while (not (sgf-root-p curr-lnode))
       (let* ((node (aref curr-lnode 1))
              (move (sgf-process-move node))
@@ -362,7 +369,8 @@ For the move annotation, add circle ring of color to the stone on the board."
               ;; add move number only if it does not already have a number.
               (sgf-svg-add-text group (car xy) (cdr xy)
                                 (number-to-string mvnum)
-                                actual-color)
+                                actual-color
+                                :font-size "0.4em")
               (puthash xy t numbered-xys)))
         ;; move to the previous node
         (setq curr-lnode (aref curr-lnode 0))

@@ -725,10 +725,12 @@ If OV is nil, it will use the overlay at point."
         (undo-boundary)))))
 
 
-(defun sgf-serialize-lnode-to-json (lnode &optional whole-game-p)
+(defun sgf-serialize-lnode-to-json (lnode &optional next-only-p)
   "Serialize the game state (from root to the current LNODE) to JSON for katago input.
 
-Katago requires json as input for game analysis."
+Katago requires json as input for game analysis. If NEXT-ONLY-P is
+nil (default), only analyze the next move; otherwise, analyze every move
+starting from root."
   (let (moves move)
     (while (not (sgf-root-p lnode))
       (setq move (sgf-process-move (aref lnode 1)))
@@ -757,9 +759,9 @@ Katago requires json as input for game analysis."
          ("initialStones" . ,(vconcat ab aw))
          ("moves" . ,(vconcat moves-gtp
 ))
-         ("analyzeTurns" . ,(if whole-game-p
-                               (vconcat (number-sequence 0 n))
-                             (vector n)))
+         ("analyzeTurns" . ,(if next-only-p
+                                (vector n)
+                              (vconcat (number-sequence 0 n))))
          ("komi" . ,komi)
          ("rules" . ,rule)
          ("includeOwnership" . t)

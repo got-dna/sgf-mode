@@ -302,19 +302,24 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
 
 (defun sgf-graph-forward-node (&optional n)
   "Forward to the next node in the graph tree."
-  (interactive "p")
-  (sgf-graph-forward-char)
-  (let ((col (current-column)))
-    (forward-line (1- n))
-    (move-to-column col)))
+  (interactive "P")
+  (unless (eolp) (sgf-graph-forward-char))
+  (let* ((col (current-column))
+         (n (or n 0))
+         (char (+ ?a n)))
+    (while (not (or (eq (char-before) char)
+                    (eq (char-before) ?*)))
+      (forward-line)
+      (move-to-column col))))
 
 
 (defun sgf-graph-backward-node ()
   "Backward to the previous node in the graph tree."
   (interactive)
   (let ((col (current-column)))
-    (while (not (or (eq (char-before) ?*)
-                    (eq (char-before) ?a)))
+    (while (and (not (or (eq (char-before) ?*)
+                         (eq (char-before) ?a)))
+                (not (bobp)))
       (forward-line -1)
       (move-to-column col)))
   (sgf-graph-backward-char))
@@ -334,8 +339,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
   (interactive)
   (sgf-graph-forward-char)
   (while (not (get-text-property (1- (point)) 'help-echo))
-    (sgf-graph-forward-char))
-  (sgf-graph-sync-game))
+    (sgf-graph-forward-char)))
 
 
 (defun sgf-graph-backward-comment ()
@@ -343,13 +347,13 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
   (interactive)
   (sgf-graph-backward-char)
   (while (not (get-text-property (1- (point)) 'help-echo))
-    (sgf-graph-backward-char))
-  (sgf-graph-sync-game))
+    (sgf-graph-backward-char)))
 
 
 (defvar-keymap sgf-graph-mode-map
   :doc "Keymap for SGF Graph mode."
   :suppress t
+  "<mouse-1>" 'ignore
   "f" #'sgf-graph-forward-node
   "b" #'sgf-graph-backward-node
   "F" #'sgf-graph-forward-comment
