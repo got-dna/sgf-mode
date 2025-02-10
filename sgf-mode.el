@@ -1334,6 +1334,7 @@ otherwise analyze next move (default)."
   (interactive "P")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
+         (depth (aref game-state 6))
          (lnode (aref game-state 0))
          (json (sgf-serialize-lnode-to-json lnode (not whole-game-p)))
          (result (or (overlay-get ov 'katago-moves) (make-hash-table)))

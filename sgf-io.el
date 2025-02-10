@@ -338,7 +338,8 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
   "Create a game state object from the root of linked nodes."
   (let* ((root-node (aref root-lnode 1))
          (size (car (alist-get 'SZ root-node)))
-         (w (car size)) (h (cdr size))
+         (w (or (car size) 19)) ; if SZ is not specified in SGF
+         (h (or (cdr size) 19))
          (board-2d (sgf-board-create w h 'E))
          (turn (car (alist-get 'PL root-node))))
     ;; if PL is not specified, check the first move to set the correct turn;
@@ -357,25 +358,49 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
     (sgf-game-state root-lnode board-2d nil turn)))
 
 
+;; (defun sgf-linkup-nodes (head-lnode sgf-tree)
+;;   "Recursively convert parsed SGF syntax tree to doubly linked list of nodes."
+;;   (let ((prev-lnode head-lnode)
+;;         (tree (aref sgf-tree 1)) ; retrieve the real data from vector
+;;         curr-node curr-lnode)
+;;     (dolist (item tree)
+;;       (cond ((listp item)
+;;              ;; it is a fork of subtrees
+;;              (dolist (sgf-subtree item)
+;;                (sgf-linkup-nodes prev-lnode sgf-subtree)))
+;;             ((vectorp item)
+;;              ;; it is a node
+;;              (setq curr-node (sgf-decode-node item))
+;;              (setq curr-lnode (sgf-linked-node prev-lnode curr-node))
+;;              ;; TODO (nconc (aref prev-lnode 2) (list curr-lnode))
+;;              (aset prev-lnode 2 (append (aref prev-lnode 2) (list curr-lnode))))
+;;             (t (error "Invalid node or subtree: %s." item)))
+;;       (setq prev-lnode curr-lnode)))
+;;   head-lnode)
+
+;; non-recursive version
 (defun sgf-linkup-nodes (head-lnode sgf-tree)
   "Convert parsed SGF syntax tree to doubly linked list of nodes."
-  (let ((prev-lnode head-lnode)
-        (tree (aref sgf-tree 1)) ; retrieve the real data from vector
-        curr-node curr-lnode)
-    (dolist (item tree)
-      (cond ((listp item)
-             ;; it is a fork of subtrees
-             (dolist (sgf-subtree item)
-               (sgf-linkup-nodes prev-lnode sgf-subtree)))
-            ((vectorp item)
-             ;; it is a node
-             (setq curr-node (sgf-decode-node item))
-             (setq curr-lnode (sgf-linked-node prev-lnode curr-node))
-             ;; TODO (nconc (aref prev-lnode 2) (list curr-lnode))
-             (aset prev-lnode 2 (append (aref prev-lnode 2) (list curr-lnode))))
-            (t (error "Invalid node or subtree: %s." item)))
-      (setq prev-lnode curr-lnode)))
-  head-lnode)
+  (let ((stack (list (cons head-lnode sgf-tree)))
+        prev-lnode curr-lnode curr-node)
+    (while stack
+      (let* ((top (pop stack))
+             (prev-node (car top))
+             (tree (cdr top)))
+        (dolist (item (aref tree 1)) ; retrieve the real data from vector
+          (cond
+           ((listp item)
+            ;; it is a fork of subtrees
+            (dolist (sgf-subtree item)
+              (push (cons prev-node sgf-subtree) stack)))
+           ((vectorp item)
+            ;; it is a node
+            (setq curr-node (sgf-decode-node item))
+            (setq curr-lnode (sgf-linked-node prev-node curr-node))
+            (aset prev-node 2 (append (list curr-lnode) (aref prev-node 2)))
+            (setq prev-node curr-lnode))
+           (t (error "Invalid node or subtree: %s." item))))))
+      head-lnode))
 
 
 (defun sgf-decode-node (sgf-node)
@@ -397,6 +422,9 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
              (prop-val
               (cond ((member key '(B W AB AW AE MA SQ TR CR))
                      (sgf-decode-prop-pos val-str beg-pos end-pos))
+                    ;; customized property for katago analysis
+                    ((eq key 'KG)
+                     (read val-str))
                     ((eq key 'C)
                      (list (sgf-io--prettify-text val-str)))
                     ((eq key 'PL)
@@ -555,6 +583,8 @@ See also `sgf-encode-prop-pos'."
                      (if (= x y) (format "[%d]" x) (format "[%d:%d]" x y))))
                   ((eq prop-key 'C)
                    (format "[%s]" (sgf-io--escape-text (car prop-vals))))
+                  ((eq prop-key 'KG)
+                   (format "[%S]" (car prop-vals)))
                   (t (format "[%s]" (car prop-vals))))))
     (format "%S%s" prop-key prop-val-str)))
 

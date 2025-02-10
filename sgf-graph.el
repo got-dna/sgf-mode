@@ -369,6 +369,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
   "Major mode for viewing SGF graph tree."
   :keymap sgf-graph-mode-map
   (setq buffer-read-only t)
+  (setq truncate-lines t)
   (add-hook 'post-command-hook #'sgf-graph-hl-before-cursor t t))
 
 
