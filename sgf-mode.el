@@ -519,10 +519,7 @@ status bar to the top instead."
     (setq new-mvnum (read-number "Move number: " old-mvnum))
     (if (integerp new-mvnum)
         (unless (equal old-mvnum new-mvnum)
-          (aset lnode 1
-                ;; delete the old MN *whether* it exists or not
-                (nconc (assq-delete-all 'MN node)
-                       (list (list 'MN new-mvnum))))
+          (setf (alist-get 'MN (aref lnode 1)) (list new-mvnum))
           (if (sgf-game-plist-get :show-numbers)
               (sgf-update-display ov t nil t t t t)
             (message "Move number was not displayed. Enable its display.")
@@ -542,14 +539,11 @@ status bar to the top instead."
          (new-comment (read-string "Edit comment: " old-comment)))
     ;; only update if the comment is changed
     (unless (string= old-comment new-comment)
-      ;; delete the old comment property
-      (setq node (assq-delete-all 'C node))
-      (aset lnode 1
-            (if (string-empty-p new-comment)
-                node
-              (nconc node (list (list 'C new-comment)))))
+      (if (string-empty-p new-comment)
+          (aset lnode 1 (assq-delete-all 'C node))
+        (setf (alist-get 'C (aref lnode 1)) (list new-comment))))
       (sgf-graph-tree ov)
-      (sgf-serialize-game-to-buffer ov))))
+      (sgf-serialize-game-to-buffer ov)))
 
 
 (defun sgf-edit-annotation (&optional lnode)
@@ -570,12 +564,10 @@ status bar to the top instead."
          (new-annt (intern (cadr annt-choice))))
     ;; only update if the annotation is changed
     (unless (eq old-annt new-annt)
-      ;; delete the old comment property
-      (setq node (assq-delete-all old-annt node))
-      (aset lnode 1
-            (if (null new-annt)
-                node
-              (nconc node (list (list new-annt "1")))))
+      (if (null new-annt)
+          ;; delete the old comment property
+          (aset lnode 1 (assq-delete-all old-annt node))
+        (setf (alist-get new-annt (aref lnode 1)) (list new-annt "1")))
       (sgf-graph-tree ov)
       (sgf-update-display ov t t t t nil t))
     (sgf-serialize-game-to-buffer ov)))
