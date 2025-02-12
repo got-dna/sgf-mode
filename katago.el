@@ -1,4 +1,5 @@
 (require 'sgf-util)
+(require 'json)
 
 (defvar katago-exe "katago"
   "The path to the KataGo executable.")
@@ -18,7 +19,8 @@
 (defvar katago-out-buffer "*katago-out*"
   "The buffer name to log katago output message.")
 
-(defvar katago-analysis-process nil)
+(defvar katago-analysis-process nil
+  "The KataGo analysis process.")
 
 (defvar katago-analysis-callback
   (lambda (turnNumber moves)
@@ -26,26 +28,31 @@
   "Callback function to handle processed katago analysis response.")
 
 (defun katago-analysis-init (&optional exe model config)
-  "Start a KataGo analysis process."
+  "Start a KataGo analysis process.
+
+EXE is the path to the KataGo executable.
+MODEL is the path to the KataGo model file.
+CONFIG is the path to the KataGo analysis config file."
   (let* ((exe (or exe katago-exe))
          (model (or model katago-model))
          (config (or config katago-analysis-config))
          (command (list exe "analysis" "-model" model "-config" config))
          (log-buffer (get-buffer-create katago-log-buffer))
-         (out-buffer (get-buffer-create katago-out-buffer))
-         (result (make-hash-table)))
+         (out-buffer (get-buffer-create katago-out-buffer)))
     (setq katago-analysis-process (make-process
                                    :name "katago-analysis"
                                    :buffer out-buffer
                                    :stderr log-buffer
                                    :command command
                                    :connection-type 'pipe
-                                   :filter 'katago-analysis-filter)))
-    (message "KataGo started with model %s and config %s." model config))
+                                   :filter #'katago-analysis-filter))
+    (message "KataGo started with model %s and config %s." model config)))
 
 
 (defun katago-gtp-init (&optional exe model config)
-  "Start a KataGo gtp process."
+  "Start a KataGo gtp process.
+
+See also `katago-analysis-init' for the analysis process."
   (let* ((exe (or exe katago-exe))
          (model (or model katago-model))
          (config (or config katago-gtp-config))
@@ -57,8 +64,8 @@
                    :command command
                    :connection-type 'pipe
                    :filter 'katago-gtp-filter)))
-    (message "KataGo started with model %s and config %s." model config)
-    process))
+    (message "KataGo started with model %s and config %s." model config)))
+
 
 (defun katago--pos-to-xy (pos)
   "Convert a POSITION in the KataGo format 'A1' to `(0 . 0)'.
@@ -71,20 +78,38 @@ The position is in the GTP format: https://www.lysator.liu.se/~gunnar/gtp/gtp2-s
       (cons x y))))
 
 
-(defun katago-analysis-filter (process output)
-  "Process filter for KataGo analysis output.
+(defun katago-analysis-filter (proc str)
+  "Process filter for KataGo analysis output STRing.
 
-It parses the output from KataGo analysis and stores the result in the
-process property."
-  (with-current-buffer (process-buffer process)
-    (insert output))
-  (let ((json-object (json-read-from-string output)))
-    ;; (message "KataGo analysis output: %s" output)
-    (when json-object
-      (let* ((res (katago-analysis-handle-response json-object))
-             (turnNumber (car res))
-             (moves (cdr res)))
-        (funcall katago-analysis-callback turnNumber moves)))))
+It parses the output string from KataGo analysis PROCess."
+  (with-current-buffer (process-buffer proc)
+    (let ((moving (= (point) (process-mark proc))))
+      (save-excursion
+        ;; insert the output
+        (goto-char (process-mark proc))
+        (insert str)
+
+        ;; the core of the filter function - process the output
+        (goto-char (process-mark proc))
+        (while (not (eobp))
+          (let ((line (buffer-substring-no-properties
+                       (line-beginning-position)
+                       (line-end-position))))
+            ;; (message "xxx %s" line)
+            ;; Check if the line is a valid JSON object
+            (when (and (not (string-empty-p line))
+                       (string-prefix-p "{" line)
+                       (string-suffix-p "}" line))
+                  (let* ((json-obj (json-read-from-string line))
+                         (res (katago-analysis-handle-response json-obj))
+                         (turnNumber (car res))
+                         (moves (cdr res)))
+                    (funcall katago-analysis-callback turnNumber moves)))
+            (forward-line 1)))
+
+        ;; reset the process marker
+        (set-marker (process-mark proc) (point-max)))
+      (if moving (goto-char (process-mark proc))))))
 
 
 (defun katago-analysis-handle-response (response)
@@ -92,7 +117,7 @@ process property."
   (let ((id (cdr (assoc 'id response)))
         (turnNumber (cdr (assoc 'turnNumber response)))
         (moveInfos (cdr (assoc 'moveInfos response))))
-      (cons turnNumber (mapcar 'katago-analysis-extract-move moveInfos))))
+      (cons turnNumber (mapcar #'katago-analysis-extract-move moveInfos))))
 
 (defun katago-analysis-extract-move (move)
   (let* ((pos (cdr (assoc 'move move)))
@@ -207,7 +232,11 @@ If called interactively, prompt the user for the number of visits."
       ;; (process-send-string process "quit\n")
       (delete-process process)
       (setq katago-analysis-process nil)
-      (message "KataGo process killed."))))
+      (message "KataGo process killed.")))
+  (when (get-buffer katago-out-buffer)
+    (kill-buffer katago-out-buffer))
+  (when (get-buffer katago-log-buffer)
+    (kill-buffer katago-log-buffer)))
 
 
 (provide 'katago)
