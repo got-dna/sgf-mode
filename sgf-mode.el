@@ -1425,6 +1425,7 @@ It is set as overlay property and only activated when the overlay is displayed."
   "s s" #'sgf-toggle-new-move
   "s a" #'sgf-toggle-katago
   "s i" #'sgf-toggle-katago-metrics
+  "s w" #'sgf-toggle-serialize-katago
   "m p" #'sgf-pass
   "m r" #'sgf-make-root
   "m k" #'sgf-prune-inclusive ; kill node

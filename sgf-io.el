@@ -21,6 +21,16 @@
 
 (require 'sgf-util)
 
+(defvar sgf-serialize-katago-p t
+  "Serialize game state with katago analysis data.")
+
+
+(defun sgf-toggle-serialize-katago ()
+  "Toggle whether to serialize the katago analysis."
+  (interactive)
+  (setq sgf-serialize-katago-p (sgf-toggle sgf-serialize-katago-p))
+  (message "Serialize katago analysis: %s"
+           (if sgf-serialize-katago-p "on" "off")))
 
 ;;; parse SGF into syntax tree
 
@@ -561,38 +571,36 @@ See also `sgf-encode-prop-pos'."
 ;; TODO remove quote for str values and escape [ ] etc
 (defun sgf-encode-prop (prop)
   "Convert to a string of SGF property."
-  (let ((prop-key (car prop))
-        (prop-vals (cdr prop))
-        prop-val-str)
-    (if (null prop-vals)
-        ;; if prop-vals is nil (eg a pass move), put [] as the value.
-        (setq prop-val-str "[]")
-      (setq prop-val-str
-            (cond ((memq prop-key '(B W AB AW TR CR MA SQ))
-                   (sgf-encode-prop-pos prop-vals))
-                  ((eq prop-key 'LB)
-                   (mapconcat (lambda (prop-val)
-                                (format "[%c%c:%s]"
-                                        (sgf-encode-d2c (car (car prop-val)))
-                                        (sgf-encode-d2c (cdr (car prop-val)))
-                                        (sgf-io--escape-text (cdr prop-val))))
-                              prop-vals))
-                  ((eq prop-key 'SZ)
-                   (let ((x (caar prop-vals))
-                         (y (cdar prop-vals)))
-                     (if (= x y) (format "[%d]" x) (format "[%d:%d]" x y))))
-                  ((eq prop-key 'C)
-                   (format "[%s]" (sgf-io--escape-text (car prop-vals))))
-                  ((eq prop-key 'KG)
-                   (format "[%S]" (car prop-vals)))
-                  (t (format "[%s]" (car prop-vals))))))
-    (format "%S%s" prop-key prop-val-str)))
+  (let* ((print-length nil)
+         (prop-key (car prop))
+         (prop-vals (cdr prop))
+         (prop-val-str
+          ;; if prop-vals is nil (eg a pass move), put [] as the value.
+          (cond ((memq prop-key '(B W))
+                 (if (null prop-vals) "[]" (sgf-encode-prop-pos prop-vals)))
+                ((memq prop-key '(AB AW TR CR MA SQ))
+                 (unless (null prop-vals) (sgf-encode-prop-pos prop-vals)))
+                ((eq prop-key 'LB)
+                 (mapconcat (lambda (prop-val)
+                              (format "[%c%c:%s]"
+                                      (sgf-encode-d2c (car (car prop-val)))
+                                      (sgf-encode-d2c (cdr (car prop-val)))
+                                      (sgf-io--escape-text (cdr prop-val))))
+                            prop-vals))
+                ((eq prop-key 'SZ)
+                 (let ((x (caar prop-vals))
+                       (y (cdar prop-vals)))
+                   (if (= x y) (format "[%d]" x) (format "[%d:%d]" x y))))
+                ((eq prop-key 'C)
+                 (format "[%s]" (sgf-io--escape-text (car prop-vals))))
+                ((eq prop-key 'KG)
+                 (if sgf-serialize-katago-p (format "[%S]" prop-vals)))
+                (t (format "[%s]" (car prop-vals))))))
+    (if prop-val-str (format "%S%s" prop-key prop-val-str))))
 
 
 (defun sgf-encode-prop-pos (xys)
-  "Encode a sequence of position(s) into SGF format.
-
-See also `sgf-io-from-positions'."
+  "Encode a sequence of position(s) into SGF format."
   (mapconcat
    (lambda (rect)
      (let ((lt (string (sgf-encode-d2c (caar rect))
@@ -602,8 +610,7 @@ See also `sgf-io-from-positions'."
        (if (string= lt rb)
            (concat "[" lt "]")
          (concat "[" lt ":" rb "]"))))
-   (sgf-io-rows-to-rects (sgf-io-xys-to-rows xys))
-   ""))
+   (sgf-io-rows-to-rects (sgf-io-xys-to-rows xys))))
 
 
 (defun sgf-io-xys-to-rows (xys)

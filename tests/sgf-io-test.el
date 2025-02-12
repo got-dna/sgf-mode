@@ -29,6 +29,8 @@
 
 
 (ert-deftest sgf-encode-prop-pos-test ()
+  (should (equal (sgf-encode-prop-pos '())
+                 ""))
   (should (equal (sgf-encode-prop-pos '((0 . 0) (1 . 0) (3 . 0) (4 . 0) (0 . 1) (1 . 1)))
                  "[aa:bb][da:ea]"))
   (should (equal (sgf-encode-prop-pos '((0 . 0) (1 . 0)))
@@ -38,6 +40,7 @@
 
 
 (ert-deftest sgf-io-xys-to-rows ()
+  (should (equal (sgf-io-xys-to-rows '()) nil))
   (should (equal (sgf-io-rows-to-rects
                   (sgf-io-xys-to-rows
                    '((15 . 5) (15 . 6) (15 . 7) (15 . 8) (15 . 9) (15 . 10))))
@@ -51,6 +54,7 @@
 
 
 (ert-deftest sgf-io-rows-to-rects ()
+  (should (equal (sgf-io-rows-to-rects '()) nil))
   (should (equal (sgf-io-rows-to-rects '(((1 . 2) . (1 . 2))
                                          ((1 . 1) . (1 . 1))))
                  '(((1 . 1) . (1 . 2)))))
