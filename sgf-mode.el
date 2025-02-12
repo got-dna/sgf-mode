@@ -825,19 +825,13 @@ Cases:
 
 (defun sgf-katago-get-next-move (xy &optional ov)
   "Return the KataGo evaluation for the next move at the XY position."
-  (let* ((moves (sgf-katago-get-next-moves ov))
+  (let* ((ov (or ov (sgf-get-overlay)))
+         (game-state (overlay-get ov 'game-state))
+         (lnode (aref game-state 0))
+         (moves (alist-get 'KG (aref lnode 1)))
          (move-xy (assoc xy moves))
          (info (cdr move-xy)))
     info))
-
-(defun sgf-katago-get-next-moves (&optional ov)
-  "Return the KataGo evaluation for the next move of possible positions."
-  (let* ((ov (or ov (sgf-get-overlay)))
-         (game-state (overlay-get ov 'game-state))
-         (turn-number (aref game-state 6))
-         (result (overlay-get ov 'katago-moves))
-         (moves (and result (gethash turn-number result))))
-    moves))
 
 
 (defun sgf-board-click-right (event)
@@ -1156,10 +1150,9 @@ The move number will be incremented."
     (unless skip-marks
       (sgf-svg-update-marks svg curr-node board-2d))
     (unless skip-katago
-      (let ((katago (sgf-katago-get-next-moves ov)))
-        ;; if katago is nil (not analyzed for the next move), it clears the
-        ;; obsolete katago info on the board from the previous move.
-        (sgf-svg-update-katago svg katago t)))
+      ;; if katago is nil (not analyzed for the next move), it clears the
+      ;; obsolete katago info on the board from the previous move.
+      (sgf-svg-update-katago svg (alist-get 'KG curr-node) t))
     (overlay-put ov 'svg svg)
     (sgf--show-svg ov)))
 
@@ -1300,7 +1293,7 @@ The existing SGF content in the buffer will be erased."
     (sgf-serialize-game-to-buffer ov)))
 
 
-(defun sgf-katago-scores ()
+(defun sgf-katago-collect-scores ()
   "Collect katago scores for every move of the game."
   (interactive)
   (let* ((ov (sgf-get-overlay))
@@ -1311,35 +1304,87 @@ The existing SGF content in the buffer will be erased."
       (let ((move (gethash i katago-moves)))
         (if move
             (progn (push (apply #'max (mapcar (lambda (x) (plist-get (cdr x) :score)) move))
-                  scores)
+                         scores)
                    (setq i (1+ i)))
           (setq i nil))))
     (message "%s" scores)
     scores))
 
 
-(defun sgf-katago-analyze (&optional whole-game-p)
-  "Analyze the whole game or the next move only with KataGo.
 
-If WHOLE-GAME-P (argument prefix) is non-nil, analyze the whole game,
-otherwise analyze next move (default)."
-  (interactive "P")
+(defun sgf-katago-review-scores ()
+  "Collect katago scores for every move of the game."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (lnode (overlay-get ov 'game-state))
+         (katago-moves (overlay-get ov 'katago-moves))
+         (i 1)
+         (score 0))
+    (while (not (sgf-root-p lnode))
+      (setq lnode (sgf-get-parent lnode)))
+    (while (setq children (sgf-get-children lnode))
+      (let* ((child (car children))
+             (child-node (aref child 1))
+             (move (gethash i katago-moves))
+             (score-next (apply #'max (mapcar (lambda (x) (plist-get (cdr x) :score)) move)))
+             (score-delta (- score-next score)))
+        (when (> (abs score-delta) 5)
+          (message "KataGo score change: %.2f" score-delta)
+          (aset child 1 (nconc child-node (list (list 'C (format "KataGo score change: %.2f" score-delta)))))
+          (message "%s" child))
+        (setq score score-next)
+        (setq lnode child)
+        (setq i (1+ i))))))
+
+
+(defun sgf-katago-analyze-next-step ()
+  "Analyze the next move only with KataGo."
+  (interactive)
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
-         (depth (aref game-state 6))
          (lnode (aref game-state 0))
-         (json (sgf-serialize-lnode-to-json lnode (not whole-game-p)))
-         (result (or (overlay-get ov 'katago-moves) (make-hash-table)))
+         (json-obj (sgf-serialize-lnode-to-json lnode t))
+         (json-str (json-encode json-obj))
          (callback (lambda (t m)
-                     (puthash t m result)
+                     (setf (alist-get 'KG (aref lnode 1)) m)
+                     (message "KataGo analysis is finished.")
+                     (sgf-update-display ov t t t t t))))
+  (unless katago-analysis-process (katago-analysis-init))
+  (message "%s" json-str)
+  (katago-analysis-query json-str callback)))
+
+
+(defun sgf-katago-analyze ()
+  "Analyze the whole game with KataGo."
+  (interactive)
+  (let* ((ov (sgf-get-overlay))
+         (game-state (overlay-get ov 'game-state))
+         (lnode (aref game-state 0))
+         (json (sgf-serialize-lnode-to-json lnode))
+         (depth (1+ (aref game-state 6)))
+         (result (make-vector depth nil))
+         (callback (lambda (t m)
+                     (aset result t m)
+                     ;; (message "KataGo analysis finished for turn number %d." t)
                      ;; these have to be put inside callback;
                      ;; otherwise, they will be executed before the
                      ;; asynchronous process is done.
-                     (overlay-put ov 'katago-moves result)
-                     (sgf-update-display ov t t t t t))))
-    (unless katago-analysis-process (katago-analysis-init))
-    (message "%s" json)
-    (katago-analysis-query (json-encode json) callback)))
+                     (message "Katago analysis for turn %d" t)
+                     ;; if the result vector is filled:
+                     (when (seq-every-p #'identity result)
+                       ;; (overlay-put ov 'katago-moves result)
+                       (message "KataGo analysis is finished.")
+                       (while (> depth 0)
+                         (setq depth (1- depth))
+                         (setf (alist-get 'KG (aref lnode 1))
+                               (aref result depth))
+                         ;; (message "zzz %S" (aref lnode 1))
+                         ;; (message "depth: %d" depth)
+                         (setq lnode (aref lnode 0)))
+                       (sgf-update-display ov t t t t t)))))
+  (unless katago-analysis-process (katago-analysis-init))
+  (message "%s" json)
+  (katago-analysis-query (json-encode json) callback)))
 
 
 (defun sgf-katago-expand-pv (event)
@@ -1417,7 +1462,8 @@ It is set as overlay property and only activated when the overlay is displayed."
   "j"   #'sgf-jump-moves
   "t"   #'sgf-traverse
   "r"   #'sgf-back-to-game
-  "k"   #'sgf-katago-analyze
+  "k"   #'sgf-katago-analyze-next-step
+  "K"   #'sgf-katago-analyze
   "s n" #'sgf-toggle-numbers
   "s m" #'sgf-toggle-marks
   "s h" #'sgf-toggle-hints
