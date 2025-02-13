@@ -364,7 +364,7 @@ one game."
     (sgf--merge-branches lnode)
     (sgf-graph-tree ov)
     (sgf-update-display ov t t nil t t t)
-    (sgf-serialize-game-to-buffer ov)))
+    (sgf-serialize-game ov)))
 
 
 (defun sgf-swap-branches (b front)
@@ -400,7 +400,7 @@ nil, swap to front. If there is only one branch, it will not swap."
           (setf (nth j children) child-i)
           (sgf-graph-tree ov)
           (sgf-update-display ov t t nil t t t)
-          (sgf-serialize-game-to-buffer ov))
+          (sgf-serialize-game ov))
       (message "There is only one branch - no swap."))))
 
 
@@ -416,7 +416,7 @@ nil, swap to front. If there is only one branch, it will not swap."
       (setq lnode parent)
       (setq parent (aref parent 0)))
     (sgf-graph-tree ov)
-    (sgf-serialize-game-to-buffer ov)))
+    (sgf-serialize-game ov)))
 
 
 (defun sgf--svg-group-from-game-prop (svg game-prop)
@@ -464,10 +464,11 @@ nil, swap to front. If there is only one branch, it will not swap."
 
 See also `sgf-new-move'."
   (interactive)
-  (let* ((ov (sgf-get-overlay)))
+  (let* ((ov (sgf-get-overlay))
+         (allow-p (sgf-game-plist-get :new-move ov)))
     (sgf-game-plist-toggle :new-move ov)
-    (message "Toggled allowing new move.")
-    (if (and (not (sgf-game-plist-get :new-move ov))
+    (message "allow new move: %s" (if allow-p "off" "on"))
+    (if (and allow-p
              (sgf-game-plist-get :show-hints ov))
         ;; if not allowing new move, it may be in self exam, disable
         ;; showing hint of next move.
@@ -489,22 +490,19 @@ It clones svg to a new object and removes the menu bar and move the
 status bar to the top instead."
   (interactive "FExport svg to file: ")
   (let* ((ov (sgf-get-overlay))
-         (svg (overlay-get ov 'svg))
-         (svg-new (copy-tree svg))
-         (status-bar (car (dom-by-id svg-new "status-bar"))))
-    (svg-remove svg-new "menu-bar")
-    (dom-set-attribute status-bar 'transform "translate(0, 0)")
+         (svg (overlay-get ov 'svg)))
     (if (or (not filename) (string-empty-p filename))
         ;; If no filename is given, display the SVG in a buffer
         (with-current-buffer (get-buffer-create "*SVG Image*")
           (erase-buffer)
-          (svg-print svg-new)
+          (svg-print svg)
           (display-buffer (current-buffer)))
       ;; Otherwise, write the SVG to the specified file
       (when (or (not (file-exists-p filename))
-                (y-or-n-p (format "The file '%s' already exists. Overwrite? " filename)))
+                (y-or-n-p (format "The file '%s' already exists. Overwrite? "
+                                  filename)))
         (with-temp-file filename
-          (svg-print svg-new))
+          (svg-print svg))
         (message "SVG exported to %s" filename)))))
 
 
@@ -524,7 +522,7 @@ status bar to the top instead."
               (sgf-update-display ov t nil t t t t)
             (message "Move number was not displayed. Enable its display.")
             (sgf-toggle-numbers))
-          (sgf-serialize-game-to-buffer ov))
+          (sgf-serialize-game ov))
       (message "Invalid move number %S. Please enter an integer." new-mvnum))))
 
 
@@ -543,7 +541,7 @@ status bar to the top instead."
           (aset lnode 1 (assq-delete-all 'C node))
         (setf (alist-get 'C (aref lnode 1)) (list new-comment))))
       (sgf-graph-tree ov)
-      (sgf-serialize-game-to-buffer ov)))
+      (sgf-serialize-game ov)))
 
 
 (defun sgf-edit-annotation (&optional lnode)
@@ -570,7 +568,7 @@ status bar to the top instead."
         (setf (alist-get new-annt (aref lnode 1)) (list new-annt "1")))
       (sgf-graph-tree ov)
       (sgf-update-display ov t t t t nil t))
-    (sgf-serialize-game-to-buffer ov)))
+    (sgf-serialize-game ov)))
 
 
 (defun sgf-make-root (&optional lnode)
@@ -612,7 +610,7 @@ marks, labels, and comments of the moves except the last one."
       (aset game-state 5 (nthcdr depth undos))  ; clear undos before lnode
       (sgf-graph-tree ov)
       (sgf-update-display ov)
-      (sgf-serialize-game-to-buffer ov))))
+      (sgf-serialize-game ov))))
 
 
 (defun sgf-prune (&optional interactive-call)
@@ -625,7 +623,7 @@ marks, labels, and comments of the moves except the last one."
     (if (and interactive-call (sgf-game-plist-get :show-hints))
         (sgf-update-display ov t t nil t t t))
     (sgf-graph-tree ov)
-    (sgf-serialize-game-to-buffer ov)))
+    (sgf-serialize-game ov)))
 
 
 (defun sgf-prune-inclusive ()
@@ -639,7 +637,7 @@ marks, labels, and comments of the moves except the last one."
     (aset parent 2 (delq lnode siblings))
     (sgf-graph-tree ov)
     (sgf-update-display ov)
-    (sgf-serialize-game-to-buffer ov)))
+    (sgf-serialize-game ov)))
 
 
 ;; Game Info Properties
@@ -760,7 +758,7 @@ marks, labels, and comments of the moves except the last one."
           (setq node (assoc-delete-all prop-id node))
           (if value (nconc node (list (list prop-id value))))
           (aset lnode 1 node))))
-    (sgf-serialize-game-to-buffer ov)
+    (sgf-serialize-game ov)
     (message "Game information saved.")
     (kill-buffer)))
 
@@ -788,7 +786,7 @@ otherwise, create a new linked node and move the game state to it."
             (aset curr-lnode 2 (nconc children (list new-lnode)))
             (sgf-update-display ov)
             (sgf-graph-tree ov)
-            (sgf-serialize-game-to-buffer ov))
+            (sgf-serialize-game ov))
         (message "New move is set to be prohibited.")))))
 
 
@@ -965,7 +963,7 @@ The move number will be incremented."
                 (nconc curr-node (list (cons prop-key xys)))) ; Add new property entry
             ;; If the xy list is empty, remove the property entirely
             (setq curr-node (assq-delete-all prop-key curr-node)))
-          (sgf-serialize-game-to-buffer ov)
+          (sgf-serialize-game ov)
           (sgf-update-display ov)
           (message "Edited %s stone at %s" stone xy))
       (error "Cannot edit setup stones on a non-root node. Move to the beginning of the game with `sgf-first-move'"))))
@@ -1035,7 +1033,7 @@ The move number will be incremented."
       ;; If the mark doesn't exist, add it
       (message "Added mark at %s" xy)
       (nconc curr-node (list (cons shape (list xy)))))
-    (sgf-serialize-game-to-buffer ov)
+    (sgf-serialize-game ov)
     ;; Update the display
     (sgf-update-display ov)))
 
@@ -1072,7 +1070,7 @@ The move number will be incremented."
             (nconc curr-node (list (cons 'LB (list (cons xy new-txt)))))))
         (message "Updated label at %s with text '%s'" xy new-txt)))
     ;; Serialize the game state to the buffer
-    (sgf-serialize-game-to-buffer ov)
+    (sgf-serialize-game ov)
     ;; Update the display
     (sgf-update-display ov)))
 
@@ -1089,7 +1087,7 @@ The move number will be incremented."
         (when (and curr-mark (member xy curr-mark))
           (delete xy curr-mark)
           (message "Deleted mark at %s" xy)
-          (sgf-serialize-game-to-buffer ov)
+          (sgf-serialize-game ov)
           (sgf-update-display ov))))))
 
 (defun sgf-delete-mark ()
@@ -1290,7 +1288,7 @@ The existing SGF content in the buffer will be erased."
     ;; update buffer content; otherwise, the *empty* overlay (empty
     ;; overlays are overlays cover no text) won't display.
     (sgf--setup-overlay ov game-state svg-hot-areas game-plist)
-    (sgf-serialize-game-to-buffer ov)))
+    (sgf-serialize-game ov)))
 
 
 (defun sgf-katago-collect-scores ()
@@ -1404,7 +1402,7 @@ The existing SGF content in the buffer will be erased."
         (setq lnode new-lnode)
         (setq turn (if (eq turn 'B) 'W 'B))))
     (sgf-graph-tree ov)
-    (sgf-serialize-game-to-buffer ov)
+    (sgf-serialize-game ov)
     (sgf-update-display ov)))
 
 
@@ -1491,6 +1489,8 @@ It is set as overlay property and only activated when the overlay is displayed."
   "m m" #'sgf-merge-branches
   "m s" #'sgf-swap-branches
   "m v" #'sgf-remove-variations
+  "m e" #'sgf-serialize-game
+  "m E" #'sgf-write-game
   "<hot-grid> M-<mouse-1>" #'sgf-katago-visualize-pv
   "<hot-grid> C-M-<mouse-1>" #'sgf-katago-expand-pv
   "<hot-grid> <mouse-1>" #'sgf-board-click-left

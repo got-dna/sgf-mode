@@ -733,7 +733,7 @@ not used and kept for reference."
     (message "(%s\n%s)" (apply #'concat output) (sgf-serialize-lnode curr-lnode))))
 
 
-(defun sgf-serialize-game-to-buffer (&optional ov)
+(defun sgf-serialize-game (&optional ov)
   "Update the buffer region with the SGF string representation of game.
 
 If OV is nil, it will use the overlay at point."
@@ -757,9 +757,28 @@ If OV is nil, it will use the overlay at point."
         ;; group the delete and insert operations into a single undo unit.
         (combine-change-calls beg end
           (delete-region beg end)
-          (insert (sgf-serialize-game-to-str lnode))
-          (insert "\n"))
+          (insert (sgf-serialize-game-to-str lnode) "\n"))
         (undo-boundary)))))
+
+
+(defun sgf-write-game (filename &optional ov)
+  "Write the game into a new file."
+  (interactive
+   (list (if buffer-file-name
+             (read-file-name "Write file: "
+                             nil nil nil nil)
+           (read-file-name "Write file: " default-directory
+                           (expand-file-name
+                            (file-name-nondirectory (buffer-name))
+                            default-directory)
+                           nil nil))))
+  (let* ((ov (or ov (sgf-get-overlay)))
+         (game-state (overlay-get ov 'game-state))
+         (lnode (aref game-state 0))
+         (sgf-str (sgf-serialize-game-to-str lnode)))
+    (with-temp-file filename
+      (insert sgf-str "\n"))
+    (find-file filename)))
 
 
 (defun sgf-serialize-lnode-to-json (lnode &optional next-only-p)
