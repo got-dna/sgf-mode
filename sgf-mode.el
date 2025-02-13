@@ -1344,7 +1344,10 @@ The existing SGF content in the buffer will be erased."
          (json-obj (sgf-serialize-lnode-to-json lnode t))
          (json-str (json-encode json-obj))
          (callback (lambda (t m)
+                     ;; this adds KG to the beginning of the node alist
                      (setf (alist-get 'KG (aref lnode 1)) m)
+                     ;; this adds KG to the end of the node alist
+                     ;; (nconc (aref lnode 1) (list (cons 'KG m)))
                      (message "KataGo analysis is finished.")
                      (sgf-update-display ov t t t t t))))
   (unless katago-analysis-process (katago-analysis-init))
@@ -1376,6 +1379,8 @@ The existing SGF content in the buffer will be erased."
                          (setq depth (1- depth))
                          (setf (alist-get 'KG (aref lnode 1))
                                (aref result depth))
+                         ;; (nconc (aref lnode 1)
+                         ;;        (list (cons 'KG (aref result depth))))
                          ;; (message "zzz %S" (aref lnode 1))
                          ;; (message "depth: %d" depth)
                          (setq lnode (aref lnode 0)))
@@ -1509,7 +1514,8 @@ It is set as overlay property and only activated when the overlay is displayed."
 
 (defun sgf-setup (&optional vertical)
   (whitespace-cleanup)
-  (let ((beg (point-min)) (end (point-max)))
+  (let ((beg (point-min)) (end (point-max))
+        (truncate-lines t))
     (if (eq beg end)
         (sgf-init-new-game beg end)
       (sgf-toggle-game-display beg end))

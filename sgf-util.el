@@ -141,6 +141,19 @@ Examples: (sgf-toggle t) => nil
         (t flag)))
 
 
+(defun sgf-merge-alist (alist)
+  "Merge items with the same key in ALIST."
+  (let ((result '()))
+    (dolist (item alist)
+      (let* ((key (car item))
+             (value (cdr item))
+             (existing (assq key result))
+             (new (nconc (cdr existing) value)))
+        ;; If key doesn't exist, add new entry with value in a list
+        (setf (alist-get key result) (delete-dups new))))
+    (nreverse result)))
+
+
 (defun sgf-get-overlay-at (&optional pos)
   "Return the SGF overlay at POS position in the current buffer.
 

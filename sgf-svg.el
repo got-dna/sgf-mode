@@ -308,6 +308,7 @@ clear the katago svg node."
         (sgf-svg-add-text group x y
                           (number-to-string (1+ i))
                           "magenta"
+                          :text-decoration "underline"
                           :font-size "0.5em")
         (setq turn (if (eq turn 'B) 'W 'B))))))
 

@@ -416,7 +416,7 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
 (defun sgf-decode-node (sgf-node)
   "Parse SGF node in syntax tree into node object."
   (let ((node (aref sgf-node 1))) ; retrieve the real data from vector
-    (mapcar #'sgf-decode-prop node)))
+    (sgf-merge-alist (mapcar #'sgf-decode-prop node))))
 
 
 (defun sgf-decode-prop (sgf-prop)
@@ -665,52 +665,63 @@ where all positions in the rectangle are filled in coords."
 
 (defun sgf-encode-node (node)
   "Convert a node to an SGF string."
+  (sort node :in-place t :key #'car
+        :lessp (lambda (key1 key2)
+                 ;; if key1 is:
+                 ;; 1. KG: put it at the end
+                 ;; 2. B or W: put it at the beginning
+                 ;; 3. others: put it in the middle unchanged
+                 (cond ((member key1 '(B W)) t)
+                       ((member key2 '(B W)) nil)
+                       ((eq key1 'KG) nil)
+                       ((eq key2 'KG) t))))
   (concat ";" (mapconcat (lambda (prop) (sgf-encode-prop prop)) node)))
 
 
 (defun sgf-serialize-lnode (lnode)
   "Convert a game tree starting from LNODE to an SGF string."
-  (let ((stack '()) (output '())
-        (indent 0))
+  (let* ((stack '()) (output '())
+         (indent-inc 2) ; the incremental indent for each level
+         (indent (- indent-inc))) ; the total indent for the current node
     ;; Push the root node onto the stack
-    (push (list lnode 0 nil) stack)
-
+    (push (list lnode 0 t) stack)
     (while stack
       (let* ((item (pop stack))
-             (node (nth 0 item))
+             (lnode (nth 0 item))
              (child-index (nth 1 item))
-             (is-branch (nth 2 item))
-             (next-lnodes (aref node 2))
-             (n (length next-lnodes)))
-
-        ;; Handle the current node
+             (fork-p (nth 2 item))
+             (next-lnodes (aref lnode 2))
+             (n (length next-lnodes))
+             (space-or-parenthesis "("))
+        ;; Handle the current lnode
         (when (= child-index 0)
-          (when is-branch
-            (setq indent (1+ indent))
-            (push (concat "\n" (make-string indent ?\s) "(") output))
-          (push (sgf-encode-node (aref node 1)) output))
-
-        ;; Process the children
-        (if (< child-index n)
-            (progn
-              ;; Increment child index and push the current node back
-              (push (list node (1+ child-index) is-branch) stack)
-              ;; Push the next child node onto the stack
-              (push (list (nth child-index next-lnodes) 0 (> n 1)) stack))
-          ;; No more children, close the branch if needed
-          (when is-branch
-            (setq indent (1- indent))
-            (push ")" output)))))
-
+          (if fork-p
+              (setq indent (+ indent indent-inc))
+            (setq space-or-parenthesis " "))
+          (push (format "\n%s%s%s"
+                        (make-string indent ?\s)
+                        space-or-parenthesis
+                        (sgf-encode-node (aref lnode 1)))
+                output))
+        ;; Process the children of lnode to push to the stack
+        (if (= child-index n)
+            ;; No more children, close the branch with parenthesis
+            (when fork-p
+              (setq indent (- indent indent-inc))
+              (push ")" output))
+          ;; Increment child index and push the current node back
+          (push (list lnode (1+ child-index) fork-p) stack)
+          ;; Push the next child node onto the stack
+          (push (list (nth child-index next-lnodes) 0 (> n 1)) stack))))
     ;; Return the final result as a concatenated string
-     (apply #'concat (nreverse output))))
+    (substring (apply #'concat (nreverse output)) 1)))
 
 
 (defun sgf-serialize-game-to-str (lnode)
   "Serialize the whole game to a string."
   ;; Move to the root node
   (while (aref lnode 0) (setq lnode (aref lnode 0)))
-  (format "(%s)" (sgf-serialize-lnode lnode)))
+  (sgf-serialize-lnode lnode))
 
 
 (defun sgf-serialize-game-to-str-no-variation ()
