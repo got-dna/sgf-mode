@@ -84,6 +84,11 @@
                              "    `-b"
                              "")
                            "\n")))
-    (add-text-properties 6 7 '(face sgf-graph-comment-node help-echo "comment@[foo]") exp-h)
+    (add-text-properties 6 7 '(face (sgf-graph-comment-node sgf-graph-bm-node) help-echo "comment@[foo]") exp-h)
+    (add-text-properties 2 3   '(face sgf-graph-te-node) exp-h)
+    (add-text-properties 4 5   '(face sgf-graph-bm-node) exp-h)
+    (add-text-properties 8 9   '(face sgf-graph-te-node) exp-h)
+    (add-text-properties 10 11 '(face sgf-graph-do-node) exp-h)
+    (add-text-properties 12 13 '(face sgf-graph-it-node) exp-h)
     (should (equal-including-properties obs-h exp-h))
     (should (equal obs-v exp-v))))
