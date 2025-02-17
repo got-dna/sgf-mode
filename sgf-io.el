@@ -822,19 +822,18 @@ starting from root."
                                    (vector (format "%s" stone)
                                            (format "(%d,%d)" (car xy) (- h (cdr xy) 1)))))
                               moves)))
-       `(("id" . ,(buffer-name))
-         ("initialStones" . ,(vconcat ab aw))
-         ("moves" . ,(vconcat moves-gtp
-))
-         ("analyzeTurns" . ,(if next-only-p
+       `((id . ,(buffer-name))
+         (initialStones . ,(vconcat ab aw))
+         (moves . ,(vconcat moves-gtp))
+         (analyzeTurns . ,(if next-only-p
                                 (vector n)
                               (vconcat (number-sequence 0 n))))
-         ("komi" . ,komi)
-         ("rules" . ,rule)
-         ("includeOwnership" . t)
-         ("includePolicy" . t)
-         ("boardXSize" . ,w)
-         ("boardYSize" . ,h)))))
+         (komi . ,komi)
+         (rules . ,rule)
+         (includeOwnership . t)
+         (includePolicy . t)
+         (boardXSize . ,w)
+         (boardYSize . ,h)))))
 
 
 (provide 'sgf-io)

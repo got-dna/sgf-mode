@@ -153,3 +153,23 @@
                          (replace-regexp-in-string
                           "[[:space:]]" "" ; remove spaces in the serialized str
                           (sgf-serialize-game-to-str (aref game-state 0)))))))))
+
+
+(ert-deftest sgf-serialize-lnode-to-json-test ()
+  (require 'project)
+  ;; TODO any better alternatives to get tests dir?
+  (let* ((root-dir (project-root (project-current)))
+         (test-dir "tests")
+         (fn "test-13x15")
+         (fp (file-name-concat root-dir test-dir fn))
+         (sgf-fp (concat fp ".sgf"))
+         (json-fp (concat fp ".json"))
+         (exp (json-read-file json-fp))
+         (root-lnode (sgf-parse-file-to-* sgf-fp
+                                          'sgf-parse-buffer-to-linked-node))
+         (curr-lnode root-lnode))
+    (while (aref curr-lnode 2)
+      (setq curr-lnode (car (aref curr-lnode 2))))
+    ;; (obs (json-parse-string obs-str :object-type 'alist))
+    (should (equal
+             (sgf-serialize-lnode-to-json curr-lnode) exp))))
