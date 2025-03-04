@@ -244,6 +244,11 @@ Return nil if LNODE is the root node."
   (inline-quote (let ((parent (sgf-get-parent ,lnode)))
                   (aref parent 2))))
 
+(define-inline sgf-get-root (lnode)
+  "Return the root of LNODE."
+  (inline-quote (while (not (sgf-root-p lnode))
+                    (setq lnode (sgf-get-parent lnode)))))
+
 (define-inline sgf-node-data (lnode)
   "Return the node of LNODE."
   (inline-quote (aref ,lnode 1)))

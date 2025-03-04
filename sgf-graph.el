@@ -121,7 +121,7 @@ from the current position to the root of the graph.
 VERTICAL is the prefix argument to specify whether the graph tree is
 vertical or horizontal (default). See also `sgf-traverse' and
 `sgf-graph-path-to-pos'."
-  (interactive "P\np")
+  (interactive "P\np" sgf-graph-mode)
   (if (sgf-graph-valid-char-p (char-before))
       (let ((path '())
             (steps (/ (1- (current-column)) 2))
@@ -155,7 +155,7 @@ vertical or horizontal (default). See also `sgf-traverse' and
 VERTICAL is the prefix argument to specify whether the graph tree is
 vertical or horizontal (default). See also `sgf-traverse' and
 `sgf-graph-pos-to-path'."
-  (interactive "P\nxTraverse path: ")
+  (interactive "P\nxTraverse path: " sgf-graph-mode)
   (let ((steps (pop path)) (column 0) char branch)
     (goto-char (point-min))
     (catch 'exit-loop
@@ -274,7 +274,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
 
 (defun sgf-graph-sync-game (&optional interactive-call)
   "Sync the game state to the current node in the graph tree."
-  (interactive "p")
+  (interactive "p" sgf-graph-mode)
   (let ((ov sgf-graph--game)
         (path (sgf-graph-pos-to-path (eq sgf-graph--direction 'v))))
     (when path
@@ -305,7 +305,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
 
 (defun sgf-graph-forward-node (&optional n)
   "Forward to the next node in the graph tree."
-  (interactive "P")
+  (interactive "P" sgf-graph-mode)
   (unless (eolp) (sgf-graph-forward-char))
   (let* ((col (current-column))
          (n (or n 0))
@@ -318,7 +318,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
 
 (defun sgf-graph-backward-node ()
   "Backward to the previous node in the graph tree."
-  (interactive)
+  (interactive nil sgf-graph-mode)
   (let ((col (current-column)))
     (while (and (not (or (eq (char-before) ?*)
                          (eq (char-before) ?a)))
@@ -339,7 +339,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
 
 (defun sgf-graph-forward-comment ()
   "Forward to the next node with comment."
-  (interactive)
+  (interactive nil sgf-graph-mode)
   (sgf-graph-forward-char)
   (while (not (get-text-property (1- (point)) 'help-echo))
     (sgf-graph-forward-char)))
@@ -347,7 +347,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
 
 (defun sgf-graph-backward-comment ()
   "Forward to the previous node with comment."
-  (interactive)
+  (interactive nil sgf-graph-mode)
   (sgf-graph-backward-char)
   (while (not (get-text-property (1- (point)) 'help-echo))
     (sgf-graph-backward-char)))
