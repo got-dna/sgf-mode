@@ -2,7 +2,7 @@
 #+OPTIONS: ^:{}
 #+property: header-args+ :results none
 
-* Installation
+* COMMENT Installation
 ~sgf-mode~ requires Emacs version >= 26 and librsvg.
 
 - Add to ~load-path~
@@ -26,17 +26,24 @@
                                    '((sgf . t)))
       (setq org-babel-default-header-args:sgf
             '(;(:show-hints . "nil")
-              (:results . "none"))))
+              (:results . "none")))
+
+      (setq katago-model "katago.bin.gz"
+            katago-analysis-config "analysis_example.cfg"
+            katago-gtp-config "gtp_example.cfg"))
   #+end_src
+
 * usage
 It creates overlay for the SGF and draws the svg for game and displays it.
 ** global user options
 1. ~sgf-svg-interval~, ~sgf-svg-bar~, ~sgf-svg-font-size~, and ~sgf-svg-font-family~ to config game board display.
-2. ~sgf-show-numbers~, ~sgf-show-hints~, ~sgf-show-marks~, ~sgf-show-ko~, ~sgf-traverse-path~  and ~sgf-new-move~ to set initial game options.
+2. ~sgf-show-numbers~, ~sgf-show-hints~, ~sgf-show-marks~, ~sgf-show-ko~, ~sgf-traverse-path~, ~sgf-new-move~, and ~sgf-show-katago~ to set game options.
+
 ** .sgf file and sgf-mode
 - =C-c C-c=: toggle the svg board for the current sgf. See [[help:sgf-mode-map][sgf-mode-map]] for more commands.
 - Once putting the cursor on the drawn svg board, you can click on the board to play the game. The right mouse click on the stone is also available for context menu. See [[help:sgf-mode-display-map][sgf-mode-display-map]] all the commands and key bindings. Note that these key bindings are only available when the cursor is on the overlay (ie the displayed svg board).
 - =C-c C-c= also displays a buffer to show all the game variations in a tree. Once in this buffer, you can see its commands in [[help:sgf-graph-mode-map][sgf-graph-mode-map]].
+
 ** sgf src block in org-mode
 *** src block usage
 As org-mode src block header arguments, similar to global user options, users can set ~show-numbers~, ~show-hints~, ~show-marks~, ~show-ko~, ~traverse-path~  and ~new-move~ for game of the current src block. See examples: [[file:tests/test.org][sgf src block in org-mode file]]
@@ -49,9 +56,12 @@ As org-mode src block header arguments, similar to global user options, users ca
 *** tangle file
 - =C-c C-v t= to tangle all the games of sgf blocks to a single file;
 - =C-u C-c C-v t= to tangle current sgf block only.
+
 * alternatives
 - [[https://github.com/misohena/el-igo][igo-org]]
 - [[https://github.com/eschulte/el-go][el-go]]
+
 * TODO
-- A pass move is shown as '[]' or alternatively as '[tt]' (only for boards <= 19x19), i.e. applications should be able to deal with both representations. '[tt]' is kept for compatibility with FF[3].
+- label black/white stone with X and O in the graph buffer
+- A pass move could be alternatively shown as '[tt]' (only for boards <= 19x19), i.e. applications should be able to deal with both representations. '[tt]' is kept for compatibility with FF[3].
 - In FF[4] it is possible to specify board sizes upto 52x52. In this case uppercase letters are used to represent points from 27-52, i.e. 'a'=1 ... 'z'=26 , 'A'=27 ... 'Z'=52
