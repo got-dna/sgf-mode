@@ -762,14 +762,21 @@ If OV is nil, it will use the overlay at point."
     (with-current-buffer buffer
       ;; (setq buffer-read-only nil)
       (save-excursion
-        ;; Wraps the operation in undo-boundary calls to ensure it's
-        ;; treated as a distinct unit in the undo list
-        (undo-boundary)
-        ;; group the delete and insert operations into a single undo unit.
-        (combine-change-calls beg end
-          (delete-region beg end)
-          (insert (sgf-serialize-game-to-str lnode) "\n"))
-        (undo-boundary)))))
+        ;; This approach:
+        ;; 1. Creates a change group
+        ;; 2. Performs the delete and insert operations
+        ;; 3. Amalgamates them into a single undo unit
+        ;; 4. Finalizes the changes
+        ;; 5. Ensures cleanup in case of errors
+        (let ((handle (prepare-change-group)))
+          (unwind-protect
+              (progn
+                (activate-change-group handle)
+                (delete-region beg end)
+                (insert (sgf-serialize-game-to-str lnode) "\n")
+                (undo-amalgamate-change-group handle)
+                (accept-change-group handle))
+            (when handle (cancel-change-group handle))))))))
 
 
 (defun sgf-write-game (filename &optional ov)
