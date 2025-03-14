@@ -368,7 +368,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
   "s" #'sgf-graph-sync-game)
 
 
-(define-derived-mode sgf-graph-mode nil "SGF-Graph"
+(define-derived-mode sgf-graph-mode special-mode "SGF-Graph"
   "Major mode for viewing SGF graph tree."
   :keymap sgf-graph-mode-map
   (setq buffer-read-only t)

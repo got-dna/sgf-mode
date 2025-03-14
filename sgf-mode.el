@@ -1391,7 +1391,7 @@ The existing SGF content in the buffer will be erased."
 
 
 (defun sgf-katago-expand-pv (event)
-  "Mouse click to show the KataGo recommended following move sequence on the board."
+  "Mouse click to put the KataGo recommended following move stones on the board."
   (interactive "@e")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
@@ -1412,7 +1412,9 @@ The existing SGF content in the buffer will be erased."
 
 
 (defun sgf-katago-visualize-pv (event)
-  "Mouse click to show the KataGo recommended following move sequence on the board."
+  "Mouse click to show the KataGo recommended following move sequence on the board.
+
+It only visualizes the move sequence, but the stones are not really put no the board or into the game."
   (interactive "@e")
   (let* ((ov (sgf-get-overlay))
          (svg (overlay-get ov 'svg))
@@ -1453,6 +1455,11 @@ It is set as overlay property and only activated when the overlay is displayed."
   "+"   #'image-increase-size
   "-"   #'image-decrease-size
   "g"   #'sgf-graph-hv
+  "o"   (lambda () "Switch to the graph tree buffer."
+          (interactive)
+          (let ((window (get-buffer-window sgf-graph-buffer-name t)))
+            (when window
+              (select-window window))))
   "z"   #'sgf-export-image
   "c"   #'sgf-show-comment
   "p"   #'sgf-show-path
