@@ -239,8 +239,6 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
       (let* ((current (pop stack))
              (lnode (car current))
              (node (aref lnode 1))
-             (move (sgf-process-move node))
-             (stone (car move))
              (annt (sgf-graph-node-annotation-face node))
              (comment (car (alist-get 'C node)))
              (props (cond ((and comment annt)
@@ -267,9 +265,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
               (insert (if is-first
                           "-"
                         (concat "\n" prefix (if is-last "`-" "|-"))))
-              (insert (if (= child-count 1)
-                          (if (eq stone 'B) "x" "o")
-                        (char-to-string (+ ?a i))))
+              (insert (if (= child-count 1) "*" (char-to-string (+ ?a i))))
               (push (list child (+ i line-n)) stack))))))
     ;; add newline to the end of buffer
     (goto-char (point-max))
