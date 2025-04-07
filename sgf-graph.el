@@ -129,7 +129,9 @@ vertical or horizontal (default). See also `sgf-traverse' and
         (save-excursion
           (backward-char)
           (while (> (point) 1)
-            (unless (eq ?* (char-after))
+            (unless (or (eq ?* (char-after))
+                        (eq ?o (char-after))
+                        (eq ?x (char-after)))
               (push (char-after) path))
             (forward-char -2)
             ;; move to the same column of the previous line.
@@ -169,7 +171,7 @@ vertical or horizontal (default). See also `sgf-traverse' and
         (unless (sgf-graph-valid-char-p char)
           (message "Moved %d steps to invalid char %c." i char)
           (throw 'exit-loop i))
-        (when (and path (/= char ?*))
+        (when (and path (/= char ?x) (/= char ?o) (/= char ?*))
           (setq branch (pop path))
           (while (not (eq branch (char-after)))
             (forward-line)
@@ -233,8 +235,8 @@ other characters to spaces."
   "Generate horizontal ASCII tree representation for the game (non-recursively).
 
 ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
-  (let ((stack (list (list root-lnode 1))))
-    (insert "*") ; root
+  (let ((stack (list (cons root-lnode 1))))
+    (insert "R") ; root
     (while stack
       (let* ((current (pop stack))
              (lnode (car current))
@@ -247,7 +249,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
                            `(help-echo ,comment face sgf-graph-comment-node))
                           ((and (null comment) annt)
                            `(face ,annt))))
-             (line-n (cadr current))
+             (line-n (cdr current))
              (children (aref lnode 2))
              (child-count (length children)))
         ;; move to the end of line line-n
@@ -261,12 +263,18 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
           (dotimes (i child-count)
             (let* ((is-last (= i (1- child-count)))
                    (is-first (= i 0))
-                   (child (nth i children)))
-              (insert (if is-first
-                          "-"
-                        (concat "\n" prefix (if is-last "`-" "|-"))))
-              (insert (if (= child-count 1) "*" (char-to-string (+ ?a i))))
-              (push (list child (+ i line-n)) stack))))))
+                   (child (nth i children))
+                   (node (aref child 1))
+                   (move (sgf-process-move node))
+                   (stone (car move)))
+                (insert (if is-first
+                            "-"
+                          (concat "\n" prefix (if is-last "`-" "|-"))))
+                (insert (if (= child-count 1)
+                            (if (eq stone 'B) "x" "o")
+                          (char-to-string (+ ?a i))))
+
+              (push (cons child (+ i line-n)) stack))))))
     ;; add newline to the end of buffer
     (goto-char (point-max))
     (insert "\n")))
@@ -311,6 +319,8 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
          (n (or n 0))
          (char (+ ?a n)))
     (while (not (or (eq (char-before) char)
+                    (eq (char-before) ?x)
+                    (eq (char-before) ?o)
                     (eq (char-before) ?*)))
       (forward-line)
       (move-to-column col))))
@@ -321,6 +331,8 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
   (interactive nil sgf-graph-mode)
   (let ((col (current-column)))
     (while (and (not (or (eq (char-before) ?*)
+                         (eq (char-before) ?x)
+                         (eq (char-before) ?o)
                          (eq (char-before) ?a)))
                 (not (bobp)))
       (forward-line -1)

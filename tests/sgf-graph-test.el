@@ -44,7 +44,7 @@
                 (sgf-graph-subtree-h lnode)
                 (buffer-string)))
          (exp (mapconcat 'identity
-                         '("*-*-a-a"
+                         '("*-o-a-a"
                            "  | |-b"
                            "  | `-c"
                            "  `-b"
@@ -66,7 +66,7 @@
                   (sgf-graph-subtree-h lnode)
                   (buffer-string)))
          (exp-h (mapconcat 'identity
-                           '("*-*-*-a-*-*-*"
+                           '("*-o-x-a-x-o-x"
                              "    `-b"
                              "")
                            "\n"))
