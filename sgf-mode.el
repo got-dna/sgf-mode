@@ -405,7 +405,7 @@ nil, swap to front. If there is only one branch, it will not swap."
 
 
 (defun sgf-remove-variations ()
-  "Remove all the variations before the current game state in the game tree."
+  "Remove all the other variations before the current game state in the game tree."
   (interactive)
   (let* ((ov (sgf-get-overlay))
          (lnode (sgf-get-lnode ov))
@@ -1391,7 +1391,9 @@ The existing SGF content in the buffer will be erased."
 
 
 (defun sgf-katago-expand-pv (event)
-  "Mouse click to put the KataGo recommended following move stones on the board."
+  "Mouse click to put the KataGo recommended following move stones on the board.
+
+It modifies the game object and the sgf buffer. See also `sgf-katago-visualize-pv'."
   (interactive "@e")
   (let* ((ov (sgf-get-overlay))
          (game-state (overlay-get ov 'game-state))
@@ -1414,7 +1416,7 @@ The existing SGF content in the buffer will be erased."
 (defun sgf-katago-visualize-pv (event)
   "Mouse click to show the KataGo recommended following move sequence on the board.
 
-It only visualizes the move sequence, but the stones are not really put no the board or into the game."
+It only visualizes the move sequence, but does not modify the game object or sgf buffer."
   (interactive "@e")
   (let* ((ov (sgf-get-overlay))
          (svg (overlay-get ov 'svg))

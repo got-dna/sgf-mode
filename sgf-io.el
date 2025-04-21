@@ -58,14 +58,24 @@
   (while (sgf-parse-ws-p (char-after))
     (forward-char)))
 
-(defun sgf-parse-match-char (c)
-  (let ((strm-c (char-after)))
-    (if (equal strm-c c)
-        (forward-char)
+
+(defun sgf-parse-match-char (c &optional no-error)
+  "Check if the next char is C.
+If so, move point ahead and return the character.
+If NO-ERROR is non-nil, return nil on mismatch instead of signaling an error."
+  (let ((char (char-after)))
+    (cond
+     ;; Match case
+     ((equal char c) (forward-char) c)
+     ;; No match but no-error option set
+     (no-error nil)
+     ;; Error case
+     (t
       (error "%d: Unexpected %s (expecting '%c')."
              (point)
-             (if strm-c (concat "'" (char-to-string strm-c) "'") "end of SGF")
-             c))))
+             (if char (concat "'" (char-to-string char) "'") "end of SGF")
+             c)))))
+
 
 (defun sgf-parse-scan-upcase ()
   "Scan [A-Z]* from strm."
@@ -108,7 +118,7 @@
   ;; (...) (...) (...)
   (let (trees)
     (while (progn (sgf-parse-skip-ws) (equal (char-after) ?\())
-      (push (sgf-parse-tree) trees))
+      (push (sgf-parse-tree-recursive) trees))
     (nreverse trees)))
 
 (defun sgf-parse-tree-recursive ()
@@ -129,7 +139,7 @@
         (error "%d: GameTree requires one or more Nodes." (point)))
 
     ;; Tree*
-    (setq subtrees (sgf-parse-trees))
+    (setq subtrees (sgf-parse-trees-recursive))
 
     ;; subtree could be nil;
     ;; if not nil, treat subtree as the same level as the parallel nodes.
@@ -141,61 +151,60 @@
 
     (vector begin-pos nodes end-pos)))
 
-(defun sgf-parse-trees ()
-  "Non-recursive version of `sgf-parse-trees-recursive'."
-  (let ((trees '())
-        (tree-stack '())
-        (node-stack '())
-        (subtree-stack '())
-        begin-pos
-        pos)
 
-    (while (progn (sgf-parse-skip-ws) (eq (char-after) ?\())
-      (setq begin-pos (point))
-      (sgf-parse-match-char ?\()
+(defun sgf-parse--start-frame ()
+  "Start parsing a new GameTree frame. Returns (begin-pos nodes nil)."
+  (let ((begin-pos (1- (point)))
+        (nodes (sgf-parse-nodes)))
+    (unless nodes
+      (error "%d: GameTree requires one or more Nodes." (point)))
+    (list begin-pos nodes nil)))
 
-      ;; Parse Node+
-      (let ((nodes (sgf-parse-nodes)))
-        (unless nodes
-          (error "%d: GameTree requires one or more Nodes." (point)))
-        (push begin-pos tree-stack)
-        (push nodes node-stack)
-        (push nil subtree-stack)
+(defun sgf-parse-tree ()
+  "Parse a single GameTree (non-recursively) and return [start nodes/subtrees end].
+Non-recursive version of `sgf-parse-tree-recursive'.
 
-        ;; Descend into nested trees while next char is (
-        (while (progn (sgf-parse-skip-ws) (eq (char-after) ?\())
-          (setq begin-pos (point))
-          (sgf-parse-match-char ?\()
+1. Start parsing a ( and collect nodes.
+2. If another ( appears, stack another frame.
+3. If a ) appears, pop a frame, assemble a tree.
+4. If no stack left after pop, store the final tree to result.
+5. After loop, return result."
 
-          ;; Subtree nodes
-          (let ((sub-nodes (sgf-parse-nodes)))
-            (unless sub-nodes
-              (error "%d: GameTree requires one or more Nodes." (point)))
-            (push begin-pos tree-stack)
-            (push sub-nodes node-stack)
-            (push nil subtree-stack)))
+  (sgf-parse-skip-ws)
+  ;; it must start with open (
+  (sgf-parse-match-char ?\()
 
-        ;; Pop back up and assemble trees
-        (while (progn
-                 (sgf-parse-skip-ws)
-                 (eq (char-after) ?\)))
-          (sgf-parse-match-char ?\))
-          (setq pos (point))
-          (let* ((end-pos pos)
-                 (subs (pop subtree-stack))
-                 (nds (pop node-stack))
-                 (start (pop tree-stack)))
+  (let ((stack '())
+        (result nil))
+    (push (sgf-parse--start-frame) stack)
 
-            ;; Attach subtrees if any
-            (if subs
-                (setq nds (nconc nds (list (nreverse subs)))))
-            (let ((tree (vector start nds end-pos)))
-              ;; Push tree as child to upper level (or top-level list)
-              (if subtree-stack
-                  (push tree (car subtree-stack))
-                (push tree trees)))))))
+    (while (and stack (not result))
+      (sgf-parse-skip-ws)
+      (cond ; expecting opening ( or closing )
+       ;; Start a nested tree
+       ((sgf-parse-match-char ?\( 'no-error)
+        (push (sgf-parse--start-frame) stack))
 
-    (nreverse trees)))
+       ;; Close current tree
+       ((sgf-parse-match-char ?\) 'no-error)
+        (let* ((end-pos (point))
+               (frame (pop stack))
+               (begin-pos (nth 0 frame))
+               (nodes (nth 1 frame))
+               (subtrees (nth 2 frame)))
+          ;; Attach subtrees if exist
+          (when subtrees
+            (setq nodes (nconc nodes (list (nreverse subtrees)))))
+          (let ((tree (vector begin-pos nodes end-pos)))
+            (if stack
+                (push tree (nth 2 (car stack))) ;; attach to parent's subtrees
+              (setq result tree))))) ;; finished!
+
+       ;; Unexpected
+       (t
+        (error "%d: Unexpected char '%c' during parsing." (point) (char-after)))))
+
+    result))
 
 
 (defun sgf-parse-nodes ()
