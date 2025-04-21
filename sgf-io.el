@@ -102,7 +102,7 @@
 ;; - sgf-parse-prop :: Property
 ;; - sgf-parse-prop-value :: PropValue
 
-(defun sgf-parse-trees ()
+(defun sgf-parse-trees-recursive ()
   "Parse 0 or more GameTree and return list of tree object."
   ;; Tree*
   ;; (...) (...) (...)
@@ -111,7 +111,7 @@
       (push (sgf-parse-tree) trees))
     (nreverse trees)))
 
-(defun sgf-parse-tree ()
+(defun sgf-parse-tree-recursive ()
   "Parse GameTree and return a tree object [begin-pos nodes/subtrees end-pos]."
 
   (sgf-parse-skip-ws)
@@ -140,6 +140,63 @@
     (setq end-pos (point))
 
     (vector begin-pos nodes end-pos)))
+
+(defun sgf-parse-trees ()
+  "Non-recursive version of `sgf-parse-trees-recursive'."
+  (let ((trees '())
+        (tree-stack '())
+        (node-stack '())
+        (subtree-stack '())
+        begin-pos
+        pos)
+
+    (while (progn (sgf-parse-skip-ws) (eq (char-after) ?\())
+      (setq begin-pos (point))
+      (sgf-parse-match-char ?\()
+
+      ;; Parse Node+
+      (let ((nodes (sgf-parse-nodes)))
+        (unless nodes
+          (error "%d: GameTree requires one or more Nodes." (point)))
+        (push begin-pos tree-stack)
+        (push nodes node-stack)
+        (push nil subtree-stack)
+
+        ;; Descend into nested trees while next char is (
+        (while (progn (sgf-parse-skip-ws) (eq (char-after) ?\())
+          (setq begin-pos (point))
+          (sgf-parse-match-char ?\()
+
+          ;; Subtree nodes
+          (let ((sub-nodes (sgf-parse-nodes)))
+            (unless sub-nodes
+              (error "%d: GameTree requires one or more Nodes." (point)))
+            (push begin-pos tree-stack)
+            (push sub-nodes node-stack)
+            (push nil subtree-stack)))
+
+        ;; Pop back up and assemble trees
+        (while (progn
+                 (sgf-parse-skip-ws)
+                 (eq (char-after) ?\)))
+          (sgf-parse-match-char ?\))
+          (setq pos (point))
+          (let* ((end-pos pos)
+                 (subs (pop subtree-stack))
+                 (nds (pop node-stack))
+                 (start (pop tree-stack)))
+
+            ;; Attach subtrees if any
+            (if subs
+                (setq nds (nconc nds (list (nreverse subs)))))
+            (let ((tree (vector start nds end-pos)))
+              ;; Push tree as child to upper level (or top-level list)
+              (if subtree-stack
+                  (push tree (car subtree-stack))
+                (push tree trees)))))))
+
+    (nreverse trees)))
+
 
 (defun sgf-parse-nodes ()
   "Parse 0 or more Node and return list of node object."
