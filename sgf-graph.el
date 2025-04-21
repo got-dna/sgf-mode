@@ -129,9 +129,7 @@ vertical or horizontal (default). See also `sgf-traverse' and
         (save-excursion
           (backward-char)
           (while (> (point) 1)
-            (unless (or (eq ?* (char-after))
-                        (eq ?o (char-after))
-                        (eq ?x (char-after)))
+            (unless (memq (char-after) '(?* ?o ?x))
               (push (char-after) path))
             (forward-char -2)
             ;; move to the same column of the previous line.
@@ -171,7 +169,7 @@ vertical or horizontal (default). See also `sgf-traverse' and
         (unless (sgf-graph-valid-char-p char)
           (message "Moved %d steps to invalid char %c." i char)
           (throw 'exit-loop i))
-        (when (and path (/= char ?x) (/= char ?o) (/= char ?*))
+        (when (and path (not (memq (char-after) '(?* ?o ?x))))
           (setq branch (pop path))
           (while (not (eq branch (char-after)))
             (forward-line)
@@ -318,10 +316,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
   (let* ((col (current-column))
          (n (or n 0))
          (char (+ ?a n)))
-    (while (not (or (eq (char-before) char)
-                    (eq (char-before) ?x)
-                    (eq (char-before) ?o)
-                    (eq (char-before) ?*)))
+    (while (not (memq (char-before) (list char ?x ?o ?*)))
       (forward-line)
       (move-to-column col))))
 
@@ -330,10 +325,7 @@ ROOT-LNODE is the doubly linked root node. See also `sgf-graph-subtree-v'."
   "Backward to the previous node in the graph tree."
   (interactive nil sgf-graph-mode)
   (let ((col (current-column)))
-    (while (and (not (or (eq (char-before) ?*)
-                         (eq (char-before) ?x)
-                         (eq (char-before) ?o)
-                         (eq (char-before) ?a)))
+    (while (and (not (memq (char-before) (list ?x ?o ?* ?a)))
                 (not (bobp)))
       (forward-line -1)
       (move-to-column col)))
