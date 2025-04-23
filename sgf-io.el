@@ -867,6 +867,7 @@ starting from root."
       (setq lnode (aref lnode 0)))
     (let* ((root-node (aref lnode 1))
            (size (car (alist-get 'SZ root-node)))
+           (pl (or (car (alist-get 'PL root-node)) 'B))
            (w (or (car size) 19))
            (h (or (cdr size) 19))
            (ab (mapcar (lambda (i)
@@ -887,6 +888,7 @@ starting from root."
        `((id . ,(buffer-name))
          (initialStones . ,(vconcat ab aw))
          (moves . ,(vconcat moves-gtp))
+         (initialPlayer . ,(format "%s" pl))
          (analyzeTurns . ,(if next-only-p
                                 (vector n)
                               (vconcat (number-sequence 0 n))))

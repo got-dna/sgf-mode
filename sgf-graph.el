@@ -80,6 +80,7 @@ the overlay property."
         (let* ((lnode (sgf-get-lnode ov))
                (path (sgf-lnode-path lnode))
                (inhibit-read-only t)
+               (cursor-in-non-selected-windows 'box)
                (direction (or direction sgf-graph--direction)))
           ;; move to the root-lnode
           (while (aref lnode 0) (setq lnode (aref lnode 0)))

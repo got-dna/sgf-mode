@@ -271,7 +271,8 @@ clear the katago svg node."
              (value (if score-p score winrate))
              (ratio (/ (- value min-value) delta-max))
              (color (sgf-svg-interpolate-color beg-color end-color ratio)))
-        (when xy
+        (if (null xy)
+            (message "The KataGo move of 1st choice is a pass. It probably indicates the end of the game.")
           (sgf-svg-add-circle-xyr group x y sgf-svg-stone-size
                                   :fill color :opacity 0.3)
           ;; show index
@@ -302,15 +303,16 @@ clear the katago svg node."
     ;;(sgf-svg-update-katago svg nil) ; clear the katago svg node
     (dotimes (i (length pv))
       (let* ((xy (nth i pv)) (x (car xy)) (y (cdr xy)))
-        (sgf-svg-add-circle-xyr group x y sgf-svg-stone-size
-                                :gradient (format "%s" turn)
-                                :opacity 0.7)
-        (sgf-svg-add-text group x y
-                          (number-to-string (1+ i))
-                          "magenta"
-                          :text-decoration "underline"
-                          :font-size "0.5em")
-        (setq turn (if (eq turn 'B) 'W 'B))))))
+        (when xy ; katago could have pass move in the variation, indicating the end of the game
+          (sgf-svg-add-circle-xyr group x y sgf-svg-stone-size
+                                  :gradient (format "%s" turn)
+                                  :opacity 0.5)
+          (sgf-svg-add-text group x y
+                            (number-to-string (1+ i))
+                            (sgf-svg-set-color turn)
+                            :text-decoration "underline"
+                            :font-size "0.5em")
+          (setq turn (if (eq turn 'B) 'W 'B)))))))
 
 
 (defun sgf-svg-update-annotations (svg game-state)
@@ -420,7 +422,7 @@ For the move annotation, add circle ring of color to the stone on the board."
          attributes))
 
 (defun sgf-svg-add-circle (svg x y &rest attributes)
-  (sgf-svg-add-circle-xyr svg x y 0.2 attributes))
+  (apply #'sgf-svg-add-circle-xyr svg x y 0.2 attributes))
 
 (defun sgf-svg-add-cross (svg x y &rest attributes)
   (let ((cx (* x sgf-svg-size))

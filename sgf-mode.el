@@ -827,9 +827,10 @@ Cases:
          (game-state (overlay-get ov 'game-state))
          (lnode (aref game-state 0))
          (moves (alist-get 'KG (aref lnode 1)))
-         (move-xy (assoc xy moves))
-         (info (cdr move-xy)))
-    info))
+         (move-xy (assoc xy moves)))
+    (if move-xy
+        (cdr move-xy)
+      (message "No KataGo info at position %S." xy))))
 
 
 (defun sgf-board-click-right (event)
@@ -839,11 +840,12 @@ Cases:
          (game-state (overlay-get ov 'game-state))
          (curr-lnode (aref game-state 0))
          (xy (sgf-mouse-event-to-xy event))
+         (pos (format "%c%c" (sgf-encode-d2c (car xy)) (sgf-encode-d2c (cdr xy))))
          ;; (xy-gtp (cons (car xy) (- h (cdr xy))))
          (katago-info (sgf-katago-get-next-move xy))
          (clicked-lnode (sgf-find-back-lnode xy game-state))
          (menu (cond (clicked-lnode
-                      `("ACTION ON THIS MOVE"
+                      `(,(format "ACTION ON THIS MOVE (%s)" pos)
                         ["Edit Comment"
                          ,(lambda () (interactive) (sgf-edit-comment clicked-lnode))]
                         ["Edit Move Number"
@@ -872,7 +874,7 @@ Cases:
                                             (plist-get katago-info :score)
                                             (plist-get katago-info :visits)
                                             (plist-get katago-info :pv))))
-                     (t `("No action or info to show.")))))
+                     (t '("No action or info to show.")))))
     (popup-menu menu)))
 
 
