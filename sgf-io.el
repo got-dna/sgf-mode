@@ -619,8 +619,8 @@ See also `sgf-encode-prop-pos'."
   ;; Convert escaped text back into its raw form.
   ;; eg "This is a \\n test \\t string." -> "This is a n test t string."
   (setq txt (replace-regexp-in-string "\\\\\\(.\\)" "\\1" txt))
-  ;; Convert Spaces
-  (setq txt (replace-regexp-in-string "\t\\|\v\\|\n\r?\\|\r\n?" " " txt))
+  ;; Convert to Spaces
+  ;; (setq txt (replace-regexp-in-string "\t\\|\v\\|\n\r?\\|\r\n?" " " txt))
   txt)
 
 

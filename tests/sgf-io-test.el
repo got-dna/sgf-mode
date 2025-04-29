@@ -88,6 +88,36 @@
   (should (equal (sgf-encode-prop '(C "comment@\[foo\]")) "C[comment@[foo\\]]")))
 
 
+
+(ert-deftest sgf-io--prettify-text-test ()
+  ;; Escaped newline (\\\n) should be removed
+  (should (equal (sgf-io--prettify-text "Line1\\\nLine2")
+                 "Line1Line2"))
+  ;; Actual newline stays
+  (should (equal (sgf-io--prettify-text "Line1\nLine2")
+                 "Line1\nLine2"))
+  (should (equal (sgf-io--prettify-text "Line1\\nLine2")
+                 "Line1nLine2"))
+
+  ;; (should (equal (sgf-io--prettify-text "Tab\\\tTest")
+  ;;                "TabTest"))
+  ;; Escaped tab (\t) becomes t
+  (should (equal (sgf-io--prettify-text "Tab\tTest")
+                 "Tab\tTest"))
+  (should (equal (sgf-io--prettify-text "Tab\\tTest")
+                 "TabtTest"))
+
+  ;; Escaped backslash becomes a backslash
+  (should (equal (sgf-io--prettify-text "Backslash: \\\\")
+                 "Backslash: \\"))
+
+  ;; Test empty string
+  (should (equal (sgf-io--prettify-text "") ""))
+
+  ;; Test no special sequences
+  (should (equal (sgf-io--prettify-text "Simple string.") "Simple string.")))
+
+
 (ert-deftest sgf-parse-syntex-tree-test ()
   (require 'project)
   ;; TODO any better alternatives to get tests dir?
