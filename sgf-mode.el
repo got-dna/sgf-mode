@@ -1525,12 +1525,15 @@ It is set as overlay property and only activated when the overlay is displayed."
 
 (defun sgf-setup (&optional vertical)
   (whitespace-cleanup)
-  (let ((beg (point-min)) (end (point-max))
-        (truncate-lines t))
-    (if (eq beg end)
-        (sgf-init-new-game beg end)
-      (sgf-toggle-game-display beg end))
-    (sgf-graph-hv vertical)))
+  ;; setup the mode only if the sgf buffer is visible;
+  ;; this avoid running upon org tangle
+  (when (get-buffer-window (current-buffer) 'visible)
+    (let ((beg (point-min)) (end (point-max))
+          (truncate-lines t))
+      (if (eq beg end)
+          (sgf-init-new-game beg end)
+        (sgf-toggle-game-display beg end))
+      (sgf-graph-hv vertical))))
 
 
 (defcustom sgf-mode-hook nil
