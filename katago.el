@@ -1,3 +1,19 @@
+;;; katago.el --- KataGo integration for SGF mode -*- lexical-binding: t -*-
+
+;; Author: Zech Xu
+;; Version: 1.0
+;; Package-Requires: ((emacs "30.1") (sgf-util "1.0") (json "1.0"))
+;; Homepage: https://github.com/RNAer/sgf-mode
+;; Keywords: SGF, go, game, KataGo
+
+;;; Commentary:
+
+;; This file provides functions to integrate with the KataGo AI engine for
+;; SGF analysis within Emacs. It handles starting KataGo processes,
+;; sending analysis queries, and parsing KataGo's JSON output.
+
+;;; Code:
+
 (require 'sgf-util)
 (require 'json)
 

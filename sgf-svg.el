@@ -2,7 +2,7 @@
 
 ;; Author: Zech Xu
 ;; Version: 1.0
-;; Package-Requires: ((emacs "30.1"))
+;; Package-Requires: ((emacs "30.1") (svg "1.0") (sgf-util "1.0"))
 ;; Homepage: homepage
 ;; Keywords: svg, go, game
 

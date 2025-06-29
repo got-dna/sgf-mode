@@ -3,7 +3,7 @@
 
 ;; Author: Zech Xu
 ;; Version: 1.0
-;; Package-Requires: ((emacs "30.1"))
+;; Package-Requires: ((emacs "30.1") (sgf-io "1.0") (sgf-mode "1.0") (org "9.5"))
 ;; Homepage: https://github.com/RNAer/sgf-mode
 ;; Keywords: SGF, go, game
 
