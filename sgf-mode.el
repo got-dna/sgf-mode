@@ -216,13 +216,13 @@ See also `sgf-forward-move'."
     (sgf-update-display ov)))
 
 
-(defun sgf-last-move (&optional ov interactival-call)
+(defun sgf-last-move (&optional ov interactive-call)
   "Move to the last node in the game tree.
 
 Always pick the 1st branch upon fork. See also `sgf-forward-move'."
   (interactive "i\np")
   (while (sgf-forward-move 0 ov))
-  (when interactival-call
+  (when interactive-call
     (sgf-update-display ov)))
 
 
@@ -249,7 +249,7 @@ The main variation is the 1st branch for every forks."
          (path (sgf-lnode-path lnode))
          (depth (pop path))
          branch)
-    (while (branch (pop path))
+    (while (setq branch (pop path))
       (if (eq branch ?a)
           (sgf-forward-fork ov)))
     (sgf-update-display ov)))
@@ -950,7 +950,7 @@ The move number will be incremented."
          (curr-lnode (aref game-state 0))
          (curr-node (aref curr-lnode 1))
          (prop-key (if (eq stone 'B) 'AB 'AW))  ; 'AB for black stones, 'AW for white stones
-         (prop (assoc prop-key curr-node))
+         (prop (assq prop-key curr-node))
          (xys (cdr prop)))
     (if (sgf-root-p curr-lnode)
         (let ((xys (if (member xy xys)
@@ -1017,7 +1017,7 @@ The move number will be incremented."
          (ov (sgf-get-overlay))
          (curr-lnode (sgf-get-lnode ov))
          (curr-node (aref curr-lnode 1))
-         (curr-mark (assoc shape curr-node)))
+         (curr-mark (assq shape curr-node)))
     (if curr-mark
         ;; If the shape exists, check if the coordinate already exists in the mark list
         (if (member xy (cdr curr-mark))
@@ -1046,7 +1046,7 @@ The move number will be incremented."
          (ov (sgf-get-overlay))
          (curr-lnode (sgf-get-lnode ov))
          (curr-node (aref curr-lnode 1))
-         (curr-mark (assoc 'LB curr-node))   ;; Check if 'LB (label) mark already exists
+         (curr-mark (assq 'LB curr-node))   ;; Check if 'LB (label) mark already exists
          (xy-label (assoc xy (cdr curr-mark))) ;; Check for existing label at xy
          (old-txt (if xy-label (cdr xy-label) "")) ;; Old label if exists
          (new-txt (read-string "Label: " old-txt))) ;; Prompt user for input
@@ -1084,7 +1084,7 @@ The move number will be incremented."
          (curr-lnode (sgf-get-lnode ov))
          (curr-node  (aref curr-lnode 1)))
     (dolist (shape '(SQ TR CR MA))
-      (let ((curr-mark (assoc shape curr-node)))
+      (let ((curr-mark (assq shape curr-node)))
         (when (and curr-mark (member xy curr-mark))
           (delete xy curr-mark)
           (message "Deleted mark at %s" xy)
