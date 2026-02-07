@@ -568,6 +568,7 @@ See also `sgf-encode-prop-pos'."
   (let* ((positions (string-split val ":" t))
          (count (length positions)))
     (cond ((= count 0) nil)   ; no position letter exists - a pass. return nil
+          ((string= val "tt") nil) ; FF[3] pass move for boards <= 19x19
           ((= count 1)
            (list (sgf-decode--prop-pos val beg end)))
           ((= count 2)

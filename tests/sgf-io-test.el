@@ -18,6 +18,7 @@
 
 (ert-deftest sgf-decode-prop-pos-test ()
   (let ((cases '(("aa" . ((0 . 0)))
+                 ("tt" . nil)           ; FF[3] pass move
                  ("aa:ac" . ((0 . 0) (0 . 1) (0 . 2)))
                  ("aa:ca" . ((0 . 0) (1 . 0) (2 . 0)))
                  ("aa:cc" . ((0 . 0) (0 . 1) (0 . 2)
