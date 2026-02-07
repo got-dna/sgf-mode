@@ -1,10 +1,10 @@
-;;; sgf-svg.el --- svg visualization  -*- lexical-binding: t; -*-
+;;; sgf-svg.el --- SVG board rendering for sgf-mode  -*- lexical-binding: t; -*-
 
 ;; Author: Zech Xu
 ;; Version: 1.0
 ;; Package-Requires: ((emacs "30.1") (svg "1.0") (sgf-util "1.0"))
-;; Homepage: homepage
-;; Keywords: svg, go, game
+;; Homepage: https://github.com/got-dna/sgf-mode
+;; Keywords: games
 
 ;;; Commentary:
 ;; SVG rendering of Go board and game moves.
@@ -14,20 +14,25 @@
 (require 'svg)
 (require 'sgf-util)
 
+(defgroup sgf-svg nil
+  "SVG rendering options for sgf-mode."
+  :group 'sgf
+  :prefix "sgf-svg-")
+
 (defcustom sgf-svg-size 28
   "Default pixels for the size of grid cells.
 It is a reference for all other element sizes."
-  :type '(number) :group 'sgf-svg)
+  :type 'number :group 'sgf-svg)
 
 
 (defcustom sgf-svg-stone-size 0.48
-  "Default size for stone radius"
-  :type '(number) :group 'sgf-svg)
+  "Default size for stone radius."
+  :type 'number :group 'sgf-svg)
 
 
 (defcustom sgf-svg-font-family "Arial"
   "Default font family for the board."
-  :type '(string) :group 'sgf-svg)
+  :type 'string :group 'sgf-svg)
 
 
 (defun sgf-svg-group (svg group-id)
@@ -463,3 +468,4 @@ Attributes are kept."
 
 
 (provide 'sgf-svg)
+;;; sgf-svg.el ends here

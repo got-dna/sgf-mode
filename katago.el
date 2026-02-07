@@ -1,10 +1,10 @@
-;;; katago.el --- KataGo integration for SGF mode -*- lexical-binding: t -*-
+;;; katago.el --- KataGo integration for sgf-mode  -*- lexical-binding: t; -*-
 
 ;; Author: Zech Xu
 ;; Version: 1.0
 ;; Package-Requires: ((emacs "30.1") (sgf-util "1.0") (json "1.0"))
-;; Homepage: https://github.com/RNAer/sgf-mode
-;; Keywords: SGF, go, game, KataGo
+;; Homepage: https://github.com/got-dna/sgf-mode
+;; Keywords: games
 
 ;;; Commentary:
 
@@ -17,17 +17,30 @@
 (require 'sgf-util)
 (require 'json)
 
-(defvar katago-exe "katago"
-  "The path to the KataGo executable.")
+(defgroup katago nil
+  "KataGo AI engine integration for sgf-mode."
+  :group 'sgf
+  :prefix "katago-")
 
-(defvar katago-model nil
-  "The path to the KataGo model file.")
+(defcustom katago-exe "katago"
+  "The path to the KataGo executable."
+  :type 'string
+  :group 'katago)
 
-(defvar katago-analysis-config nil
-  "The path to the KataGo analysis config file.")
+(defcustom katago-model nil
+  "The path to the KataGo model file."
+  :type '(choice (const nil) string)
+  :group 'katago)
 
-(defvar katago-gtp-config nil
-  "The path to the KataGo gtp configuration file.")
+(defcustom katago-analysis-config nil
+  "The path to the KataGo analysis config file."
+  :type '(choice (const nil) string)
+  :group 'katago)
+
+(defcustom katago-gtp-config nil
+  "The path to the KataGo GTP configuration file."
+  :type '(choice (const nil) string)
+  :group 'katago)
 
 (defvar katago-log-buffer "*katago-log*"
   "The buffer name to log katago message.")
@@ -256,3 +269,4 @@ If called interactively, prompt the user for the number of visits."
 
 
 (provide 'katago)
+;;; katago.el ends here

@@ -1,55 +1,59 @@
-;;; sgf-util.el --- util functions -*- lexical-binding: t -*-
-
+;;; sgf-util.el --- Utility functions for sgf-mode  -*- lexical-binding: t; -*-
 
 ;; Author: Zech Xu
 ;; Version: 1.0
 ;; Package-Requires: ((emacs "30.1"))
-;; Homepage: https://github.com/RNAer/sgf-mode
-;; Keywords: SGF, go, game
+;; Homepage: https://github.com/got-dna/sgf-mode
+;; Keywords: games
 
 ;;; Commentary:
 
 ;;; Code:
 
-(defvar sgf-bm-color "red" "Color for the node of the bad move")
-(defvar sgf-do-color "blue" "Color for the node of the doubtful move")
-(defvar sgf-it-color "yellow" "Color for the node of the interesting move")
-(defvar sgf-te-color "green" "Color for the node of the tesuji move")
+(defgroup sgf nil
+  "View, edit, and analyze Go games in SGF format."
+  :group 'games
+  :prefix "sgf-")
+
+(defvar sgf-bm-color "red" "Color for the node of the bad move.")
+(defvar sgf-do-color "blue" "Color for the node of the doubtful move.")
+(defvar sgf-it-color "yellow" "Color for the node of the interesting move.")
+(defvar sgf-te-color "green" "Color for the node of the tesuji move.")
 
 (defcustom sgf-show-hints t
   "Show the hint mark(s) for next move(s)."
-  :type '(boolean)
+  :type 'boolean
   :group 'sgf)
 
 (defcustom sgf-show-numbers t
   "Show move number on the stones."
-  :type '(boolean)
+  :type 'boolean
   :group 'sgf)
 
 (defcustom sgf-show-marks t
   "Show marks on the board."
-  :type '(boolean)
+  :type 'boolean
   :group 'sgf)
 
 (defcustom sgf-show-ko t
   "Show KO position on the board."
-  :type '(boolean)
+  :type 'boolean
   :group 'sgf)
 
 (defcustom sgf-show-katago t
   "Show katago analysis on the board."
-  :type '(boolean)
+  :type 'boolean
   :group 'sgf)
 
 
 (defcustom sgf-new-move nil
   "Do not allow new move on the game. It is useful for exam to check if you clicked and played right next move (because it will not show up if the move is not in the game). However, it allow other changes (eg comment and mark modification)."
-  :type '(boolean)
+  :type 'boolean
   :group 'sgf)
 
 (defcustom sgf-suicide-move nil
   "Allow suicide or not. Some rule set allow suicide: https://senseis.xmp.net/?Suicide"
-  :type '(boolean)
+  :type 'boolean
   :group 'sgf)
 
 

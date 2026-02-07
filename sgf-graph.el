@@ -1,12 +1,10 @@
-;;; sgf-graph.el --- visualize game in tree graph  -*- lexical-binding: t; -*-
-
-
+;;; sgf-graph.el --- Game tree visualization for sgf-mode  -*- lexical-binding: t; -*-
 
 ;; Author: Zech Xu
 ;; Version: 1.0
 ;; Package-Requires: ((emacs "30.1") (sgf-util "1.0") (sgf-svg "1.0") (sgf-io "1.0"))
-;; Homepage: https://github.com/RNAer/sgf-mode
-;; Keywords: SGF, go, game
+;; Homepage: https://github.com/got-dna/sgf-mode
+;; Keywords: games
 
 
 ;;; Commentary:
@@ -17,6 +15,11 @@
 (require 'sgf-util)
 (require 'sgf-svg)
 (require 'sgf-io)
+
+(defgroup sgf-graph nil
+  "Game tree visualization for sgf-mode."
+  :group 'sgf
+  :prefix "sgf-graph-")
 
 (defvar sgf-graph-buffer-name "*SGF TREE*"
   "The default buffer name for the SGF tree graph.")

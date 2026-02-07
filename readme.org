@@ -15,7 +15,7 @@
 - For latest Emacs, it can also be installed with ~use-package~:
   #+begin_src emacs-lisp
     (use-package sgf-mode
-      :vc (:url https://github.com/RNAer/sgf-mode.git)
+      :vc (:url https://github.com/got-dna/sgf-mode.git)
       :bind
       (:map sgf-mode-display-map
             ("f" . sgf-forward-move)) ; example of keybinding setup

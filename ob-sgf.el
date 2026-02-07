@@ -1,11 +1,10 @@
-;;; ob-sgf.el --- sgf block in org-mode -*- lexical-binding: t -*-
-
+;;; ob-sgf.el --- Org Babel support for SGF code blocks  -*- lexical-binding: t; -*-
 
 ;; Author: Zech Xu
 ;; Version: 1.0
 ;; Package-Requires: ((emacs "30.1") (sgf-io "1.0") (sgf-mode "1.0") (org "9.5"))
-;; Homepage: https://github.com/RNAer/sgf-mode
-;; Keywords: SGF, go, game
+;; Homepage: https://github.com/got-dna/sgf-mode
+;; Keywords: games
 
 
 ;;; Commentary:

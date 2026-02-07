@@ -1,11 +1,10 @@
-;;; sgf-io.el --- input and output sgf file and prep data   -*- lexical-binding: t; -*-
-
+;;; sgf-io.el --- SGF file parsing and serialization  -*- lexical-binding: t; -*-
 
 ;; Author: Zech Xu
 ;; Version: 1.0
 ;; Package-Requires: ((emacs "30.1") (sgf-util "1.0"))
-;; Homepage: https://github.com/RNAer/sgf-mode
-;; Keywords: SGF, go, game
+;; Homepage: https://github.com/got-dna/sgf-mode
+;; Keywords: games
 
 ;;; Commentary:
 

@@ -1,10 +1,10 @@
-;;; sgf-mode.el --- SGF Major Mode  -*- lexical-binding: t; -*-
+;;; sgf-mode.el --- Major mode for editing SGF Go game files  -*- lexical-binding: t; -*-
 
 ;; Author: Zech Xu
 ;; Version: 1.0
 ;; Package-Requires: ((emacs "30.1") (sgf-util "1.0") (sgf-svg "1.0") (sgf-io "1.0") (sgf-graph "1.0") (katago "1.0"))
-;; Homepage: https://github.com/RNAer/sgf-mode
-;; Keywords: SGF, go, game, major-mode
+;; Homepage: https://github.com/got-dna/sgf-mode
+;; Keywords: games
 
 ;;; Commentary:
 ;;
@@ -23,7 +23,7 @@
     (aset game-state 5 (cons change undos))))
 
 (defun sgf-pop-undo (game-state)
-  "Pop a game CHANGE from the undo stack in GAME-STATE"
+  "Pop a game CHANGE from the undo stack in GAME-STATE."
   (let ((undos (aref game-state 5)))
     (if undos
         (let ((change (car undos)))
@@ -32,7 +32,7 @@
       nil)))
 
 (defun sgf-revert-undo (game-state &optional change)
-  "Revert the CHANGE for the GAME-STATE"
+  "Revert the CHANGE for the GAME-STATE."
   (unless change
     (setq change (sgf-pop-undo game-state)))
   (let ((black-xys (aref change 0))
