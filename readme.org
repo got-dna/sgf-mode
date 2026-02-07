@@ -1,18 +1,24 @@
-#+TILE: SGF-MODE - emacs-lisp package for GO game
+#+TITLE: sgf-mode
 #+OPTIONS: ^:{}
 #+property: header-args+ :results none
 
-* COMMENT Installation
-~sgf-mode~ requires Emacs version >= 26 and librsvg.
+An Emacs package for viewing, editing, and analyzing Go games in [[https://homepages.cwi.nl/~aeb/go/misc/sgf.html][Smart Game Format (SGF)]]. It provides interactive SVG board rendering, game tree visualization, KataGo AI integration, and Org-mode Babel support for embedding SGF games in documents.
 
-- Add to ~load-path~
+* Requirements
+
+- Emacs 30.1 or later
+- librsvg (for SVG rendering)
+- KataGo (optional, for AI analysis)
+
+* Installation
+
+- Add to ~load-path~:
   #+begin_src emacs-lisp
     (add-to-list 'load-path "~/git/sgf-mode")
     (require 'sgf-mode)
-    (set-keymap-parent org-mode-map sgf-mode-map)
   #+end_src
 
-- For latest Emacs, it can also be installed with ~use-package~:
+- Or install with ~use-package~:
   #+begin_src emacs-lisp
     (use-package sgf-mode
       :vc (:url https://github.com/got-dna/sgf-mode.git)
@@ -33,31 +39,193 @@
             katago-gtp-config "gtp_example.cfg"))
   #+end_src
 
-* usage
-It creates overlay for the SGF and draws the svg for game and displays it.
-** global user options
-1. ~sgf-svg-interval~, ~sgf-svg-bar~, ~sgf-svg-font-size~, and ~sgf-svg-font-family~ to config game board display.
-2. ~sgf-show-numbers~, ~sgf-show-hints~, ~sgf-show-marks~, ~sgf-show-ko~, ~sgf-traverse-path~, ~sgf-new-move~, and ~sgf-show-katago~ to set game options.
+* Quick Start
 
-** .sgf file and sgf-mode
-- =C-c C-c=: toggle the svg board for the current sgf. See [[help:sgf-mode-map][sgf-mode-map]] for more commands.
-- Once putting the cursor on the drawn svg board, you can click on the board to play the game. The right mouse click on the stone is also available for context menu. See [[help:sgf-mode-display-map][sgf-mode-display-map]] all the commands and key bindings. Note that these key bindings are only available when the cursor is on the overlay (ie the displayed svg board).
-- =C-c C-c= also displays a buffer to show all the game variations in a tree. Once in this buffer, you can see its commands in [[help:sgf-graph-mode-map][sgf-graph-mode-map]].
+1. Open an ~.sgf~ file in Emacs. ~sgf-mode~ activates automatically.
+2. Press =C-c C-c= to display the SVG board.
+3. Use =f= / =b= (or arrow keys) to navigate moves.
+4. Click on the board to play stones.
 
-** sgf src block in org-mode
-*** src block usage
-As org-mode src block header arguments, similar to global user options, users can set ~show-numbers~, ~show-hints~, ~show-marks~, ~show-ko~, ~traverse-path~  and ~new-move~ for game of the current src block. See examples: [[file:tests/test.org][sgf src block in org-mode file]]
-*** recommended workflow
-1. =C-c '= to edit the game in a separate buffer
-2. in this separate buffer, ~sgf-mode~ is enabled and everything works like above.
-*** or display game in situ
-- =C-c C-c= (~org-babel-execute-src-block~) to display the game in the current sgf block.
-- =C-c C-v b= (~org-babel-execute-buffer~) to display all the games in the org file.
-*** tangle file
-- =C-c C-v t= to tangle all the games of sgf blocks to a single file;
-- =C-u C-c C-v t= to tangle current sgf block only.
+* Usage
 
-* alternatives
+** SGF Files
+
+Opening an ~.sgf~ file activates ~sgf-mode~. Press =C-c C-c= to create an overlay that renders the game as an interactive SVG board. A game tree buffer (~*SGF TREE*~) also opens to show all variations.
+
+| Key       | Command                   | Description                 |
+|-----------+---------------------------+-----------------------------|
+| =C-c C-c= | ~sgf-toggle-game-display~ | Toggle SVG board display    |
+| =C-c s i= | ~sgf-init-new-game~       | Initialize a new game       |
+| =C-c s r= | ~sgf-remove-game-display~ | Remove the SVG board display |
+
+** Board Display
+
+Once the SVG board is displayed, place your cursor on it to activate the board keybindings ([[help:sgf-mode-display-map][sgf-mode-display-map]]). These keys are only active when the cursor is on the overlay.
+
+*** Navigation
+
+| Key              | Command              | Description                                 |
+|------------------+----------------------+---------------------------------------------|
+| =f= / =<right>=   | ~sgf-forward-move~   | Next move (prompts at forks)                |
+| =b= / =<left>=    | ~sgf-backward-move~  | Previous move                               |
+| =M-f= / =<down>=  | ~sgf-forward-fork~   | Jump to next fork                           |
+| =M-b= / =<up>=    | ~sgf-backward-fork~  | Jump to previous fork                       |
+| =a=              | ~sgf-first-move~     | Jump to first move                          |
+| =e=              | ~sgf-last-move~      | Jump to last move (first branch at forks)   |
+| =j=              | ~sgf-jump-moves~     | Jump forward/backward N moves               |
+| =t=              | ~sgf-traverse~       | Traverse using a path specification         |
+| =r=              | ~sgf-back-to-game~   | Return to main variation                    |
+
+*** View
+
+| Key | Command            | Description                                   |
+|-----+--------------------+-----------------------------------------------|
+| =c= | ~sgf-show-comment~ | Display comment for current move              |
+| =p= | ~sgf-show-path~    | Show path to current position                 |
+| =z= | ~sgf-export-image~ | Export board to SVG file or display in buffer  |
+| =g= | ~sgf-graph-hv~     | Toggle horizontal/vertical game tree layout   |
+| =o= |                    | Switch to game tree buffer                    |
+| =+= | ~image-increase-size~ | Zoom in                                    |
+| =-= | ~image-decrease-size~ | Zoom out                                   |
+
+*** Display Toggles (=s= prefix)
+
+| Key   | Command                       | Description                         |
+|-------+-------------------------------+-------------------------------------|
+| =s n= | ~sgf-toggle-numbers~          | Toggle move numbers on stones       |
+| =s m= | ~sgf-toggle-marks~            | Toggle marks                        |
+| =s h= | ~sgf-toggle-hints~            | Toggle next move hints              |
+| =s k= | ~sgf-toggle-ko~              | Toggle KO position mark             |
+| =s a= | ~sgf-toggle-katago~          | Toggle KataGo analysis overlay      |
+| =s i= | ~sgf-toggle-katago-metrics~  | Toggle KataGo metrics display       |
+| =s w= | ~sgf-toggle-serialize-katago~ | Toggle saving KataGo data to SGF   |
+| =s s= | ~sgf-toggle-new-move~        | Toggle allowing new moves (exam mode) |
+
+*** Move Editing (=m= prefix)
+
+| Key   | Command                      | Description                        |
+|-------+------------------------------+------------------------------------|
+| =m p= | ~sgf-pass~                   | Play a pass move                   |
+| =m r= | ~sgf-make-root~              | Set current node as game root      |
+| =m k= | ~sgf-prune-inclusive~        | Delete current node and children   |
+| =m K= | ~sgf-prune~                  | Delete all children                |
+| =m c= | ~sgf-edit-comment~           | Edit/add comment                   |
+| =m n= | ~sgf-edit-move-number~       | Set move number                    |
+| =m a= | ~sgf-edit-mark-triangle~     | Add/delete triangle mark           |
+| =m d= | ~sgf-edit-mark-square~       | Add/delete square mark             |
+| =m o= | ~sgf-edit-mark-circle~       | Add/delete circle mark             |
+| =m x= | ~sgf-edit-mark-cross~        | Add/delete cross mark              |
+| =m l= | ~sgf-edit-mark-label~        | Add/delete text label              |
+| =m -= | ~sgf-delete-mark~            | Remove mark from position          |
+| =m b= | ~sgf-edit-setup-black-stone~ | Add/remove black setup stone       |
+| =m w= | ~sgf-edit-setup-white-stone~ | Add/remove white setup stone       |
+| =m i= | ~sgf-edit-game-info~         | Edit game info (players, result, etc.) |
+| =m h= | ~sgf-edit-annotation~        | Add move annotation (BM/DO/IT/TE)  |
+| =m m= | ~sgf-merge-branches~         | Merge branches with same moves     |
+| =m s= | ~sgf-swap-branches~          | Reorder branches                   |
+| =m v= | ~sgf-remove-variations~      | Delete variations before current   |
+| =m e= | ~sgf-serialize-game~         | Update buffer with game state      |
+| =m E= | ~sgf-write-game~             | Write game to a new file           |
+
+*** Mouse
+
+| Action                | Description                                         |
+|-----------------------+-----------------------------------------------------|
+| Left click on board   | Play stone or navigate to existing move              |
+| Right click on stone  | Context menu                                         |
+| =M-click=             | Show KataGo principal variation for a candidate move |
+| =C-M-click=           | Expand KataGo recommended moves onto the board       |
+
+** Game Tree
+
+The game tree buffer (~*SGF TREE*~) shows the structure of all game variations. See [[help:sgf-graph-mode-map][sgf-graph-mode-map]] for all commands.
+
+| Key | Command                     | Description                          |
+|-----+-----------------------------+--------------------------------------|
+| =f= | ~sgf-graph-forward-node~    | Move to next node                    |
+| =b= | ~sgf-graph-backward-node~   | Move to previous node                |
+| =F= | ~sgf-graph-forward-comment~ | Jump to next node with comment       |
+| =B= | ~sgf-graph-backward-comment~ | Jump to previous node with comment  |
+| =p= | ~sgf-graph-pos-to-path~     | Convert cursor position to path      |
+| =P= | ~sgf-graph-path-to-pos~     | Convert path to cursor position      |
+| =s= | ~sgf-graph-sync-game~       | Sync game display with tree position |
+
+** KataGo Integration
+
+sgf-mode integrates with [[https://github.com/lightvector/KataGo][KataGo]] for AI analysis. Analysis runs asynchronously without blocking the UI.
+
+*** Setup
+
+#+begin_src emacs-lisp
+  (setq katago-exe "katago"                        ; path to executable
+        katago-model "/path/to/model.bin.gz"       ; neural network model
+        katago-analysis-config "/path/to/analysis.cfg"
+        katago-gtp-config "/path/to/gtp.cfg")
+#+end_src
+
+*** Keybindings
+
+| Key | Command                       | Description                          |
+|-----+-------------------------------+--------------------------------------|
+| =k= | ~sgf-katago-analyze-next-step~ | Analyze the next move               |
+| =K= | ~sgf-katago-analyze~          | Analyze entire game                  |
+
+Analysis results are displayed as overlays on the board showing win rate, score lead, and candidate moves. Use =s a= to toggle the analysis display.
+
+** Org-mode Babel
+
+sgf-mode supports SGF code blocks in Org-mode. See examples in [[file:tests/test.org][tests/test.org]].
+
+*** Header Arguments
+
+| Argument         | Values           | Description                     |
+|------------------+------------------+---------------------------------|
+| =:show-numbers=  | =t= or =nil=     | Display move numbers on stones  |
+| =:show-hints=    | =t= or =nil=     | Display next move hints         |
+| =:show-marks=    | =t= or =nil=     | Display marks on board          |
+| =:show-ko=       | =t= or =nil=     | Display KO position             |
+| =:show-katago=   | =t= or =nil=     | Display KataGo analysis         |
+| =:new-move=      | =t= or =nil=     | Allow playing new moves         |
+| =:suicide-move=  | =t= or =nil=     | Allow suicide moves             |
+| =:traverse-path= | =t= / int / list | Initial position to navigate to |
+
+*** Workflow
+
+- =C-c '= to edit the SGF block in a separate buffer with full ~sgf-mode~ support (recommended).
+- =C-c C-c= to display the game board in-place.
+- =C-c C-v b= to display all SGF blocks in the buffer.
+- =C-c C-v t= to tangle SGF blocks to files. Use =C-u C-c C-v t= for only the current block.
+
+* Customization
+
+** Display Options
+
+| Variable           | Default | Description                          |
+|--------------------+---------+--------------------------------------|
+| ~sgf-show-numbers~ | =t=     | Show move numbers on stones          |
+| ~sgf-show-hints~   | =t=     | Show hint marks for next move(s)     |
+| ~sgf-show-marks~   | =t=     | Show marks on the board              |
+| ~sgf-show-ko~      | =t=     | Show KO position                     |
+| ~sgf-show-katago~  | =t=     | Show KataGo analysis                 |
+
+** Game Behavior
+
+| Variable            | Default | Description                                    |
+|---------------------+---------+------------------------------------------------|
+| ~sgf-new-move~      | =nil=   | Allow new moves (nil = self-exam mode)         |
+| ~sgf-suicide-move~  | =nil=   | Allow suicide moves                            |
+| ~sgf-traverse-path~ | =nil=   | Default path to traverse on display init       |
+
+** SVG Rendering
+
+| Variable              | Default   | Description                          |
+|-----------------------+-----------+--------------------------------------|
+| ~sgf-svg-size~        | =28=      | Grid cell size in pixels             |
+| ~sgf-svg-stone-size~  | =0.48=    | Stone radius (ratio to cell size)    |
+| ~sgf-svg-font-family~ | ="Arial"= | Font family for numbers and labels   |
+
+* Alternatives
+
 - [[https://github.com/misohena/el-igo][igo-org]]
 - [[https://github.com/eschulte/el-go][el-go]]
 
