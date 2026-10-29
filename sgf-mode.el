@@ -1344,7 +1344,7 @@ The existing SGF content in the buffer will be erased."
          (lnode (aref game-state 0))
          (json-obj (sgf-serialize-lnode-to-json lnode t))
          (json-str (json-encode json-obj))
-         (callback (lambda (t m)
+         (callback (lambda (_turn m)
                      ;; this adds KG to the beginning of the node alist
                      (setf (alist-get 'KG (aref lnode 1)) m)
                      ;; this adds KG to the end of the node alist
@@ -1365,13 +1365,13 @@ The existing SGF content in the buffer will be erased."
          (json (sgf-serialize-lnode-to-json lnode))
          (depth (1+ (aref game-state 6)))
          (result (make-vector depth nil))
-         (callback (lambda (t m)
-                     (aset result t m)
+         (callback (lambda (turn m)
+                     (aset result turn m)
                      ;; (message "KataGo analysis finished for turn number %d." t)
                      ;; these have to be put inside callback;
                      ;; otherwise, they will be executed before the
                      ;; asynchronous process is done.
-                     (message "Katago analysis for turn %d" t)
+                     (message "Katago analysis for turn %d" turn)
                      ;; if the result vector is filled:
                      (when (seq-every-p #'identity result)
                        ;; (overlay-put ov 'katago-moves result)

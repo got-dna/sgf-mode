@@ -241,17 +241,16 @@ lists of black and white stones respectively. Return nil if no setup stones."
   "Return the children nodes of LNODE."
   (inline-quote (aref ,lnode 2)))
 
-(define-inline sgf-get-siblings (lnode)
-  "Return the sibling nodes of LNODE.
+(defun sgf-get-siblings (lnode)
+  "Return the siblings of LNODE, or nil for the root node."
+  (let ((parent (sgf-get-parent lnode)))
+    (when parent (sgf-get-children parent))))
 
-Return nil if LNODE is the root node."
-  (inline-quote (let ((parent (sgf-get-parent ,lnode)))
-                  (aref parent 2))))
-
-(define-inline sgf-get-root (lnode)
+(defun sgf-get-root (lnode)
   "Return the root of LNODE."
-  (inline-quote (while (not (sgf-root-p lnode))
-                    (setq lnode (sgf-get-parent lnode)))))
+  (while (sgf-get-parent lnode)
+    (setq lnode (sgf-get-parent lnode)))
+  lnode)
 
 (define-inline sgf-node-data (lnode)
   "Return the node of LNODE."
@@ -334,10 +333,8 @@ The return value can be passed to `sgf-traverse'."
 
 
 (defun sgf-board-clear (board-2d)
-  "Clear 2D board"
-  (dotimes (i (length board-2d))       ;; Loop over rows
-    (dotimes (j (length (aref board-2d i)))  ;; Loop over columns in each row
-      (sgf-board-set (cons i j) 'E board-2d))))  ;; Set each cell to 'E'
+  "Clear every row of BOARD-2D to empty intersections."
+  (mapc (lambda (row) (fillarray row 'E)) board-2d))
 
 
 (defun sgf-board-get (xy board-2d)

@@ -51,6 +51,12 @@
 (defvar katago-analysis-process nil
   "The KataGo analysis process.")
 
+(defvar katago-process nil
+  "The KataGo GTP process.")
+
+(defvar katago-analysis nil
+  "Most recently parsed GTP analysis.")
+
 (defvar katago-analysis-callback
   (lambda (turnNumber moves)
     (message "KataGo analysis: %s %s" turnNumber moves))
@@ -93,6 +99,7 @@ See also `katago-analysis-init' for the analysis process."
                    :command command
                    :connection-type 'pipe
                    :filter 'katago-gtp-filter)))
+    (setq katago-process process)
     (message "KataGo started with model %s and config %s." model config)))
 
 
@@ -108,37 +115,35 @@ The position is in the GTP format: https://www.lysator.liu.se/~gunnar/gtp/gtp2-s
 
 
 (defun katago-analysis-filter (proc str)
-  "Process filter for KataGo analysis output STRing.
-
-It parses the output string from KataGo analysis PROCess."
-  (with-current-buffer (process-buffer proc)
-    (let ((moving (= (point) (process-mark proc))))
-      (save-excursion
-        ;; insert the output
-        (goto-char (process-mark proc))
-        (insert str)
-
-        ;; the core of the filter function - process the output
-        (goto-char (process-mark proc))
-        (while (not (eobp))
-          (let ((line (buffer-substring-no-properties
-                       (line-beginning-position)
-                       (line-end-position))))
-            ;; (message "xxx %s" line)
-            ;; Check if the line is a valid JSON object
-            (when (and (not (string-empty-p line))
-                       (string-prefix-p "{" line)
-                       (string-suffix-p "}" line))
-                  (let* ((json-obj (json-read-from-string line))
-                         (res (katago-analysis-handle-response json-obj))
-                         (turnNumber (car res))
-                         (moves (cdr res)))
-                    (funcall katago-analysis-callback turnNumber moves)))
-            (forward-line 1)))
-
-        ;; reset the process marker
-        (set-marker (process-mark proc) (point-max)))
-      (if moving (goto-char (process-mark proc))))))
+  "Append STR from PROC and dispatch complete newline-delimited responses.
+Keep incomplete lines on PROC until the next output chunk arrives."
+  (when (buffer-live-p (process-buffer proc))
+    (with-current-buffer (process-buffer proc)
+      (let ((moving (= (point) (process-mark proc)))
+            (inhibit-read-only t))
+        (save-excursion
+          (goto-char (process-mark proc))
+          (insert str)
+          (set-marker (process-mark proc) (point)))
+        (when moving (goto-char (process-mark proc))))))
+  (let* ((pending (concat (process-get proc 'katago-pending) str))
+         (start 0))
+    ;; Store the remainder before callbacks, which can accept more output.
+    (process-put proc 'katago-pending
+                 (substring pending (if (string-match "[^\n]*\\'" pending)
+                                        (match-beginning 0)
+                                      (length pending))))
+    (while (string-match "\n" pending start)
+      (let ((line (string-trim (substring pending start (match-beginning 0)))))
+        (setq start (match-end 0))
+        (when (string-prefix-p "{" line)
+          (let* ((json-array-type 'list)
+                 (json-object-type 'alist)
+                 (json-key-type 'symbol)
+                 (response (json-read-from-string line)))
+            (when (assq 'turnNumber response)
+              (let ((result (katago-analysis-handle-response response)))
+                (funcall katago-analysis-callback (car result) (cdr result))))))))))
 
 
 (defun katago-analysis-handle-response (response)
@@ -196,13 +201,15 @@ If the command has a dedicated wrapper function, call that instead."
             "quit")
           nil nil nil 'katago-gtp-history)))
   (cond
-   ((string= command "quit") (katago-gtp-quit))
+   ((string= command "quit")
+    (when katago-process (katago-process-quit katago-process)))
    ((string= command "kata-analyze") (katago-gtp-analyze))
    ((string= command "play") (katago-gtp-play))
    ((string= command "genmove") (katago-gtp-genmove))
-   (t (when (process-live-p katago-process)
-        (process-send-string katago-process (concat command "\n"))
-        (message "Sent command: %s" command)))))
+   (t (unless (process-live-p katago-process)
+        (user-error "KataGo GTP process is not running"))
+      (process-send-string katago-process (concat command "\n"))
+      (message "Sent command: %s" command))))
 
 
 (defun katago-gtp-genmove (&optional color)
@@ -260,12 +267,17 @@ If called interactively, prompt the user for the number of visits."
     (when (process-live-p process)
       ;; (process-send-string process "quit\n")
       (delete-process process)
-      (setq katago-analysis-process nil)
+      (when (eq process katago-analysis-process)
+        (setq katago-analysis-process nil))
+      (when (eq process katago-process)
+        (setq katago-process nil))
       (message "KataGo process killed.")))
-  (when (get-buffer katago-out-buffer)
-    (kill-buffer katago-out-buffer))
-  (when (get-buffer katago-log-buffer)
-    (kill-buffer katago-log-buffer)))
+  (unless (or (process-live-p katago-analysis-process)
+              (process-live-p katago-process))
+    (when (get-buffer katago-out-buffer)
+      (kill-buffer katago-out-buffer))
+    (when (get-buffer katago-log-buffer)
+      (kill-buffer katago-log-buffer))))
 
 
 (provide 'katago)

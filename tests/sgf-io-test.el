@@ -204,3 +204,16 @@
     ;; (obs (json-parse-string obs-str :object-type 'alist))
     (should (equal
              (sgf-serialize-lnode-to-json curr-lnode) exp))))
+
+(ert-deftest sgf-serialization-preserves-properties-test ()
+  (let* ((source "(;SZ[9]AE[aa][bb]XX[first\\]value][second\\\\value])")
+         (root (sgf-parse-str-to-* source #'sgf-parse-buffer-to-linked-node))
+         (encoded (sgf-serialize-game-to-str root))
+         (decoded (sgf-parse-str-to-* encoded #'sgf-parse-buffer-to-linked-node)))
+    (should (equal (aref root 1) (aref decoded 1)))))
+
+(ert-deftest sgf-encode-node-does-not-mutate-test ()
+  (let* ((node (list (list 'C "comment") (list 'KG 'data) (list 'B '(0 . 0))))
+         (original (copy-tree node)))
+    (sgf-encode-node node)
+    (should (equal node original))))

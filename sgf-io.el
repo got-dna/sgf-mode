@@ -499,7 +499,7 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
                      (sgf-decode-prop-pos val-str beg-pos end-pos))
                     ;; customized property for katago analysis
                     ((eq key 'KG)
-                     (read val-str))
+                     (read (sgf-io--prettify-text val-str)))
                     ((eq key 'C)
                      (list (sgf-io--prettify-text val-str)))
                     ((eq key 'PL)
@@ -517,8 +517,8 @@ See also `sgf-parse-str-to-*' and functions prefixed with `sgf-parse-buffer-to'.
                     ((or (eq key 'MN) (eq key 'KM))
                      (list (string-to-number val-str)))
                     ((eq key 'LB)
-                     (list (sgf-decode-prop-LB val-str)))
-                    (t (list val-str)))))
+                     (list (sgf-decode-prop-LB (sgf-io--prettify-text val-str))))
+                    (t (list (sgf-io--prettify-text val-str))))))
         (nconc prop prop-val)))
     prop))
 
@@ -644,7 +644,7 @@ See also `sgf-encode-prop-pos'."
           ;; if prop-vals is nil (eg a pass move), put [] as the value.
           (cond ((memq prop-key '(B W))
                  (if (null prop-vals) "[]" (sgf-encode-prop-pos prop-vals)))
-                ((memq prop-key '(AB AW TR CR MA SQ))
+                ((memq prop-key '(AB AW AE TR CR MA SQ))
                  (unless (null prop-vals) (sgf-encode-prop-pos prop-vals)))
                 ((eq prop-key 'LB)
                  (mapconcat (lambda (prop-val)
@@ -660,8 +660,12 @@ See also `sgf-encode-prop-pos'."
                 ((eq prop-key 'C)
                  (format "[%s]" (sgf-io--escape-text (car prop-vals))))
                 ((eq prop-key 'KG)
-                 (if sgf-serialize-katago-p (format "[%S]" prop-vals)))
-                (t (format "[%s]" (car prop-vals))))))
+                 (when sgf-serialize-katago-p
+                   (format "[%s]" (sgf-io--escape-text (format "%S" prop-vals)))))
+                (t (mapconcat (lambda (value)
+                                (format "[%s]"
+                                        (sgf-io--escape-text (format "%s" value))))
+                              prop-vals)))))
     (if prop-val-str (format "%S%s" prop-key prop-val-str))))
 
 
@@ -731,17 +735,12 @@ where all positions in the rectangle are filled in coords."
 
 (defun sgf-encode-node (node)
   "Convert a node to an SGF string."
-  (sort node :in-place t :key #'car
-        :lessp (lambda (key1 key2)
-                 ;; if key1 is:
-                 ;; 1. KG: put it at the end
-                 ;; 2. B or W: put it at the beginning
-                 ;; 3. others: put it in the middle unchanged
-                 (cond ((member key1 '(B W)) t)
-                       ((member key2 '(B W)) nil)
-                       ((eq key1 'KG) nil)
-                       ((eq key2 'KG) t))))
-  (concat ";" (mapconcat (lambda (prop) (sgf-encode-prop prop)) node)))
+  (let ((ordered (sort node :key (lambda (prop)
+                                  (cond ((memq (car prop) '(B W)) 0)
+                                        ((eq (car prop) 'KG) 2)
+                                        (t 1))))))
+    (concat ";" (mapconcat #'sgf-encode-prop ordered))))
+
 
 
 (defun sgf-serialize-lnode (lnode)

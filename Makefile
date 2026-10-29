@@ -15,6 +15,9 @@ test:
 	@printf "\n------- Testing...\n"
 	$(EMACS) -Q --batch -L . -L tests -l ert $(foreach file,$(TEST_FILES),-l $(file)) -f ert-run-tests-batch-and-exit
 
+byte-compile:
+	$(EMACS) -Q --batch -L . -f batch-byte-compile $(filter-out %-pkg.el,$(EL_FILES))
+
 clean:
 	@printf "\n------- Cleaning byte-compiled files...\n"
 	rm -f $(patsubst %.el,%.elc,$(EL_FILES))
